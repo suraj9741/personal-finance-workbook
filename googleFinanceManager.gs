@@ -21,7 +21,7 @@
 /* ============================ CENTRAL CONFIGURATION ============================ */
 const CONFIG = {
   YEAR: 2026,
-  WORKBOOK_NAME: "2026 Finance",
+  WORKBOOK_NAME: "2026 google Finance",
   DRIVE_FOLDER_ID: "1Rgo2m0U9UclxpByY5aJqMoqiJAHWlIAl",
   REBUILD_MODE: "BACKUP",                 // DELETE | BACKUP | SKIP
   MONTHS: ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"],
@@ -124,13 +124,13 @@ const ACCOUNT_SECTIONS = [['Bank Accounts','Bank'],['Credit Cards','Credit Card'
 
 /* Single source of truth for monthly-sheet layout — no magic numbers scattered in builders.
    Columns are 1-based; move a panel by changing one number here.
-   Layout (compact): A–F Expense BvA | H–M Income BvA | O–Q Transfer | S–W Accounts | Y+ Transactions */
+   Layout (compact): A–F Expense BvA | H–M Income BvA | O–Q Transfer | S–X Account detail | Z–AD Totals | AF+ Transactions */
 const LAYOUT = {
   EXPENSE_COL: 1,   EXPENSE_ROWS: 154,   // A–F  (6 cols: Parent, Sub, Budget, Spent, Diff, Progress)
   INCOME_COL:  8,   INCOME_ROWS:  60,    // H–M  (6 cols: Parent, Sub, Budget, Earned, Diff, Progress)
   TRANSFER_COL: 15, TRANSFER_ROWS: 60,   // O–Q  (3 cols: Parent, Sub, Actual)
-  ACCOUNTS_COL: 19, ACCOUNTS_CAP: 80,    // S–W  (account dashboard)
-  TXN_COL:     25,  TXN_ROWS: 500        // Y+   (transactions: Date, Desc, Amount, Type, Cat, Account)
+  ACCOUNTS_COL: 19, ACCOUNTS_CAP: 80,    // S–X detail (6 cols) + Z–AD totals by pay type
+  TXN_COL:     32,  TXN_ROWS: 500        // AF+  (transactions: Date, Desc, Amount, Type, Cat, Account)
 };
 
 /* Derived constants */
@@ -594,18 +594,25 @@ function buildAccountSections_(ss, sh, top, startCol, monthMode, tag, prevTag){
   }
 
   // 5) DYNAMIC TOTALS by Pay Type (QUERY group-by → rows appear/disappear automatically)
-  const s = startCol+8, cs = n => colL_(s+n);
+  // One gutter column after the 6-col detail table (startCol+7). The previous offset
+  // (startCol+8) pushed this block INTO the Transactions panel on monthly sheets,
+  // making the two sections overlap and clip each other.
+  const s = startCol+7, cs = n => colL_(s+n);
   sh.getRange(top,s).setValue('TOTALS by Pay Type').setFontWeight('bold').setFontColor(STYLE.SLATE_DARK).setFontSize(11);
   sh.getRange(top+1,s,1,5).setValues([['Pay Type','Starting','Expense','Income','Remaining']])
-    .setFontWeight('bold').setBackground(STYLE.SLATE_DARK).setFontColor('white');
+    .setFontWeight('bold').setBackground(STYLE.SLATE_DARK).setFontColor('white').setVerticalAlignment('middle');
+  sh.setRowHeight(top+1, 24);
   sh.getRange(top+2,s).setFormula(
     `=IFERROR(QUERY({${ptRng},${cStart}${first}:${cRem}${last}},`+
     `"select Col1,sum(Col2),sum(Col3),sum(Col4),sum(Col5) where Col1 is not null group by Col1 `+
     `label sum(Col2) '',sum(Col3) '',sum(Col4) '',sum(Col5) ''",0),"")`);
-  sh.getRange(`${cs(1)}${top+2}:${cs(4)}${last}`).setNumberFormat(CUR);
-  // Grand total (Net) — sums the whole detail table; position is fixed in the header, value is dynamic
-  sh.getRange(top,s+6).setValue('NET (all accounts)').setFontWeight('bold').setFontColor(STYLE.SLATE_DARK);
-  sh.getRange(top+1,s+6).setFormula(`=SUM(${cRem}${first}:${cRem}${last})`).setNumberFormat(CUR).setFontWeight('bold');
+  sh.getRange(`${cs(1)}${top+2}:${cs(4)}${last}`).setNumberFormat(CUR).setHorizontalAlignment('right');
+  // Grand total (Net) — on the totals block's own TITLE row, inside its columns, so it
+  // can never collide with the Transactions panel to the right.
+  sh.getRange(top,s+2,1,2).merge();
+  sh.getRange(top,s+2).setValue('NET (all accounts)').setFontWeight('bold').setFontColor(STYLE.SLATE_DARK)
+    .setFontSize(10).setHorizontalAlignment('right');
+  sh.getRange(top,s+4).setFormula(`=SUM(${cRem}${first}:${cRem}${last})`).setNumberFormat(CUR).setFontWeight('bold');
   styleTableBorder_(sh, `${cs(0)}${top+1}:${cs(4)}${first+10}`);
   return last;
 }
@@ -631,13 +638,16 @@ function buildAccounts_(ss) {
   sh.setConditionalFormatRules([]);                       // start clean
   const endRow = buildAccountSections_(ss, sh, 3, 1, false, '', '');
 
-  // Sizing
-  sh.setColumnWidth(1, 180);
-  sh.setColumnWidth(2, 110);
+  // Sizing — A–F detail (6 cols), G gutter, H–L totals by pay type
+  sh.setColumnWidth(1, 130);
+  sh.setColumnWidth(2, 160);
   sh.setColumnWidth(3, 110);
   sh.setColumnWidth(4, 110);
   sh.setColumnWidth(5, 110);
-  
+  sh.setColumnWidth(6, 110);
+  sh.setColumnWidth(7, 24);
+  for (let c = 8; c <= 12; c++) sh.setColumnWidth(c, 110);
+
   sh.setFrozenRows(1);
 }
 
@@ -742,8 +752,8 @@ function buildMonthTemplate_(ss) {
   } catch(e) { Log_('WARNING','Card accent borders: '+e); }
 
   /* LEFT — EXPENSE Budget vs Actual  (cols A–F) */
-  sh.getRange('A7').setValue('EXPENSE — Budget vs Actual').setFontWeight('bold').setFontColor(STYLE.RED).setFontSize(10);
-  sh.setRowHeight(7, 22);
+  sh.getRange('A7').setValue('EXPENSE — Budget vs Actual').setFontWeight('bold').setFontColor(STYLE.RED).setFontSize(11);
+  sh.setRowHeight(7, 26);
   head_(sh,'A8:E8',['Parent','Sub','Budget','Spent','Diff']);
   sh.getRange('F8').setValue('Bar').setFontWeight('bold').setBackground(STYLE.SLATE_DARK).setFontColor('white').setHorizontalAlignment('center');
   sh.setRowHeight(8, 24);
@@ -770,7 +780,7 @@ function buildMonthTemplate_(ss) {
   /* MIDDLE — INCOME Budget vs Actual  (cols H–M; col 8–13) */
   const incStartCol = LAYOUT.INCOME_COL; // 8 = H
   const iC = colL_(incStartCol); // H
-  sh.getRange(`${iC}7`).setValue('INCOME — Budget vs Actual').setFontWeight('bold').setFontColor(STYLE.GREEN).setFontSize(10);
+  sh.getRange(`${iC}7`).setValue('INCOME — Budget vs Actual').setFontWeight('bold').setFontColor(STYLE.GREEN).setFontSize(11);
   head_(sh,`${iC}8:${colL_(incStartCol+4)}8`,['Parent','Sub','Budget','Earned','Diff']);
   sh.getRange(`${colL_(incStartCol+5)}8`).setValue('Bar').setFontWeight('bold').setBackground(STYLE.SLATE_DARK).setFontColor('white').setHorizontalAlignment('center');
   const IQ=`Config!F2:F${CROWS}`, IR=`Config!G2:G${CROWS}`, IS=`Config!I2:I${CROWS}`;
@@ -810,7 +820,7 @@ function buildMonthTemplate_(ss) {
   /* TRANSFER Actual Summary  (cols O–Q; col 15–17) */
   const tC = colL_(LAYOUT.TRANSFER_COL); // O
   const TBUD_LAST = 60;
-  sh.getRange(`${tC}7`).setValue('TRANSFER — Summary').setFontWeight('bold').setFontColor(STYLE.BLUE).setFontSize(10);
+  sh.getRange(`${tC}7`).setValue('TRANSFER — Actual Summary').setFontWeight('bold').setFontColor(STYLE.BLUE).setFontSize(11);
   head_(sh,`${tC}8:${colL_(LAYOUT.TRANSFER_COL+2)}8`,['Parent','Sub','Actual']);
   const TQ=`Config!K2:K${CROWS}`, TR=`Config!L2:L${CROWS}`;
   sh.getRange(`${tC}9`).setFormula(`=IFERROR(FILTER(${TQ},${TQ}<>""),"")`);
@@ -820,13 +830,13 @@ function buildMonthTemplate_(ss) {
   applyTableStripe_(sh, 9, TBUD_LAST, LAYOUT.TRANSFER_COL, LAYOUT.TRANSFER_COL+2, STYLE.SLATE_LIGHT, '#ffffff');
   styleTableBorder_(sh, `${tC}8:${colL_(LAYOUT.TRANSFER_COL+2)}${TBUD_LAST}`);
 
-  /* ACCOUNT BALANCE DASHBOARD  (cols S–W; LAYOUT.ACCOUNTS_COL = 19) */
+  /* ACCOUNT BALANCE DASHBOARD  (detail S–X, totals Z–AD; LAYOUT.ACCOUNTS_COL = 19) */
   buildAccountSections_(ss, sh, 7, LAYOUT.ACCOUNTS_COL, true, '', '');
 
-  /* TRANSACTIONS  (col Y = 25; LAYOUT.TXN_COL = 25) */
+  /* TRANSACTIONS  (col AF = 32; LAYOUT.TXN_COL) */
   const TXN_COL = LAYOUT.TXN_COL;
   const tHdr = 8, tFirst = 9, tEnd = 508, cT0 = colL_(TXN_COL), cT5 = colL_(TXN_COL+5);
-  sh.getRange(7,TXN_COL).setFormula('="TRANSACTIONS — "&$B$1').setFontWeight('bold').setFontColor(STYLE.SLATE_DARK).setFontSize(10);
+  sh.getRange(7,TXN_COL).setFormula('="TRANSACTIONS — "&$B$1').setFontWeight('bold').setFontColor(STYLE.SLATE_DARK).setFontSize(12);
   sh.getRange(tHdr,TXN_COL,1,6).setValues([['Date','Description','Amount','Type','Category','Account']])
     .setFontWeight('bold').setBackground(STYLE.SLATE_DARK).setFontColor('white').setHorizontalAlignment('center');
   sh.setRowHeight(tHdr, 24);
@@ -860,14 +870,18 @@ function buildMonthTemplate_(ss) {
   sh.setColumnWidth(15,120); sh.setColumnWidth(16,130); sh.setColumnWidth(17,95);
   // R    spacer
   sh.setColumnWidth(18, 24);
-  // S–W  Accounts (5 cols)
-  sh.setColumnWidth(19,160); sh.setColumnWidth(20,95); sh.setColumnWidth(21,95); sh.setColumnWidth(22,95); sh.setColumnWidth(23,95);
-  // X    spacer
-  sh.setColumnWidth(24, 24);
-  // Y+   Transactions (6 cols) — Category/Account wide enough for "Parent → Sub" strings
-  sh.setColumnWidth(25,95); sh.setColumnWidth(26,155); sh.setColumnWidth(27,90); sh.setColumnWidth(28,80); sh.setColumnWidth(29,150); sh.setColumnWidth(30,130);
+  // S–X  Account detail (6 cols: Pay Type, Account, Starting, Expense, Income, Remaining)
+  sh.setColumnWidth(19,110); sh.setColumnWidth(20,140); sh.setColumnWidth(21,95); sh.setColumnWidth(22,95); sh.setColumnWidth(23,95); sh.setColumnWidth(24,95);
+  // Y    spacer
+  sh.setColumnWidth(25, 24);
+  // Z–AD TOTALS by Pay Type (5 cols)
+  sh.setColumnWidth(26,110); sh.setColumnWidth(27,95); sh.setColumnWidth(28,95); sh.setColumnWidth(29,95); sh.setColumnWidth(30,95);
+  // AE   spacer
+  sh.setColumnWidth(31, 24);
+  // AF+  Transactions (6 cols) — Category/Account wide enough for "Parent → Sub" strings
+  sh.setColumnWidth(32,95); sh.setColumnWidth(33,155); sh.setColumnWidth(34,90); sh.setColumnWidth(35,80); sh.setColumnWidth(36,150); sh.setColumnWidth(37,130);
   // All table header rows: centered vertically so bold headers never look cut off
-  sh.getRange('A8:AD8').setVerticalAlignment('middle');
+  sh.getRange('A8:AK8').setVerticalAlignment('middle');
 
   sh.setFrozenRows(1);
 }
@@ -1087,33 +1101,36 @@ function buildAnnualCharts_(sh){
     sh.getRange('A38').setValue('Visual Analytics').setFontWeight('bold').setFontColor(AU.NAVY).setFontSize(11);
     sh.setRowHeight(38, 26);
     sh.setRowHeights(39, 35, 21);              // uniform canvas rows keep both bands aligned
-    /* Shared professional look: framed white card, navy title, muted axes, light gridlines */
-    const base = (b, title) => b
-      .setOption('title', title)
-      .setOption('titleTextStyle', {color: AU.NAVY, fontSize: 13, bold: true})
-      .setOption('fontName', 'Inter')
-      .setOption('width', W).setOption('height', H)
-      .setOption('backgroundColor', {fill: '#ffffff', stroke: AU.BORDER, strokeWidth: 1})
-      .setOption('legend', {position: 'bottom', textStyle: {color: AU.MUTED, fontSize: 10}})
-      .setOption('hAxis', {textStyle: {color: AU.MUTED, fontSize: 9}, gridlines: {color: 'transparent'}})
-      .setOption('vAxis', {textStyle: {color: AU.MUTED, fontSize: 9}, gridlines: {count: 4, color: '#eef2f7'}, format: 'short'})
-      .setOption('chartArea', {left: 64, top: 48, width: '84%', height: '60%'});
+    /* Chart options are deliberately MINIMAL. The Sheets embedded-chart renderer supports
+       only a subset of Google Charts options; the object-form styling added in the earlier
+       redesign (backgroundColor {fill,stroke}, chartArea, legend/hAxis/vAxis objects) made
+       every chart render EMPTY — frame and title only, no series. Restored to the proven
+       configuration (title + colors, as in the original working version) plus explicit
+       width/height, which are documented-safe and required for the fixed 2×2 grid.
+       Positions/offsets never affect data bindings — ranges are attached per chart below. */
     /* Middle Left — Income vs Expense */
-    sh.insertChart(base(sh.newChart().asColumnChart().addRange(sh.getRange('D3:F15')), 'Income vs Expense (Monthly)')
+    sh.insertChart(sh.newChart().asColumnChart().addRange(sh.getRange('D3:F15'))
+      .setOption('title', 'Income vs Expense (Monthly)')
       .setOption('colors', [AU.GREEN, AU.RED])
+      .setOption('width', W).setOption('height', H)
       .setPosition(ROW1, 1, 0, 0).build());
     /* Middle Right — Savings Trend */
-    sh.insertChart(base(sh.newChart().asLineChart().addRange(sh.getRange('D3:D15')).addRange(sh.getRange('G3:G15')), 'Savings Trend')
-      .setOption('colors', [AU.BLUE]).setOption('lineWidth', 3).setOption('pointSize', 5)
+    sh.insertChart(sh.newChart().asLineChart().addRange(sh.getRange('D3:D15')).addRange(sh.getRange('G3:G15'))
+      .setOption('title', 'Savings Trend')
+      .setOption('colors', [AU.BLUE])
+      .setOption('width', W).setOption('height', H)
       .setPosition(ROW1, 1, X2, 0).build());
-    /* Lower Left — Category Breakdown (donut) */
-    sh.insertChart(base(sh.newChart().asPieChart().addRange(sh.getRange('A14:A23')).addRange(sh.getRange('C14:C23')), 'Expense Category Distribution')
-      .setOption('pieHole', 0.45).setOption('colors', AU.PIE)
-      .setOption('legend', {position: 'right', textStyle: {color: AU.MUTED, fontSize: 10}})
+    /* Lower Left — Category Breakdown */
+    sh.insertChart(sh.newChart().asPieChart().addRange(sh.getRange('A14:A23')).addRange(sh.getRange('C14:C23'))
+      .setOption('title', 'Expense Category Distribution')
+      .setOption('colors', AU.PIE)
+      .setOption('width', W).setOption('height', H)
       .setPosition(ROW2, 1, 0, 0).build());
     /* Lower Right — Net Worth Trend */
-    sh.insertChart(base(sh.newChart().asLineChart().addRange(sh.getParent().getRange('Helper!A5:M5')).setTransposeRowsAndColumns(true), 'Net Worth Trend')
-      .setOption('colors', [AU.PURPLE]).setOption('lineWidth', 3).setOption('pointSize', 5)
+    sh.insertChart(sh.newChart().asLineChart().addRange(sh.getParent().getRange('Helper!A5:M5')).setTransposeRowsAndColumns(true)
+      .setOption('title', 'Net Worth Trend')
+      .setOption('colors', [AU.PURPLE])
+      .setOption('width', W).setOption('height', H)
       .setPosition(ROW2, 1, X2, 0).build());
   } catch(e){ Log_('WARNING','Chart build skipped: '+e); }
 }
