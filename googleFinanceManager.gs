@@ -65,18 +65,19 @@ const SEED = {
     'Savings':['PPF','Friend','Share Market','H Gold'],
     'Gifts':['Gifts','Gift card','Other'],
     'Health':['Doctors','Pharmacy'],
-    'Gotu':['G Food','G Bank','G Pharmacy','G Doctors','G Medical test','G Clothes','G Phone','G Utilities','G Fuel','G Cash','G Tuition'],
-    'Mom':['M Insurance','M Bank','M Pharmacy','M Doctors','M Medical test','M Clothes','M Phone','M Utilities','M Bachat Gat','M Cash'],
-    'Baba':['B Insurance','B Bank','B Pharmacy','B Doctors','B Shopping','B Phone','B Utilities','B Fuel','B Cash'],
-    'Room':['R Rent/mortgage','R Groceries','R Maintenance','R Improvements','R Property taxes','R Internet','R Electricity','R Heat/gas','R TV'],
-    'Farm':['F Pharmacy','F Pre Farming','F Post Farming','F Maintenance'],
-    'Friend':['F EMI','F borrow','F lent'],
-    'Home':['Rent/mortgage','H Clothes','Groceries','Maintenance','Improvements','Property taxes','Internet','Electricity','Heat/gas','TV','Paper bill','Milk bill','Food','Wedding'],
+    'Gotu':['Food','Bank','Pharmacy','Doctors','Medical test','Clothes','Phone','Utilities','Fuel','Cash','Tuition'],
+    'Mom':['Insurance','Bank','Pharmacy','Doctors','Medical test','Clothes','Phone','Utilities','Bachat Gat','Cash'],
+    'Baba':['Insurance','Bank','Pharmacy','Doctors','Shopping','Phone','Utilities','Fuel','Cash'],
+    'Room':['Rent/mortgage','Groceries','Maintenance','Improvements','Property taxes','Internet','Electricity','Heat/gas','TV'],
+    'Farm':['Pharmacy','Pre Farming','Post Farming','Maintenance'],
+    'Friend':['EMI','borrow','lent'],
+    'Home':['Rent/mortgage','Clothes','Groceries','Maintenance','Improvements','Property taxes','Internet','Electricity','Heat/gas','TV','Paper bill','Milk bill','Home Food','Wedding'],
     'Insurance':['Vehicle','Health','Home','Life'],
     'Pets':['Food','Vet/medical','Toys','Supplies'],
     'Technology':['Domains & hosting','Online services','Hardware','Software'],
     'Transportation':['Fuel','Car','Fast Tag','Bike','Public transit','Trip'],
-    'Travel':['Airfare','Hotels','Food'],
+    'Travel':['Airfare','Hotels','Travel Food'],
+    'Pratiksha':['Food','Bank','Pharmacy','Doctors','Medical test','Clothes','Phone','Utilities','Fuel','Cash','Tuition'],
     'Other':['Other']
   },
   INCOME: {
@@ -85,10 +86,11 @@ const SEED = {
     'Savings':['PPF','Friend','Interest Income','FD'],
     'Share Market':['Dividends','S Refund','Stock sell'],
     'Gifts':['Gifts','Gift card','Other'],
-    'Trip':['T Refund','Fee'],
-    'Gotu':['G Bank','G Cash'],
-    'Mom':['M Bank','M Cash'],
-    'Baba':['B Bank','B Cash'],
+    'Trip':['Refund','Fee'],
+    'Gotu':['Bank','Cash'],
+    'Mom':['Bank','Cash'],
+    'Baba':['Bank','Cash'],
+    'Pratiksha':['Bank','Cash'],
     'Other':['Other']
   },
   TRANSFER: {
@@ -315,7 +317,7 @@ function writePerfReport_(ss, T){
   sh.getRange(rows.length,1,1,3).setFontWeight('bold');
   sh.setColumnWidth(1,200); sh.setColumnWidth(3,300); sh.setFrozenRows(1); sh.setTabColor('#16a34a');
 }
-function refreshCategories(ss){ if(!ss.getSheetByName('Config')) buildConfig_(ss); applyDataValidations_(ss); refreshNamedRanges(ss); Log_('INFO','Dropdowns refreshed (categories are live from Config).'); }
+function refreshCategories(ss){ buildConfig_(ss); applyDataValidations_(ss); refreshNamedRanges(ss); Log_('INFO','Dropdowns refreshed (categories are live from Config).'); }  // buildConfig_ preserves existing Config and only appends missing defaults
 
 /* ============================ SPREADSHEET / FOLDER MGMT ============================ */
 function getOrCreateSpreadsheet_() {
@@ -394,6 +396,7 @@ function buildConfig_(ss) {
   const preserve = sh && sh.getRange('A2').getValue()!=='' && sh.getRange('P2').getValue()!=='' && CONFIG.REBUILD_MODE!=='DELETE';
   if (preserve) {
     Log_('INFO','Config has data — preserving user categories (Config = source of truth).');
+    appendMissingExpenseSeeds_(sh);   // additive only: default combos the user doesn't have yet
     applyConfigStructure_(sh);
     return;
   }
@@ -408,6 +411,27 @@ function buildConfig_(ss) {
   sh.getRange('V2:W5').setValues([['Year',CONFIG.YEAR],['Emergency Target (months)',6],['Currency',CONFIG.CURRENCY],['Rebuild Mode',CONFIG.REBUILD_MODE]]);
   applyConfigStructure_(sh);
   Log_('INFO','Config seeded from DEFAULT_CATEGORIES (first run).');
+}
+/* Appends default Parent/Sub combos missing from Config below the last used row of each
+   section (Expense: A/B with 0 budget in D; Income: F/G with 0 planned in I). Existing rows —
+   including user-added categories and edited budgets — are never touched, so Config stays
+   the source of truth. */
+function appendMissingExpenseSeeds_(sh){
+  appendMissingSeeds_(sh, DEFAULT_CATEGORIES.EXPENSE, 1, 4, 'expense');  // A/B + D budget
+  appendMissingSeeds_(sh, DEFAULT_CATEGORIES.INCOME,  6, 9, 'income');   // F/G + I planned
+}
+function appendMissingSeeds_(sh, dict, col, amtCol, label){
+  const rows = sh.getRange(2,col,CONFIG.MAX_CATEGORY_ROWS,2).getValues();
+  const existing = {}; let last = 1;                       // last = sheet row of final non-empty Parent
+  rows.forEach((r,i)=>{
+    const p=String(r[0]).trim(), s=String(r[1]).trim();
+    if(p!==''){ last=i+2; if(s!=='') existing[p+'|'+s]=1; }
+  });
+  const missing = flat_(dict).filter(r=>!existing[r[0]+'|'+r[1]]);
+  if(!missing.length){ Log_('INFO','Config: all default '+label+' categories already present.'); return; }
+  sh.getRange(last+1,col,missing.length,2).setValues(missing);
+  sh.getRange(last+1,amtCol,missing.length,1).setValues(missing.map(_=>[0]));
+  Log_('INFO','Config: appended '+missing.length+' missing default '+label+' categories.');
 }
 /* Re-applies Config headers, auto-formula columns, formats & theme — never touches user data. */
 function applyConfigStructure_(sh) {
@@ -1186,7 +1210,9 @@ function flushLogs_(ss){ if(!LOGS.length) return; let sh=ss.getSheetByName('_Log
   }
   sh.getRange(sh.getLastRow()+1,1,LOGS.length,3).setValues(LOGS);
   if(sh.getLastRow()>2000) sh.deleteRows(2,sh.getLastRow()-2000); LOGS=[]; }
-function flat_(d){ const o=[]; Object.keys(d).forEach(p=>d[p].forEach(c=>o.push([p,c]))); return o; }
+/* Flattens {Parent:[Subs]} to [[Parent,Sub],...], de-duplicating Parent|Sub combos while
+   preserving first-seen order (guards against accidental duplicates in the seed lists). */
+function flat_(d){ const o=[], seen={}; Object.keys(d).forEach(p=>d[p].forEach(c=>{ const k=p+'|'+c; if(!seen[k]){ seen[k]=1; o.push([p,c]); } })); return o; }
 function setRows_(sh,r,c,a){ if(a.length) sh.getRange(r,c,a.length,a[0].length).setValues(a); }
 function head_(sh,a1,vals){ const r=sh.getRange(a1); if(vals&&vals.length&&r.getNumRows()===1&&r.getNumColumns()===vals.length) r.setValues([vals]); r.setFontWeight('bold').setBackground(STYLE.SLATE_DARK).setFontColor('white'); }
 function colL_(c){ let s=''; while(c>0){ const m=(c-1)%26; s=String.fromCharCode(65+m)+s; c=(c-m-1)/26; } return s; }
