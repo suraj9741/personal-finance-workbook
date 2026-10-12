@@ -10,9 +10,9 @@ Whoever holds that token can act as you on the Apps Script API.
 | Piece | What it is | Where it lives |
 |---|---|---|
 | clasp | Google's CLI that calls the **Apps Script API** (create, read and update script files) | `npm install -g @google/clasp` |
-| OAuth client | clasp's built-in client ID and secret, owned by Google's clasp project. It identifies the *app*, not you | Inside clasp; clasp 2.x also copies it into `~/.clasprc.json` |
-| Access token | Short-lived (about 1 hour) bearer token sent with every API call | `~/.clasprc.json` → `token.access_token` |
-| Refresh token | Long-lived token that clasp trades for a new access token. **This is the real credential** | `~/.clasprc.json` → `token.refresh_token` |
+| OAuth client | clasp's built-in client ID and secret, owned by Google's clasp project. It identifies the *app*, not you | `~/.clasprc.json` → `tokens.default.client_id` / `client_secret` |
+| Access token | Short-lived (about 1 hour) bearer token sent with every API call | `~/.clasprc.json` → `tokens.default.access_token` (may be empty; clasp refreshes it) |
+| Refresh token | Long-lived token that clasp trades for a new access token. **This is the real credential** | `~/.clasprc.json` → `tokens.default.refresh_token` |
 | Apps Script API switch | A per-account setting. Without it, every API call fails with 403 "User has not enabled the Apps Script API" | https://script.google.com/home/usersettings |
 | `scriptId` | Which project to push to. Not a secret; useless without a token | `.clasp.json` |
 | `CLASPRC_JSON` | A GitHub repository secret holding the full text of your `~/.clasprc.json` | GitHub ▸ Settings ▸ Secrets and variables ▸ Actions |
@@ -76,9 +76,15 @@ From `.github/workflows/clasp-push.yml`:
 
 The runner is thrown away after the job, but for those few minutes it holds your token.
 
+**Version match matters.** clasp 3 writes `~/.clasprc.json` as
+`{"tokens":{"default":{...}}}`; clasp 2 used `{"token":{...},"oauth2ClientSettings":{...}}`
+and fails on the new format with `Cannot read properties of undefined (reading
+'access_token')`. The workflow pins clasp 3, so the secret must come from a clasp 3
+`clasp login` (any `npm install -g @google/clasp` today).
+
 ## What the token can do
 
-clasp 2.x requests roughly these scopes (check the consent screen when you log in):
+clasp requests roughly these scopes (check the consent screen when you log in):
 `script.projects`, `script.deployments`, `script.webapp.deploy`, `drive.file`,
 `drive.metadata.readonly`, `logging.read`, `service.management`, `cloud-platform`,
 `userinfo.email` and `userinfo.profile`.
