@@ -1,6 +1,6 @@
 # personal-finance-workbook
 
-Google Apps Script that builds and maintains the "2026 Finance" Google Sheets workbook
+Google Apps Script that builds and maintains the yearly finance workbook in Google Sheets (currently "2027 Finance")
 (Config, Data, monthly dashboards, Accounts, Annual Dashboard, Quick-Add sidebar).
 
 The live script is the standalone Apps Script project **"google finance sheet"**
@@ -55,7 +55,7 @@ flowchart LR
 
   repo -- "clasp push" --> GAS["Apps Script project<br/>'google finance sheet'"]
   GAS -- "clasp pull" --> repo
-  GAS -- "SpreadsheetApp / DriveApp" --> Sheet[("Google Sheet<br/>'2026 Finance'<br/>Drive ▸ Budgets ▸ 2026")]
+  GAS -- "SpreadsheetApp / DriveApp" --> Sheet[("Google Sheet<br/>'2027 Finance'<br/>Drive ▸ Budgets ▸ 2027")]
 ```
 
 ### One shared scope, no imports
