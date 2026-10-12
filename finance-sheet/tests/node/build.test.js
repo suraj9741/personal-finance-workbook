@@ -126,3 +126,34 @@ test('building installs exactly one onEdit trigger, and none during tests', () =
   P.run('TEST_MODE_ = true; installTriggers_(__ss); TEST_MODE_ = false;');
   assert.deepEqual(P.gas.state.triggers, []);
 });
+
+// Budget vs Actual: every row has a live Diff, both tables have a total row (row 7), and Diff
+// points the same way in both (positive = good: money left on expenses, extra on income).
+test('Budget vs Actual: Diff on every row and a total with its own Diff, every month', () => {
+  const { ss, CONFIG } = built();
+  for (const m of CONFIG.MONTHS) {
+    const sh = ss.getSheetByName(m + '_' + CONFIG.YEAR), f = a1 => sh.getRange(a1).getFormula();
+    // Expense (A–E): Diff = Budget − Spent for rows 9–154, the whole list.
+    assert.equal(f('E9'), '=ARRAYFORMULA(IF(A9:A154="","",IFERROR(C9:C154-D9:D154,0)))', m + ' expense Diff');
+    assert.equal(f('C7'), '=SUM(C9:C154)', m + ' expense total budget');
+    assert.equal(f('D7'), '=SUM(D9:D154)', m + ' expense total spent');
+    assert.equal(f('E7'), '=C7-D7', m + ' expense total Diff');
+    // Income (H–L): Diff = Earned − Budget for rows 9–60.
+    assert.equal(f('L9'), '=ARRAYFORMULA(IF(H9:H60="","",IFERROR(K9:K60-J9:J60,0)))', m + ' income Diff');
+    assert.equal(f('J7'), '=SUM(J9:J60)', m + ' income total planned');
+    assert.equal(f('K7'), '=SUM(K9:K60)', m + ' income total earned');
+    assert.equal(f('L7'), '=K7-J7', m + ' income total Diff');
+    // Totals sit beside the titles, not on top of them.
+    assert.match(sh.getRange('A7').getValue(), /^EXPENSE/);
+    assert.match(sh.getRange('H7').getValue(), /^INCOME/);
+    assert.equal(sh.getRange('B7').getValue(), '');
+    assert.equal(sh.getRange('I7').getValue(), '');
+  }
+});
+
+test('Budget vs Actual: Diff columns are not hard-coded values', () => {
+  const { ss, CONFIG } = built();
+  const sh = ss.getSheetByName('Jan_' + CONFIG.YEAR);
+  for (let r = 10; r <= 154; r++) assert.equal(sh.getRange('E' + r).getValue(), '', 'E' + r + ' left free for the E9 formula to fill');
+  for (let r = 10; r <= 60; r++) assert.equal(sh.getRange('L' + r).getValue(), '', 'L' + r + ' left free for the L9 formula to fill');
+});

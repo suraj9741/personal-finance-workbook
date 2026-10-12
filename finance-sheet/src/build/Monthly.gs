@@ -110,7 +110,14 @@ function buildMonthTemplate_(ss) {
   sh.getRange('B9').setFormula(`=IFERROR(FILTER(${ER},${EQ}<>""),"")`);
   sh.getRange('C9').setFormula(`=IFERROR(FILTER(${ES},${EQ}<>""),"")`);
   sh.getRange('D9').setFormula(`=ARRAYFORMULA(IF(A9:A${BUD_LAST}="","",IFERROR(SUMIF(${R.CK},"Expense|"&$B$1&"|"&A9:A${BUD_LAST}&"${STYLE.SEP}"&B9:B${BUD_LAST},${R.AMT}),0)))`);
-  sh.getRange('E9').setFormula(`=ARRAYFORMULA(IF(A9:A${BUD_LAST}="","",C9:C${BUD_LAST}-D9:D${BUD_LAST}))`);
+  // Diff = Budget − Spent: positive = still left to spend, negative = over budget.
+  sh.getRange('E9').setFormula(`=ARRAYFORMULA(IF(A9:A${BUD_LAST}="","",IFERROR(C9:C${BUD_LAST}-D9:D${BUD_LAST},0)))`);
+  // Totals for the whole table, on the title row (row 7) so they stay visible above the list.
+  sh.getRange('C7').setFormula(`=SUM(C9:C${BUD_LAST})`);
+  sh.getRange('D7').setFormula(`=SUM(D9:D${BUD_LAST})`);
+  sh.getRange('E7').setFormula('=C7-D7');
+  sh.getRange('C7:E7').setNumberFormat(CUR).setHorizontalAlignment('right').setFontWeight('bold').setBackground(STYLE.RED_BG)
+    .setNote('Month total: Budget · Spent · Diff');
   
   sh.getRange(`C9:E${BUD_LAST}`).setNumberFormat(CUR).setHorizontalAlignment('right');
   applyTableStripe_(sh, 9, BUD_LAST, 1, 5, STYLE.SLATE_LIGHT, '#ffffff');
@@ -135,7 +142,15 @@ function buildMonthTemplate_(ss) {
   sh.getRange(`${colL_(incStartCol+1)}9`).setFormula(`=IFERROR(FILTER(${IR},${IQ}<>""),"")`);
   sh.getRange(`${colL_(incStartCol+2)}9`).setFormula(`=IFERROR(FILTER(${IS},${IQ}<>""),"")`);
   sh.getRange(`${colL_(incStartCol+3)}9`).setFormula(`=ARRAYFORMULA(IF(${iC}9:${iC}${IBUD_LAST}="","",IFERROR(SUMIF(${R.CK},"Income|"&$B$1&"|"&${iC}9:${iC}${IBUD_LAST}&"${STYLE.SEP}"&${colL_(incStartCol+1)}9:${colL_(incStartCol+1)}${IBUD_LAST},${R.AMT}),0)))`);
-  sh.getRange(`${colL_(incStartCol+4)}9`).setFormula(`=ARRAYFORMULA(IF(${iC}9:${iC}${IBUD_LAST}="","",${colL_(incStartCol+2)}9:${colL_(incStartCol+2)}${IBUD_LAST}-${colL_(incStartCol+3)}9:${colL_(incStartCol+3)}${IBUD_LAST}))`);
+  // Diff = Earned − Budget: positive = earned more than planned, negative = short.
+  // (Same direction as Expense: positive is good, so the green/red colouring means the same thing.)
+  const iB=colL_(incStartCol+2), iE=colL_(incStartCol+3), iD=colL_(incStartCol+4);
+  sh.getRange(`${iD}9`).setFormula(`=ARRAYFORMULA(IF(${iC}9:${iC}${IBUD_LAST}="","",IFERROR(${iE}9:${iE}${IBUD_LAST}-${iB}9:${iB}${IBUD_LAST},0)))`);
+  sh.getRange(`${iB}7`).setFormula(`=SUM(${iB}9:${iB}${IBUD_LAST})`);
+  sh.getRange(`${iE}7`).setFormula(`=SUM(${iE}9:${iE}${IBUD_LAST})`);
+  sh.getRange(`${iD}7`).setFormula(`=${iE}7-${iB}7`);
+  sh.getRange(`${iB}7:${iD}7`).setNumberFormat(CUR).setHorizontalAlignment('right').setFontWeight('bold').setBackground(STYLE.GREEN_BG)
+    .setNote('Month total: Budget · Earned · Diff');
   sh.getRange(`${colL_(incStartCol+2)}9:${colL_(incStartCol+4)}${IBUD_LAST}`).setNumberFormat(CUR).setHorizontalAlignment('right');
   applyTableStripe_(sh, 9, IBUD_LAST, incStartCol, incStartCol+4, STYLE.SLATE_LIGHT, '#ffffff');
   styleTableBorder_(sh, `${iC}8:${colL_(incStartCol+4)}${IBUD_LAST}`);
@@ -150,16 +165,17 @@ function buildMonthTemplate_(ss) {
 
   sh.setRowHeights(9, BUD_LAST-8, 20);   // compact row height
 
-  // Diff CF (expense + income) — unchanged logic
+  // Diff colours (expense + income, rows and totals): positive green, negative red
   if (CONFIG.ENABLE_CONDITIONAL_FORMATTING) {
     const budgetCfRules = sh.getConditionalFormatRules();
-    const expDiffRng = sh.getRange(`E9:E${BUD_LAST}`);
-    const incDiffRng = sh.getRange(`${colL_(LAYOUT.INCOME_COL+4)}9:${colL_(LAYOUT.INCOME_COL+4)}${IBUD_LAST}`);
+    const dc = colL_(LAYOUT.INCOME_COL+4);
+    const expDiffRng = [sh.getRange(`E9:E${BUD_LAST}`), sh.getRange('E7')];
+    const incDiffRng = [sh.getRange(`${dc}9:${dc}${IBUD_LAST}`), sh.getRange(`${dc}7`)];
     budgetCfRules.push(
-      SpreadsheetApp.newConditionalFormatRule().whenNumberGreaterThan(0).setFontColor(STYLE.GREEN).setBold(true).setRanges([expDiffRng]).build(),
-      SpreadsheetApp.newConditionalFormatRule().whenNumberLessThan(0).setFontColor(STYLE.RED).setRanges([expDiffRng]).build(),
-      SpreadsheetApp.newConditionalFormatRule().whenNumberGreaterThanOrEqualTo(0).setFontColor(STYLE.GREEN).setBold(true).setRanges([incDiffRng]).build(),
-      SpreadsheetApp.newConditionalFormatRule().whenNumberLessThan(0).setFontColor(STYLE.RED).setRanges([incDiffRng]).build()
+      SpreadsheetApp.newConditionalFormatRule().whenNumberGreaterThan(0).setFontColor(STYLE.GREEN).setBold(true).setRanges(expDiffRng).build(),
+      SpreadsheetApp.newConditionalFormatRule().whenNumberLessThan(0).setFontColor(STYLE.RED).setRanges(expDiffRng).build(),
+      SpreadsheetApp.newConditionalFormatRule().whenNumberGreaterThanOrEqualTo(0).setFontColor(STYLE.GREEN).setBold(true).setRanges(incDiffRng).build(),
+      SpreadsheetApp.newConditionalFormatRule().whenNumberLessThan(0).setFontColor(STYLE.RED).setRanges(incDiffRng).build()
     );
     sh.setConditionalFormatRules(budgetCfRules);
   }

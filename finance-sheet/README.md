@@ -141,7 +141,7 @@ menu items run the tests; no trigger does.
 | Config seeded with default categories and accounts; no duplicates or stray spaces | ✓ | ✓ |
 | Data sheet: headers, Month/Parent/Sub/key formulas, Type/Category/Account dropdowns | ✓ | ✓ |
 | Monthly KPI cards: opening balance, income, expense, net, savings rate, budget | | ✓ |
-| Budget vs Actual for expense and income categories | | ✓ |
+| Budget vs Actual for expense and income: Diff on every row, month totals with Diff | ✓ (formula) | ✓ |
 | Transfers between accounts (counted in neither income nor expense) | | ✓ |
 | Monthly account balances, carry-forward from the previous month, NET | ✓ (formula) | ✓ |
 | Monthly transaction list, including an empty month | | ✓ |

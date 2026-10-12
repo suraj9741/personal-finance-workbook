@@ -275,7 +275,16 @@ function testBudgetVsActual_(T, ss) {
   T.eq('Groceries spent (refund netted)', 1000, gro[3]); T.eq('Groceries over budget (negative diff)', -1000, gro[4]);
   T.eq('Car EMI spent in Feb', 0, (exp('Feb', 'Debt', 'Car EMI') || [])[3]);
   const pay = inc('Jan', 'Wages', 'Paycheck') || [];
-  T.eq('Paycheck planned', 60000, pay[2]); T.eq('Paycheck earned', 50000, pay[3]); T.eq('Paycheck short by', 10000, pay[4]);
+  T.eq('Paycheck planned', 60000, pay[2]); T.eq('Paycheck earned', 50000, pay[3]); T.eq('Paycheck diff (short = negative)', -10000, pay[4]);
+  const jan = ss.getSheetByName(TEST_MONTH_('Jan')), ic = c => colL_(LAYOUT.INCOME_COL + c);
+  T.eq('Jan expense total budget', 1000, jan.getRange('C7').getValue());
+  T.eq('Jan expense total spent', 800, jan.getRange('D7').getValue());
+  T.eq('Jan expense total diff', 200, jan.getRange('E7').getValue());
+  T.eq('Jan income total planned', 60000, jan.getRange(ic(2) + '7').getValue());
+  T.eq('Jan income total earned', 50000, jan.getRange(ic(3) + '7').getValue());
+  T.eq('Jan income total diff', -10000, jan.getRange(ic(4) + '7').getValue());
+  const blank = exp('Jan', 'Education', 'Tuition') || [];
+  T.eq('No-budget, no-spend row still shows Diff 0', 0, blank[4]);
 }
 
 function testTransfers_(T, ss) {
