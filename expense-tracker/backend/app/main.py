@@ -7,6 +7,7 @@ from fastapi import Depends, FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from prometheus_fastapi_instrumentator import Instrumentator
+from prometheus_fastapi_instrumentator.routing import get_route_name
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
@@ -22,6 +23,15 @@ UNSAFE_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
 CSRF_HEADER = "x-requested-with"
 
 log = structlog.get_logger("app.access")
+
+
+def route_template(request: Request) -> str:
+    """The matched route's full template (e.g. /api/v1/transactions/{transaction_id}).
+
+    Same resolver the /metrics handler label uses, so logs and metrics agree and raw ids
+    never reach the logs.
+    """
+    return get_route_name(request, should_include_root_path=False) or "unmatched"
 
 
 def create_app() -> FastAPI:
@@ -61,8 +71,7 @@ def create_app() -> FastAPI:
             )
         else:
             response = await call_next(request)
-        route = request.scope.get("route")
-        path = getattr(route, "path", None) or "unmatched"  # template, never raw values
+        path = route_template(request)
         if path not in {"/healthz", "/readyz", "/metrics"}:
             log.info(
                 "request",

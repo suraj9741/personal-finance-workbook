@@ -26,6 +26,8 @@ from app.services import add_months, match_rule
 router = APIRouter(prefix="/transactions", tags=["transactions"])
 
 CREATED = Counter("transactions_created_total", "Transactions created", ["type"])
+for _label in ("expense", "income", "transfer"):
+    CREATED.labels(_label)  # export zeros from boot
 
 
 def month_range(month: str) -> tuple[date, date]:

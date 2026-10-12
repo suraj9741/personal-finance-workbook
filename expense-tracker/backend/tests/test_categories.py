@@ -1,4 +1,5 @@
 import json
+import os
 import re
 from ast import literal_eval
 from pathlib import Path
@@ -8,7 +9,9 @@ import pytest
 from app.services import full_category_list
 from tests.conftest import Api, add_tx, category_id
 
-DEFAULTS = Path(__file__).resolve().parents[3] / "src" / "config" / "Defaults.gs"
+# The Apps Script seed list. In the test container it is mounted and named by DEFAULTS_GS.
+_REPO = Path(__file__).resolve().parents[1].parent.parent
+DEFAULTS = Path(os.environ.get("DEFAULTS_GS", _REPO / "src" / "config" / "Defaults.gs"))
 FAMILY = {"Gotu", "Mom", "Baba", "Pratiksha", "Farm"}
 
 

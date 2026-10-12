@@ -1,0 +1,90 @@
+# Expense tracker: `make up` starts everything; data lives in the `pgdata` volume.
+# Never run `docker compose down -v`: -v deletes the volume and all your data.
+name: expense-tracker
+
+x-backend-env: &backend-env
+  DATABASE_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+  APP_ENV: ${APP_ENV:-production}
+  LOG_LEVEL: ${LOG_LEVEL:-INFO}
+  LOG_FORMAT: ${LOG_FORMAT:-json}
+  SESSION_TTL_DAYS: ${SESSION_TTL_DAYS:-30}
+  COOKIE_SECURE: ${COOKIE_SECURE:-false}
+  PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-http://localhost:8080}
+  CORS_ORIGINS: ${CORS_ORIGINS:-}
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?set POSTGRES_USER in .env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:?set POSTGRES_DB in .env}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  # One-shot: applies migrations, then exits. The backend starts only if this succeeds.
+  # (In Kubernetes this becomes a Job / Helm hook, so replicas never race on migrations.)
+  migrate:
+    build: { context: ./backend, target: runtime }
+    image: expense-tracker-backend:local
+    command: ["alembic", "upgrade", "head"]
+    environment: *backend-env
+    depends_on:
+      db: { condition: service_healthy }
+    restart: "no"
+
+  backend:
+    image: expense-tracker-backend:local
+    restart: unless-stopped
+    environment: *backend-env
+    depends_on:
+      db: { condition: service_healthy }
+      migrate: { condition: service_completed_successfully }
+    ports:
+      - "127.0.0.1:${BACKEND_PORT:-8000}:8000"
+
+  frontend:
+    build: { context: ./frontend, target: runtime }
+    image: expense-tracker-frontend:local
+    restart: unless-stopped
+    depends_on:
+      backend: { condition: service_healthy }
+    ports:
+      - "127.0.0.1:${FRONTEND_PORT:-8080}:8080"
+
+  # Nightly pg_dump into ./backups, keeping the newest BACKUP_KEEP files.
+  backup:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      PGHOST: db
+      PGUSER: ${POSTGRES_USER}
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      PGDATABASE: ${POSTGRES_DB}
+      BACKUP_KEEP: ${BACKUP_KEEP:-14}
+    volumes:
+      - ./backups:/backups
+    depends_on:
+      db: { condition: service_healthy }
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        while true; do
+          file=/backups/expense-$$(date +%Y%m%d-%H%M%S).dump
+          if pg_dump --format=custom --file="$$file.tmp" && mv "$$file.tmp" "$$file"; then
+            echo "backup written: $$file"
+          else
+            echo "backup FAILED" >&2; rm -f "$$file.tmp"
+          fi
+          ls -1t /backups/expense-*.dump 2>/dev/null | tail -n +$$((BACKUP_KEEP + 1)) | xargs -r rm -f
+          sleep 86400
+        done
+
+volumes:
+  pgdata:

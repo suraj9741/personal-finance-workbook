@@ -1,0 +1,26 @@
+name: Expense tracker
+
+on:
+  push:
+    paths:
+      - "expense-tracker/**"
+      - "src/config/Defaults.gs"
+      - ".github/workflows/expense-tracker.yml"
+  pull_request:
+    paths:
+      - "expense-tracker/**"
+      - "src/config/Defaults.gs"
+      - ".github/workflows/expense-tracker.yml"
+
+jobs:
+  test-and-lint:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: expense-tracker
+    steps:
+      - uses: actions/checkout@v4
+      - name: Lint (ruff, mypy, ESLint)
+        run: make lint
+      - name: Test (pytest against Postgres 16, vitest)
+        run: make test

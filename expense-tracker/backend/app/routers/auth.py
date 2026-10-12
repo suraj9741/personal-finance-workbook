@@ -22,6 +22,8 @@ from app.security import hash_password, hash_token, new_token, verify_password
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 LOGINS = Counter("logins_total", "Login attempts", ["result"])
+for _label in ("ok", "failed", "rate_limited"):
+    LOGINS.labels(_label)  # export zeros from boot
 
 
 def start_session(db: Session, response: Response, user: User) -> None:
