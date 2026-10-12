@@ -324,11 +324,20 @@ class BudgetLine(BaseModel):
     set_in: str
 
 
+class NextChange(BaseModel):
+    """A later month where a different default budget, set earlier, takes over."""
+
+    category_id: uuid.UUID
+    month: str
+    amount: Decimal
+
+
 class BudgetsOut(BaseModel):
     month: str
     # False for past months: changes there apply to that month only.
     carries_forward: bool
     items: list[BudgetLine]
+    next_changes: list[NextChange] = []
 
 
 class BudgetsIn(Strict):

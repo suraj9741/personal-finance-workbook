@@ -70,7 +70,7 @@ it("shows budget, spent and diff for expense and income", async () => {
   const categories = [cat("c1", "expense", "Everyday", "Food"), cat("c2", "expense", "Debt", "Tax"), cat("c3", "income", "Wages", "Paycheck")];
   const line = (category_id: string, kind: string, actual: string) => ({ category_id, kind, parent_name: "", sub_name: "", stats_group: "spend", budget: null, actual, diff: "0", over_budget: false });
   const stats = { month: "2026-10", scope: "household", income: "52000", spend: "1200", saved: "0", savings_rate: null, invested: "0", lent: "0", repaid: "0", budget_total: "3000", categories: [line("c1", "expense", "1200"), line("c3", "income", "52000")] };
-  const budgets = { month: "2026-10", carries_forward: true, items: [{ category_id: "c1", amount: "3000.00", this_month_only: false, set_in: "2026-09" }, { category_id: "c3", amount: "50000.00", this_month_only: false, set_in: "2026-10" }] };
+  const budgets = { month: "2026-10", carries_forward: true, items: [{ category_id: "c1", amount: "3000.00", this_month_only: false, set_in: "2026-09" }, { category_id: "c3", amount: "50000.00", this_month_only: false, set_in: "2026-10" }], next_changes: [{ category_id: "c1", month: "2026-12", amount: "1000.00" }] };
   vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
     const url = String(input);
     const body = url.includes("/auth/me") ? ME
@@ -87,6 +87,6 @@ it("shows budget, spent and diff for expense and income", async () => {
   expect((await screen.findByLabelText("Everyday Food diff")).textContent).toBe("₹1,800");
   expect(screen.getByLabelText("Debt Tax diff").textContent).toBe("₹0");
   expect(screen.getByLabelText("Wages Paycheck diff").textContent).toBe("₹2,000");
-  expect(screen.getByText("since September 2026")).toBeTruthy();
+  expect(screen.getByText("since September 2026, until November 2026, then ₹1,000")).toBeTruthy();
   expect(within(screen.getByLabelText("Expense totals")).getByText("₹1,800")).toBeTruthy();
 });
