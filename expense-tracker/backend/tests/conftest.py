@@ -10,6 +10,9 @@ os.environ["DATABASE_URL"] = os.environ.get(
 os.environ.setdefault("COOKIE_SECURE", "false")
 os.environ.setdefault("APP_ENV", "test")
 os.environ.setdefault("LOG_LEVEL", "WARNING")
+os.environ.setdefault(
+    "SEED_CONFIG", str(Path(__file__).resolve().parents[2] / "config" / "seed.yaml")
+)
 
 from alembic import command
 from alembic.config import Config
@@ -24,7 +27,7 @@ from app.main import app
 BACKEND = Path(__file__).resolve().parents[1]
 PASSWORD = "correct-horse-battery"
 # Reference data written by migrations survives between tests.
-KEEP = {"alembic_version", "category_templates", "app_settings"}
+KEEP = {"alembic_version", "app_settings"}
 
 
 def alembic_config() -> Config:
@@ -119,9 +122,9 @@ def category_id(client: Api, parent: str, sub: str, kind: str = "expense") -> st
     raise AssertionError(f"category {parent} > {sub} not found")
 
 
-def account_id(client: Api, name: str) -> str:
+def account_id(client: Api, name: str, pay_type: str | None = None) -> str:
     for a in client.get("/api/v1/accounts").json():
-        if a["name"] == name:
+        if a["name"] == name and pay_type in (None, a["pay_type"]):
             return str(a["id"])
     raise AssertionError(f"account {name} not found")
 

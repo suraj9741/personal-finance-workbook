@@ -4,7 +4,7 @@ COMPOSE := docker compose
 TEST_COMPOSE := docker compose -f docker-compose.test.yml
 
 .DEFAULT_GOAL := help
-.PHONY: help env up down logs ps migrate create-admin seed backup restore test lint fmt clean-test
+.PHONY: help env up down logs ps migrate create-admin apply-config seed backup restore test lint fmt clean-test
 
 help: ## Show this list
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  make %-14s %s\n", $$1, $$2}'
@@ -34,6 +34,9 @@ create-admin: env ## Create the first admin: make create-admin EMAIL=you@example
 	@test -n "$(EMAIL)" || (echo "Usage: make create-admin EMAIL=you@example.com NAME=Suraj" && exit 1)
 	$(COMPOSE) run --rm -it backend python -m app.cli create-admin --email "$(EMAIL)" $(if $(NAME),--name "$(NAME)")
 
+apply-config: env ## Add what's missing from config/seed.yaml now (make up does this too)
+	$(COMPOSE) run --rm seed
+
 seed: env ## Load demo households with fake data (for trying the app, not for real use)
 	$(COMPOSE) run --rm backend python -m app.cli seed-demo
 
@@ -46,7 +49,9 @@ restore: ## Replace the database with a backup: make restore FILE=backups/xxx.du
 	@test -f "$(FILE)" || (echo "Usage: make restore FILE=backups/expense-....dump" && exit 1)
 	@read -p "This replaces ALL current data with $(FILE). Type 'yes' to continue: " ok && [ "$$ok" = yes ]
 	$(COMPOSE) stop backend frontend
-	$(COMPOSE) exec -T db sh -c 'pg_restore -U "$$POSTGRES_USER" -d "$$POSTGRES_DB" --clean --if-exists --no-owner' < "$(FILE)"
+	@# Start from an empty schema, so tables added after the backup was taken don't linger.
+	$(COMPOSE) exec -T db sh -c 'psql -q -U "$$POSTGRES_USER" -d "$$POSTGRES_DB" -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public"'
+	$(COMPOSE) exec -T db sh -c 'pg_restore -U "$$POSTGRES_USER" -d "$$POSTGRES_DB" --no-owner' < "$(FILE)"
 	$(COMPOSE) start backend frontend
 
 test: ## Run backend and frontend tests in throwaway containers

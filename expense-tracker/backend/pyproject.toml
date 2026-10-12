@@ -15,6 +15,7 @@ dependencies = [
     "structlog>=24.4",
     "prometheus-fastapi-instrumentator>=7.0",
     "prometheus-client>=0.21",
+    "pyyaml>=6.0",
 ]
 
 [dependency-groups]
@@ -23,6 +24,7 @@ dev = [
     "httpx>=0.28",
     "ruff>=0.8",
     "mypy>=1.13",
+    "types-pyyaml>=6.0.12.20260906",
 ]
 
 [tool.uv]

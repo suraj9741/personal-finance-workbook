@@ -6,7 +6,7 @@ import { CategoryPicker } from "../components/CategoryPicker";
 import { Modal } from "../components/Modal";
 import { MonthPicker } from "../components/MonthPicker";
 import { TransactionForm } from "../components/TransactionForm";
-import { currentMonth, money } from "../format";
+import { accountLabel, currentMonth, money } from "../format";
 import { useAccounts, useCategories, useMembers, useRefreshMoney } from "../hooks";
 
 const PAGE = 100;
@@ -52,7 +52,7 @@ export function Transactions() {
     onError: (e: Error) => setNotice(e.message),
   });
 
-  const accountName = (id: string | null) => accounts.find((a) => a.id === id)?.name ?? "";
+  const accountName = (id: string | null) => accountLabel(accounts.find((a) => a.id === id), accounts);
   const items = list.data?.items ?? [];
 
   return (
@@ -83,7 +83,7 @@ export function Transactions() {
           <option value="">All accounts</option>
           {accounts.map((a) => (
             <option key={a.id} value={a.id}>
-              {a.name}
+              {accountLabel(a, accounts)}
             </option>
           ))}
         </select>

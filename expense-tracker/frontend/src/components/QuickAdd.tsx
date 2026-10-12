@@ -1,7 +1,8 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useRef, useState, type FormEvent } from "react";
+import { Link } from "react-router-dom";
 import { api, post, type Suggestion, type Transaction, type TransactionInput } from "../api";
-import { categoryLabel, money, today } from "../format";
+import { accountLabel, categoryLabel, money, today } from "../format";
 import { useAccounts, useCategories, useRefreshMoney } from "../hooks";
 
 const LAST_ACCOUNT = "et:lastAccount";
@@ -16,7 +17,8 @@ function readLastAccount(): string {
 
 /** The main way money gets in: amount, description, account, Enter. */
 export function QuickAdd() {
-  const accounts = useAccounts().data ?? [];
+  const accountsQuery = useAccounts();
+  const accounts = accountsQuery.data ?? [];
   const categories = useCategories().data ?? [];
   const refresh = useRefreshMoney();
   const amountRef = useRef<HTMLInputElement>(null);
@@ -110,6 +112,17 @@ export function QuickAdd() {
 
   const showSuggestions = !picked && (suggestions.data?.length ?? 0) > 0;
 
+  if (accountsQuery.isSuccess && accounts.length === 0) {
+    return (
+      <div className="quick-add" role="status">
+        <p className="qa-msg hint">
+          Welcome! Add your first account (a bank, card or cash) in <Link to="/settings">Settings</Link>, and
+          your own categories there too. Then you can start adding expenses here.
+        </p>
+      </div>
+    );
+  }
+
   return (
     <form className="quick-add" onSubmit={submit} aria-label="Quick add">
       <input
@@ -151,7 +164,7 @@ export function QuickAdd() {
       <select aria-label="Account" value={account} onChange={(e) => setAccountId(e.target.value)}>
         {accounts.map((a) => (
           <option key={a.id} value={a.id}>
-            {a.name}
+            {accountLabel(a, accounts)}
             {a.visibility === "private" ? " (private)" : ""}
           </option>
         ))}

@@ -1,7 +1,7 @@
 import { useMutation } from "@tanstack/react-query";
 import { useState, type FormEvent } from "react";
 import { del, patch, post, type Kind, type Transaction, type TransactionInput } from "../api";
-import { today } from "../format";
+import { accountLabel, today } from "../format";
 import { useAccounts, useCategories, useRefreshMoney } from "../hooks";
 import { CategoryPicker } from "./CategoryPicker";
 
@@ -91,7 +91,7 @@ export function TransactionForm({ existing, onDone }: Props) {
         <select value={form.account_id} onChange={(e) => set({ account_id: e.target.value })}>
           {accounts.map((a) => (
             <option key={a.id} value={a.id}>
-              {a.name}
+              {accountLabel(a, accounts)}
             </option>
           ))}
         </select>
@@ -105,7 +105,7 @@ export function TransactionForm({ existing, onDone }: Props) {
               .filter((a) => a.id !== form.account_id)
               .map((a) => (
                 <option key={a.id} value={a.id}>
-                  {a.name}
+                  {accountLabel(a, accounts)}
                 </option>
               ))}
           </select>

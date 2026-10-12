@@ -22,6 +22,8 @@ class Settings(BaseSettings):
     invite_expiry_days: int = 7
     login_max_failures: int = 5
     login_window_minutes: int = 15
+    # config/seed.yaml, mounted into the containers. Unset: nothing is seeded.
+    seed_config: str | None = None
 
     @field_validator("cors_origins", mode="before")
     @classmethod

@@ -23,10 +23,11 @@ def test_other_household_sees_nothing(admin: Api, solo: Api) -> None:
     # Can't post into someone else's account or category.
     body = {"date": "2026-10-01", "amount": "1", "account_id": hdfc}
     assert solo.post("/api/v1/transactions", json=body).status_code == 404
+    own_account = solo.post("/api/v1/accounts", json={"name": "HDFC", "pay_type": "bank"})
     own = {
         "date": "2026-10-01",
         "amount": "1",
-        "account_id": account_id(solo, "HDFC"),
+        "account_id": own_account.json()["id"],
         "category_id": food,
     }
     assert solo.post("/api/v1/transactions", json=own).status_code == 404
