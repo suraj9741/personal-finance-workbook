@@ -1,14 +1,15 @@
-# personal-finance-workbook
+# Finance sheet (Google Apps Script)
 
 Google Apps Script that builds and maintains the yearly finance workbook in Google Sheets (currently "2027 Finance")
 (Config, Data, monthly dashboards, Accounts, Annual Dashboard, Quick-Add sidebar).
 
 The live script is the standalone Apps Script project **"google finance sheet"**
-(Drive ▸ Budgets ▸ scripts). This repo is its source of truth from now on: edit here, then
-`clasp push`.
+(Drive ▸ Budgets ▸ scripts). This folder is its source of truth: edit here, then
+`clasp push` **from this folder** (`finance-sheet/`).
 
-**New:** [`expense-tracker/`](expense-tracker/README.md) is the web app that replaces this
-workbook (FastAPI + React + Postgres, run locally with Docker). See its README to run it.
+The web app that replaces this workbook lives next door in
+[`../expense-tracker/`](../expense-tracker/README.md). Its category list is generated from
+`src/config/Defaults.gs` here, so changes to that file show up in the app's CI too.
 
 ## Layout
 
@@ -112,6 +113,7 @@ dropdowns, named ranges, triggers, and how each function reacts to bad input. Ne
 no install step.
 
 ```
+cd finance-sheet
 npm test
 ```
 
@@ -173,9 +175,11 @@ clasp login                             # opens a browser; sign in with the Goog
 
 Also turn on the Apps Script API once: https://script.google.com/home/usersettings
 
-Then, from a clone of this repo:
+Then, from the `finance-sheet/` folder of your clone (that's where `.clasp.json` is):
 
 ```sh
+cd personal-finance-workbook/finance-sheet
+clasp status      # lists the files a push would upload: the src/ .gs files and appsscript.json
 clasp push        # upload src/ to the Apps Script project (replaces ALL files there)
 clasp open        # open the project in the browser editor
 ```
@@ -206,7 +210,7 @@ rather hide the IDs anyway, make the repo private.
 How the login token works, what it can access, and how to revoke it:
 [docs/authentication.md](docs/authentication.md).
 
-`.github/workflows/clasp-push.yml` runs `clasp push` when you start it by hand
+`.github/workflows/finance-sheet-push.yml` (at the repo root) runs `clasp push` in `finance-sheet/` when you start it by hand
 (Actions ▸ Push to Apps Script ▸ Run workflow). It never runs on its own. To enable it, add
 a repository secret named `CLASPRC_JSON` containing the contents of your `~/.clasprc.json`.
 That token can edit your Apps Script projects, so only do this if the repo is private or you

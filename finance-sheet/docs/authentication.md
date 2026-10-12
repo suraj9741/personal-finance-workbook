@@ -49,7 +49,7 @@ sequenceDiagram
     clasp->>Google: refresh token
     Google-->>clasp: new access token
   end
-  clasp->>API: projects.updateContent(scriptId, files from src/)
+  clasp->>API: projects.updateContent(scriptId, files from finance-sheet/src/)
   API->>API: is the API switch on? does this user own or edit the script?
   API->>Proj: replace ALL files with the pushed set
 ```
@@ -64,7 +64,7 @@ flowchart LR
   runner -- "acts as YOU" --> api["Apps Script API"] --> proj["Your script project"]
 ```
 
-From `.github/workflows/clasp-push.yml`:
+From `.github/workflows/finance-sheet-push.yml` (it runs in `finance-sheet/`):
 
 ```yaml
 - name: Write clasp credentials

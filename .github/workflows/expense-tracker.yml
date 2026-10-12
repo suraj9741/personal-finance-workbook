@@ -4,12 +4,12 @@ on:
   push:
     paths:
       - "expense-tracker/**"
-      - "src/config/Defaults.gs"
+      - "finance-sheet/src/config/Defaults.gs"
       - ".github/workflows/expense-tracker.yml"
   pull_request:
     paths:
       - "expense-tracker/**"
-      - "src/config/Defaults.gs"
+      - "finance-sheet/src/config/Defaults.gs"
       - ".github/workflows/expense-tracker.yml"
 
 jobs:

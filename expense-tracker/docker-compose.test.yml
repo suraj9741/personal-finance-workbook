@@ -22,7 +22,7 @@ services:
       DEFAULTS_GS: /defaults/Defaults.gs
     # Defaults.gs is mounted so the test that keeps categories in sync with it can run.
     volumes:
-      - ../src/config/Defaults.gs:/defaults/Defaults.gs:ro
+      - ../finance-sheet/src/config/Defaults.gs:/defaults/Defaults.gs:ro
     depends_on:
       test-db: { condition: service_healthy }
     command: ["pytest"]

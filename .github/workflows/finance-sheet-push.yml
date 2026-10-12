@@ -1,5 +1,5 @@
 # Manual deploy: Actions ▸ "Push to Apps Script" ▸ Run workflow.
-# Not triggered on push on purpose. Needs the repo secret CLASPRC_JSON (see README).
+# Not triggered on push on purpose. Needs the repo secret CLASPRC_JSON (see finance-sheet/README.md).
 name: Push to Apps Script
 on:
   workflow_dispatch:
@@ -7,6 +7,9 @@ on:
 jobs:
   push:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: finance-sheet   # .clasp.json lives here
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

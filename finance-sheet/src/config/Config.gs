@@ -14,7 +14,7 @@
  *  • Dependent Category dropdown via onEdit (needs a BOUND script: Extensions ▸ Apps Script).
  *
  * QUICK START
- *  1. From the repo root: clasp push   (see README — uploads every file under src/)
+ *  1. From finance-sheet/: clasp push   (see README — uploads every file under src/)
  *  2. Reload the sheet ▸ Finance Tools ▸ Build New Workbook
  *
  * FILES (all share ONE global scope — no imports; every function/const is visible everywhere)
