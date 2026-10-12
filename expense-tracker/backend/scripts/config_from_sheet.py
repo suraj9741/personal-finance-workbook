@@ -24,6 +24,8 @@ PAY_TYPES = {
 # for its kind: expense -> spend, income -> earned, transfer -> transfer.
 PARENT_GROUPS = {("expense", "Savings"): "saving"}
 SUB_GROUPS = {("expense", "Friend", "lent"): "lent", ("income", "Friend", "Refund"): "repaid"}
+# Groups only your own household gets. Invited households get everything else.
+FAMILY = {"Gotu", "Mom", "Baba", "Pratiksha", "Farm"}
 
 HEADER = """\
 # What the app adds at deploy time (`make up` runs the seed step after migrations).
@@ -59,6 +61,24 @@ def item(kind: str, parent: str, sub: str) -> str:
     return f"{{name: {q(sub)}, counts_as: {group}}}" if group else q(sub)
 
 
+def categories(
+    blocks: list[tuple[str, dict[str, list[str]]]], indent: str, skip: set[str] | None = None
+) -> list[str]:
+    lines = []
+    for kind, parents in blocks:
+        lines.append(f"{indent}{kind}:")
+        for parent, subs in parents.items():
+            if skip and parent in skip:
+                continue
+            items = ", ".join(item(kind, parent, s) for s in subs)
+            group = PARENT_GROUPS.get((kind, parent))
+            if group:
+                lines.append(f"{indent}  {q(parent)}: {{counts_as: {group}, items: [{items}]}}")
+            else:
+                lines.append(f"{indent}  {q(parent)}: [{items}]")
+    return lines
+
+
 def render(text: str) -> str:
     lines = [HEADER, "settings:", '  currency_symbol: "₹"', '  invite_expiry_days: "7"', ""]
     lines += ["# Every household that has a site admin (yours).", "admin_household:", "  accounts:"]
@@ -71,27 +91,22 @@ def render(text: str) -> str:
     for pay_type, names in by_type.items():
         lines.append(f"    {pay_type}: [{', '.join(names)}]")
     lines.append("  categories:")
+    blocks = []
     for key in ("EXPENSE", "INCOME", "TRANSFER"):
         block = re.search(key + r":\s*(\{.*?\n  \})", text, re.S)
         if not block:
             raise ValueError(f"{key} block not found in Defaults.gs")
-        kind = key.lower()
-        lines.append(f"    {kind}:")
-        for parent, subs in ast.literal_eval(block.group(1)).items():
-            items = ", ".join(item(kind, parent, s) for s in subs)
-            group = PARENT_GROUPS.get((kind, parent))
-            if group:
-                lines.append(f"      {q(parent)}: {{counts_as: {group}, items: [{items}]}}")
-            else:
-                lines.append(f"      {q(parent)}: [{items}]")
+        blocks.append((key.lower(), ast.literal_eval(block.group(1))))
+    lines += categories(blocks, "    ")
     lines += [
         "",
-        "# Households created from an invite. Empty means new people start with nothing and",
-        "# add their own accounts and categories. Add categories here (same format as above)",
-        "# to give everyone a starting list. You can also edit it on the Admin page.",
+        "# Households created from an invite start with no accounts and get these categories",
+        "# (the list above without the family groups). Empty it ({}) to give new people",
+        "# nothing. You can also edit it on the Admin page.",
         "new_household:",
-        "  categories: {}",
+        "  categories:",
     ]
+    lines += categories(blocks, "    ", skip=FAMILY)
     return "\n".join(lines) + "\n"
 
 

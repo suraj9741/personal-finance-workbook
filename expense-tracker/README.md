@@ -33,7 +33,8 @@ Both ports bind to `127.0.0.1`, so nothing else on your Wi-Fi can reach the app.
 
 Your accounts and categories come from [`config/seed.yaml`](config/seed.yaml) (see
 [Accounts and categories](#accounts-and-categories-configseedyaml) below). People you invite
-into their own household start empty and add their own in Settings.
+into their own household start with no accounts and the starter categories (without your
+family groups). They add their own accounts in Settings.
 
 ### Adding people
 
@@ -137,8 +138,8 @@ The full, typed list is at http://localhost:8000/docs.
 
 ### Accounts and categories (config/seed.yaml)
 
-`config/seed.yaml` holds your accounts, your categories, an optional starter category list
-for new households, and app settings. On every `make up` the one-shot `seed` service applies
+`config/seed.yaml` holds your accounts, your categories, the starter category list for new
+households, and app settings. On every `make up` the one-shot `seed` service applies
 it right after migrations. To apply an edit without a restart, run `make apply-config`.
 
 The seed only **adds**. It never renames, changes or deletes anything, so the database stays
@@ -149,8 +150,10 @@ added back on the next deploy. To change something that already exists, change i
 - `admin_household`: applied to every household that has a site admin (yours). It started out
   as the finance sheet's starter list: 16 accounts and 154 categories, including the family
   groups.
-- `new_household`: categories copied into each household created from an invite. It is empty,
-  so new people build their own. You can also edit this list on the Admin page.
+- `new_household`: categories copied into each household created from an invite: the same
+  list without the family groups (Gotu, Mom, Baba, Pratiksha, Farm), 101 categories. New
+  households get no accounts. A change here only affects households created after it; existing
+  households keep their own categories. You can also edit this list on the Admin page.
 - A category that isn't plain spend or income says what it counts as (`saving`, `lent`,
   `repaid`), which keeps savings, money lent and transfers out of "Spent".
 

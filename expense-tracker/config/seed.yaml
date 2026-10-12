@@ -58,8 +58,35 @@ admin_household:
     transfer:
       Self Transfer: [Bank to Bank, Bank to Credit, Credit to Bank, Cash to Bank, Bank to Cash, Broker to Bank, Bank to Broker, Credit to Cash]
 
-# Households created from an invite. Empty means new people start with nothing and
-# add their own accounts and categories. Add categories here (same format as above)
-# to give everyone a starting list. You can also edit it on the Admin page.
+# Households created from an invite start with no accounts and get these categories
+# (the list above without the family groups). Empty it ({}) to give new people
+# nothing. You can also edit it on the Admin page.
 new_household:
-  categories: {}
+  categories:
+    expense:
+      Debt: [Credit cards, Car EMI, Electronics EMI, EMI, Tax, GST]
+      Education: [Tuition, Books]
+      Entertainment: [Concerts, Movies / Shows, Games]
+      Everyday: [Groceries, Food, Clothes, Subscriptions, Utilities, Shopping]
+      Savings: {counts_as: saving, items: [PPF, Friend, Share Market, H Gold]}
+      Gifts: [Gifts, Gift card, Other]
+      Health: [Doctors, Pharmacy]
+      Room: [Rent/mortgage, Groceries, Maintenance, Improvements, Property taxes, Internet, Electricity, Heat/gas, TV]
+      Friend: [EMI, borrow, {name: lent, counts_as: lent}]
+      Home: [Rent/mortgage, Clothes, Groceries, Maintenance, Improvements, Property taxes, Internet, Electricity, Heat/gas, TV, Paper bill, Milk bill, Home Food, Wedding]
+      Insurance: [Vehicle, Health, Home, Life]
+      Pets: [Food, Vet/medical, Toys, Supplies]
+      Technology: [Domains & hosting, Online services, Hardware, Software]
+      Transportation: [Fuel, Car, Fast Tag, Bike, Public transit, Trip]
+      Travel: [Airfare, Hotels, Travel Food]
+      Other: [Other]
+    income:
+      Wages: [Paycheck, Bonus, Commission, W Other]
+      Friend: [{name: Refund, counts_as: repaid}, Rent]
+      Savings: [PPF, Friend, Interest Income, FD]
+      Share Market: [Dividends, S Refund, Stock sell]
+      Gifts: [Gifts, Gift card, Other]
+      Trip: [Refund, Fee]
+      Other: [Other]
+    transfer:
+      Self Transfer: [Bank to Bank, Bank to Credit, Credit to Bank, Cash to Bank, Bank to Cash, Broker to Bank, Bank to Broker, Credit to Cash]
