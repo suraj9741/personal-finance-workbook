@@ -17,7 +17,8 @@ src/
   core/                  Utils (logging), Spreadsheet (open/backup), Styling, Validation
   build/                 one file per sheet builder; Build.gs runs them in order
   ui/                    Menu, Triggers (onEdit), Navigation, QuickAdd sidebar
-  tests/Tests.gs         runVerificationTests
+  tests/Tests.gs         runVerificationTests (in-sheet tests)
+tests/node/              Node tests with a SpreadsheetApp stand-in (npm test)
 ```
 
 Apps Script has **no imports**: every `.gs` file is loaded into one shared global scope, so
@@ -92,6 +93,65 @@ flowchart TB
   edit(["You edit Type in Data"]) --> trig["ui/Triggers.gs handleEdit_()"] -->|sets Category dropdown| data
   data -->|formulas read it| dash["Monthly + Annual dashboards"]
 ```
+
+## Testing
+
+There are two test suites. Neither touches your real workbook's data.
+
+**1. Node tests (`npm test`)** run on your computer and on every push (GitHub Actions ▸ Tests).
+They load every `src/**/*.gs` file into Node with a stand-in for `SpreadsheetApp`
+(`tests/node/gas-mock.js`). The stand-in stores values and formulas but cannot calculate
+formulas, so these tests check what the script *writes*: sheet order, headers, formulas,
+dropdowns, named ranges, triggers, and how each function reacts to bad input. Needs Node 20+;
+no install step.
+
+```
+npm test
+```
+
+**2. In-sheet tests (Finance Tools ▸ Run Verification Tests)** run inside Google Sheets, where
+formulas really calculate. The suite builds a throwaway workbook, fills it with a small known
+set of transactions, checks the numbers every sheet shows, and writes the results to a
+`Test_Report` sheet in the workbook you ran it from. If everything passes, the throwaway
+workbook goes to the Drive trash; if anything fails, it is kept and its link is in the report.
+Your real onEdit trigger is never reinstalled during a test run.
+
+Apps Script stops any single run at 6 minutes, and the suite builds a whole workbook, so it
+watches the clock. After about 4½ minutes it finishes the group it is on, saves its place, and
+stops with "PAUSED" at the top of `Test_Report`. Run **Finance Tools ▸ Resume Verification
+Tests** to carry on; repeat until the report shows the final pass/fail count. If Google kills a
+run anyway, `Test_Report` still has every result up to the group that was cut off, and Resume
+continues after it (finishing the build if that was the step cut off). Starting **Run
+Verification Tests** again instead throws away the paused run and starts over. Only these two
+menu items run the tests; no trigger does.
+
+### Scenarios covered
+
+| Area | Node tests | In-sheet tests |
+| --- | --- | --- |
+| Build from scratch: every sheet created, in order, hidden helpers hidden | ✓ | ✓ |
+| Config seeded with default categories and accounts; no duplicates or stray spaces | ✓ | ✓ |
+| Data sheet: headers, Month/Parent/Sub/key formulas, Type/Category/Account dropdowns | ✓ | ✓ |
+| Monthly KPI cards: opening balance, income, expense, net, savings rate, budget | | ✓ |
+| Budget vs Actual for expense and income categories | | ✓ |
+| Transfers between accounts (counted in neither income nor expense) | | ✓ |
+| Monthly account balances, carry-forward from the previous month, NET | ✓ (formula) | ✓ |
+| Monthly transaction list, including an empty month | | ✓ |
+| Refund entered as a negative expense | | ✓ |
+| Accounts sheet: year-to-date balances per account and NET | | ✓ |
+| Annual Dashboard: totals, averages, top categories, best month, health score, net worth | | ✓ |
+| Navigation links between month sheets | ✓ | ✓ |
+| Dependent Category dropdown when Type changes; warnings for incomplete rows | ✓ | ✓ |
+| Quick Add: first empty row, formula columns untouched, transfers, bad amount or date | ✓ | ✓ |
+| Running the build twice: Config edits kept, Data backed up, missing defaults re-added | ✓ | |
+| Rebuild modes: BACKUP, SKIP, DELETE | ✓ | |
+| A month sheet deleted, then Validate and Resume | ✓ | ✓ |
+| A row dated next year is left out of this year's totals | | ✓ |
+| A wrong Drive folder ID stops with a clear error | ✓ | ✓ |
+| Only one onEdit trigger installed; none during a test run | ✓ | ✓ |
+| The test suite itself leaves the host workbook alone except for `Test_Report` | ✓ | |
+| Test suite under the 6-minute limit: pause, resume, killed mid-build, killed mid-group | ✓ | ✓ |
+| Nothing runs the tests automatically | ✓ | |
 
 ## Connect to GitHub with clasp
 

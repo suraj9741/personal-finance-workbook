@@ -11,8 +11,8 @@ function getFormData_(ss){
   const col = c => cfg.getRange(2,c,CONFIG.MAX_CATEGORY_ROWS,1).getValues().map(r=>String(r[0]).trim()).filter(String);
   return { Expense: col(25), Income: col(26), Transfer: col(27), accounts: col(18) };  // Y, Z, AA, R
 }
-function addQuickTransaction(p){
-  const ss = SpreadsheetApp.getActive(), sh = ss.getSheetByName('Data'); if(!sh) throw new Error('Data sheet missing');
+function addQuickTransaction(p, ssOpt){   // ssOpt: only the test suite passes a workbook
+  const ss = ssOpt || SpreadsheetApp.getActive(), sh = ss.getSheetByName('Data'); if(!sh) throw new Error('Data sheet missing');
   // Next free entry row = first blank in column A (Date)
   const colA = sh.getRange(2,1,CONFIG.MAX_TRANSACTION_ROWS,1).getValues();
   let n = 0; while(n < colA.length && colA[n][0] !== '') n++;
