@@ -116,8 +116,8 @@ export function QuickAdd() {
     return (
       <div className="quick-add" role="status">
         <p className="qa-msg hint">
-          Welcome! Add your first account (a bank, card or cash) in <Link to="/settings">Settings</Link>, and
-          your own categories there too. Then you can start adding expenses here.
+          Welcome! Add your first account (a bank, card or cash) in <Link to="/settings">Settings</Link>. Your
+          categories are ready, and you can change them there too. Then you can start adding expenses here.
         </p>
       </div>
     );

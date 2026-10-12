@@ -47,7 +47,10 @@ def test_config_matches_the_finance_sheet_starter_list() -> None:
     assert groups[("expense", "Everyday", "Food")] == "spend"
     assert groups[("income", "Wages", "Paycheck")] == "earned"
     assert groups[("transfer", "Self Transfer", "Bank to Credit")] == "transfer"
-    assert cfg.new_household.categories == {}
+    template = seed.flat_categories(cfg.new_household.categories)
+    assert len(template) == 101
+    assert not {parent for _, parent, _, _ in template} & FAMILY
+    assert set(template) <= set(categories)
 
 
 @pytest.mark.skipif(not DEFAULTS.exists(), reason="finance-sheet source not present")
@@ -78,9 +81,11 @@ def test_admin_household_gets_everything_in_the_config(admin: Api) -> None:
     assert {c["parent_name"] for c in categories} >= FAMILY
 
 
-def test_new_household_starts_empty(solo: Api) -> None:
+def test_new_household_gets_template_categories_but_no_accounts(solo: Api) -> None:
     assert solo.get("/api/v1/accounts").json() == []
-    assert solo.get("/api/v1/categories").json() == []
+    categories = solo.get("/api/v1/categories").json()
+    assert len(categories) == 101
+    assert not {c["parent_name"] for c in categories} & FAMILY
 
 
 def test_family_member_shares_the_admin_household(family_member: Api) -> None:
@@ -88,13 +93,28 @@ def test_family_member_shares_the_admin_household(family_member: Api) -> None:
 
 
 def test_template_from_admin_page_is_copied_to_new_households(admin: Api) -> None:
-    admin.post(
+    added = admin.post(
         "/api/v1/admin/category-template",
-        json={"kind": "expense", "parent_name": "Everyday", "sub_name": "Food"},
+        json={"kind": "expense", "parent_name": "Kids", "sub_name": "School"},
     )
+    assert added.status_code == 201
     newcomer = join_by_invite(admin, "new@example.com", "New", admin_new_household="New house")
     cats = newcomer.get("/api/v1/categories").json()
-    assert [(c["parent_name"], c["sub_name"]) for c in cats] == [("Everyday", "Food")]
+    assert len(cats) == 102
+    assert ("Kids", "School") in {(c["parent_name"], c["sub_name"]) for c in cats}
+
+
+def test_template_changes_do_not_touch_existing_households(solo: Api, db: Session) -> None:
+    food = category_id(solo, "Everyday", "Food")
+    assert solo.delete(f"/api/v1/categories/{food}").status_code == 204
+    cfg = config()
+    cfg.new_household.categories["expense"]["Kids"] = ["School"]
+    assert seed.apply(db, cfg)["template_categories"] == 1
+    left = solo.get("/api/v1/categories").json()
+    assert len(left) == 100
+    names = {(c["parent_name"], c["sub_name"]) for c in left}
+    assert ("Kids", "School") not in names
+    assert ("Everyday", "Food") not in names
 
 
 def test_seed_is_add_only_and_keeps_app_edits(admin: Api, db: Session) -> None:
