@@ -1,0 +1,40 @@
+# Throwaway stack for `make test` and `make lint`. Nothing here touches your real data.
+name: expense-tracker-test
+
+services:
+  test-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: expense_test
+    tmpfs: /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d expense_test"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  backend-tests:
+    build: { context: ./backend, target: dev }
+    environment:
+      TEST_DATABASE_URL: postgresql+psycopg://postgres:postgres@test-db:5432/expense_test
+      DEFAULTS_GS: /defaults/Defaults.gs
+    # Defaults.gs is mounted so the test that keeps categories in sync with it can run.
+    volumes:
+      - ../src/config/Defaults.gs:/defaults/Defaults.gs:ro
+    depends_on:
+      test-db: { condition: service_healthy }
+    command: ["pytest"]
+
+  backend-lint:
+    build: { context: ./backend, target: dev }
+    command: ["sh", "-c", "ruff check . && ruff format --check . && mypy"]
+
+  frontend-tests:
+    build: { context: ./frontend, target: dev }
+    command: ["sh", "-c", "npm run typecheck && npm test"]
+
+  frontend-lint:
+    build: { context: ./frontend, target: dev }
+    command: ["npm", "run", "lint"]

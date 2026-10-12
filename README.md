@@ -7,6 +7,9 @@ The live script is the standalone Apps Script project **"google finance sheet"**
 (Drive ▸ Budgets ▸ scripts). This repo is its source of truth from now on: edit here, then
 `clasp push`.
 
+**New:** [`expense-tracker/`](expense-tracker/README.md) is the web app that replaces this
+workbook (FastAPI + React + Postgres, run locally with Docker). See its README to run it.
+
 ## Layout
 
 ```

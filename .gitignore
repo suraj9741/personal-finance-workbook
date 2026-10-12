@@ -2,3 +2,15 @@
 .clasprc.json
 node_modules/
 .DS_Store
+
+# Expense tracker web app
+expense-tracker/.env
+expense-tracker/backups/
+expense-tracker/backend/.venv/
+expense-tracker/frontend/node_modules/
+expense-tracker/frontend/dist/
+expense-tracker/frontend/test-results/
+__pycache__/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
