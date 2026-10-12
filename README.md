@@ -116,6 +116,15 @@ set of transactions, checks the numbers every sheet shows, and writes the result
 workbook goes to the Drive trash; if anything fails, it is kept and its link is in the report.
 Your real onEdit trigger is never reinstalled during a test run.
 
+Apps Script stops any single run at 6 minutes, and the suite builds a whole workbook, so it
+watches the clock. After about 4½ minutes it finishes the group it is on, saves its place, and
+stops with "PAUSED" at the top of `Test_Report`. Run **Finance Tools ▸ Resume Verification
+Tests** to carry on; repeat until the report shows the final pass/fail count. If Google kills a
+run anyway, `Test_Report` still has every result up to the group that was cut off, and Resume
+continues after it (finishing the build if that was the step cut off). Starting **Run
+Verification Tests** again instead throws away the paused run and starts over. Only these two
+menu items run the tests; no trigger does.
+
 ### Scenarios covered
 
 | Area | Node tests | In-sheet tests |
@@ -141,6 +150,8 @@ Your real onEdit trigger is never reinstalled during a test run.
 | A wrong Drive folder ID stops with a clear error | ✓ | ✓ |
 | Only one onEdit trigger installed; none during a test run | ✓ | ✓ |
 | The test suite itself leaves the host workbook alone except for `Test_Report` | ✓ | |
+| Test suite under the 6-minute limit: pause, resume, killed mid-build, killed mid-group | ✓ | ✓ |
+| Nothing runs the tests automatically | ✓ | |
 
 ## Connect to GitHub with clasp
 

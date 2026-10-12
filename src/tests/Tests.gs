@@ -17,33 +17,85 @@
 
 const TEST_MONTH_ = m => m + '_' + CONFIG.YEAR;
 
-function runVerificationTests() {
+/* Apps Script stops any run at 6 minutes. Between groups the suite checks the clock, and once
+   this budget is used it saves its place and stops cleanly; Finance Tools ▸ Resume Verification
+   Tests carries on from there. Results so far are always in Test_Report. Nothing runs these
+   tests automatically: only the two menu items do. */
+let   TEST_TIME_BUDGET_MS_ = 4.5 * 60 * 1000;
+const TEST_STATE_KEY_ = 'VERIFICATION_TEST_STATE';
+
+function runVerificationTests()    { return runTests_(null); }
+function resumeVerificationTests() {
+  const st = loadTestState_();
+  if (!st) Log_('INFO', 'No paused test run found — starting a new one.');
+  return runTests_(st);
+}
+
+function testGroups_(saved) {
+  return [
+    ['1. Build from scratch',                  (T, ss) => { buildNewWorkbook(ss); testStructure_(T, ss); }],
+    ['2. Seed test data',                      (T, ss) => { seedTestConfig_(T, ss); writeTestRows_(ss, 2, testRows_()); SpreadsheetApp.flush(); }],
+    ['3. Data sheet auto-columns',             testDataColumns_],
+    ['4. Monthly KPI cards',                   testMonthlyKpis_],
+    ['5. Budget vs Actual',                    testBudgetVsActual_],
+    ['6. Transfers',                           testTransfers_],
+    ['7. Monthly account balances',            testMonthlyAccounts_],
+    ['8. Monthly transactions list',           testTransactionsPanel_],
+    ['9. Accounts sheet (year to date)',       testAccountsSheet_],
+    ['10. Annual Dashboard',                   testAnnual_],
+    ['11. Navigation',                         testNavigation_],
+    ['12. Dependent Category dropdown',        testDependentDropdown_],
+    ['13. Quick Add',                          testQuickAdd_],
+    ['14. Missing month → Validate → Resume',  testMissingMonthAndResume_],
+    ['15. Row dated next year is ignored',     testOutOfYearRow_],
+    ['16. Wrong Drive folder ID fails loudly', T => testBadFolder_(T, saved)]
+  ];
+}
+
+/* st: saved place of a paused run, or null for a fresh run.
+   State is saved BEFORE each group, so even if Apps Script kills the run mid-group,
+   Resume knows which group was cut off. */
+function runTests_(st) {
+  const started = Date.now();
   const host = SpreadsheetApp.getActiveSpreadsheet();
-  const T = newTestKit_();
   const saved = { name: CONFIG.WORKBOOK_NAME, folder: CONFIG.DRIVE_FOLDER_ID };
-  let tmp = null;
-  Log_('INFO', '=== Running Verification Tests (throwaway workbook) ===');
+  const groups = testGroups_(saved);
+  let tmp = null, T, next = 0, paused = false;
+  Log_('INFO', '=== ' + (st ? 'Resuming' : 'Running') + ' Verification Tests (throwaway workbook) ===');
   TEST_MODE_ = true;
   try {
-    const stamp = Utilities.formatDate(new Date(), Session.getScriptTimeZone() || 'GMT', 'yyyyMMdd_HHmmss');
-    tmp = SpreadsheetApp.create(CONFIG.WORKBOOK_NAME + ' — TEST ' + stamp);
-    T.group('1. Build from scratch', () => { buildNewWorkbook(tmp); testStructure_(T, tmp); });
-    T.group('2. Seed test data', () => { seedTestConfig_(T, tmp); writeTestRows_(tmp, 2, testRows_()); SpreadsheetApp.flush(); });
-    T.group('3. Data sheet auto-columns', () => testDataColumns_(T, tmp));
-    T.group('4. Monthly KPI cards', () => testMonthlyKpis_(T, tmp));
-    T.group('5. Budget vs Actual', () => testBudgetVsActual_(T, tmp));
-    T.group('6. Transfers', () => testTransfers_(T, tmp));
-    T.group('7. Monthly account balances', () => testMonthlyAccounts_(T, tmp));
-    T.group('8. Monthly transactions list', () => testTransactionsPanel_(T, tmp));
-    T.group('9. Accounts sheet (year to date)', () => testAccountsSheet_(T, tmp));
-    T.group('10. Annual Dashboard', () => testAnnual_(T, tmp));
-    T.group('11. Navigation', () => testNavigation_(T, tmp));
-    T.group('12. Dependent Category dropdown', () => testDependentDropdown_(T, tmp));
-    T.group('13. Quick Add', () => testQuickAdd_(T, tmp));
-    T.group('14. Missing month → Validate → Resume', () => testMissingMonthAndResume_(T, tmp));
-    T.group('15. Row dated next year is ignored', () => testOutOfYearRow_(T, tmp));
-    T.group('16. Wrong Drive folder ID fails loudly', () => testBadFolder_(T, saved));
+    if (st) {
+      tmp = SpreadsheetApp.openById(st.tmpId);
+      T = newTestKit_(readTestReportRows_(host));
+      next = st.next;
+      if (st.running === next) {            // the last run was killed inside this group
+        if (next === 0) {
+          T.group(groups[0][0], () => {
+            resumeBuild(tmp); applyNavigationToAllSheets_(tmp);
+            T.ok('Build needed a second run (6-minute limit)', true, 'finished on resume');
+            testStructure_(T, tmp);
+          });
+        } else {
+          T.group(groups[next][0], () => T.ok('(stopped by the 6-minute limit)', false, 'not re-run: it changes the test workbook'));
+        }
+        next++;
+      }
+    } else {
+      discardPausedTestRun_();
+      T = newTestKit_([]);
+      const stamp = Utilities.formatDate(new Date(), Session.getScriptTimeZone() || 'GMT', 'yyyyMMdd_HHmmss');
+      tmp = SpreadsheetApp.create(CONFIG.WORKBOOK_NAME + ' — TEST ' + stamp);
+    }
+    for (let i = next, first = true; i < groups.length; i++, first = false) {
+      if (!first && Date.now() - started > TEST_TIME_BUDGET_MS_) { paused = true; break; }
+      next = i;
+      saveTestState_({ tmpId: tmp.getId(), next: i, running: i });
+      writeTestReport_(host, T, tmp, 'running', i, groups.length);
+      T.group(groups[i][0], () => groups[i][1](T, tmp));
+      next = i + 1;
+    }
   } catch (e) {
+    T = T || newTestKit_([]);
     T.ok('Test run', false, 'Stopped: ' + (e && e.message || e));
   } finally {
     TEST_MODE_ = false;
@@ -52,16 +104,44 @@ function runVerificationTests() {
   }
 
   const failed = T.failed();
+  if (paused) {
+    saveTestState_({ tmpId: tmp.getId(), next: next });
+    writeTestReport_(host, T, tmp, 'paused', next, groups.length);
+    Log_('INFO', `Verification paused after ${next} of ${groups.length} groups — run Resume Verification Tests.`);
+    try { host.toast(`Paused after ${next} of ${groups.length} groups (time limit). Run Finance Tools ▸ Resume Verification Tests.`, 'Verification Tests', 10); } catch (e) {}
+    return { total: T.rows.length, failed: failed, paused: true, next: next };
+  }
+  clearTestState_();
   if (tmp && failed === 0) { try { DriveApp.getFileById(tmp.getId()).setTrashed(true); } catch (e) { Log_('WARNING', 'Could not trash test workbook: ' + e); } }
-  writeTestReport_(host, T, failed ? tmp : null);
+  writeTestReport_(host, T, failed ? tmp : null, 'done', groups.length, groups.length);
   Log_(failed ? 'ERROR' : 'INFO', `Verification: ${T.rows.length - failed} passed, ${failed} failed`);
   try { host.toast(failed ? `${failed} check(s) FAILED — see Test_Report` : `All ${T.rows.length} checks passed`, 'Verification Tests', 8); } catch (e) {}
-  return { total: T.rows.length, failed: failed };
+  return { total: T.rows.length, failed: failed, paused: false };
+}
+
+/* ---------- paused-run bookkeeping (PropertiesService) ---------- */
+function loadTestState_() {
+  const raw = PropertiesService.getUserProperties().getProperty(TEST_STATE_KEY_);
+  try { return raw ? JSON.parse(raw) : null; } catch (e) { return null; }
+}
+function saveTestState_(st) { PropertiesService.getUserProperties().setProperty(TEST_STATE_KEY_, JSON.stringify(st)); }
+function clearTestState_()  { PropertiesService.getUserProperties().deleteProperty(TEST_STATE_KEY_); }
+/* Starting over: trash the half-tested workbook a paused run left behind. */
+function discardPausedTestRun_() {
+  const st = loadTestState_();
+  if (st && st.tmpId) { try { DriveApp.getFileById(st.tmpId).setTrashed(true); } catch (e) {} }
+  clearTestState_();
+}
+/* Results of earlier runs live in Test_Report, so a resumed run reads them back from there. */
+function readTestReportRows_(host) {
+  const rep = host.getSheetByName('Test_Report');
+  if (!rep || rep.getLastRow() < 3) return [];
+  return rep.getRange(3, 1, rep.getLastRow() - 2, 5).getValues().filter(r => r[1] !== '');
 }
 
 /* ---------- tiny assertion kit ---------- */
-function newTestKit_() {
-  const rows = []; let group = '';
+function newTestKit_(earlier) {
+  const rows = (earlier || []).slice(); let group = '';
   const show = v => (v instanceof Date) ? Utilities.formatDate(v, Session.getScriptTimeZone() || 'GMT', 'yyyy-MM-dd') : v;
   const add = (name, exp, act, ok) => { rows.push([group, name, show(exp), show(act), ok ? 'PASS' : 'FAIL']); return ok; };
   return {
@@ -340,14 +420,19 @@ function testBadFolder_(T, saved) {
 }
 
 /* ---------- report ---------- */
-function writeTestReport_(host, T, keptWorkbook) {
+/* status: 'running' (written before each group, so a killed run still leaves its results),
+   'paused' (time budget used; Resume continues) or 'done'. */
+function writeTestReport_(host, T, keptWorkbook, status, groupsDone, groupsTotal) {
   let rep = host.getSheetByName('Test_Report');
   if (rep) rep.clear(); else rep = host.insertSheet('Test_Report');
   rep.setTabColor('#1e3a8a');
   const failed = T.failed();
   const head = [['Group', 'Check', 'Expected', 'Actual', 'Result']];
-  const summary = `${T.rows.length - failed} passed · ${failed} failed · ${new Date()}` +
-    (keptWorkbook ? ` · test workbook kept for inspection: ${keptWorkbook.getUrl()}` : ' · test workbook moved to Trash');
+  const counts = `${T.rows.length - failed} passed · ${failed} failed · ${new Date()}`;
+  const summary = status === 'done'
+    ? counts + (keptWorkbook ? ` · test workbook kept for inspection: ${keptWorkbook.getUrl()}` : ' · test workbook moved to Trash')
+    : `${status === 'paused' ? 'PAUSED (time limit)' : 'IN PROGRESS'} after ${groupsDone} of ${groupsTotal} groups — ` +
+      `if this run has stopped, use Finance Tools ▸ Resume Verification Tests · ${counts} so far · test workbook: ${keptWorkbook.getUrl()}`;
   rep.getRange(1, 1).setValue(summary).setFontWeight('bold');
   rep.getRange(2, 1, 1, 5).setValues(head).setFontWeight('bold').setBackground(STYLE.SLATE_DARK).setFontColor('white');
   if (T.rows.length) rep.getRange(3, 1, T.rows.length, 5).setValues(T.rows);

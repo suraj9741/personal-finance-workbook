@@ -151,6 +151,7 @@ function createGas() {
     getActive: () => state.active.self,
     create: (name) => { const s = new Spreadsheet(name); state.created.push(s); return s.self; },
     open: (f) => f._ss.self,
+    openById: (id) => { const s = state.created.find(x => x.getId() === id); if (!s) throw new Error('Spreadsheet not found: ' + id); return s.self; },
     flush: () => {},
     newDataValidation: dvBuilder,
     newConditionalFormatRule: () => chain({ build: () => ({}) }),
@@ -174,9 +175,18 @@ function createGas() {
     formatDate: (d, tz, fmt) => d.toISOString().replace(/[-:T]/g, '').slice(0, 15),
     sleep: () => {},
   };
+  const props = new Map();
+  state.props = props;
+  const store = {
+    getProperty: (k) => (props.has(k) ? props.get(k) : null),
+    setProperty: (k, v) => { props.set(k, String(v)); return store; },
+    deleteProperty: (k) => { props.delete(k); return store; },
+  };
+  const PropertiesService = { getUserProperties: () => store, getScriptProperties: () => store };
   return {
     state, active,
     globals: {
+      PropertiesService,
       SpreadsheetApp, DriveApp, ScriptApp, Utilities,
       Session: { getScriptTimeZone: () => 'Asia/Kolkata' },
       Logger: { log: (m) => state.logs.push(m) },

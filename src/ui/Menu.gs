@@ -13,6 +13,7 @@ function onOpen() {
     .addItem('Refresh Named Ranges','menuRefreshNames')
     .addItem('Enable Dependent Dropdowns','menuInstallTriggers').addSeparator()
     .addItem('Run Verification Tests','menuRunTests')
+    .addItem('Resume Verification Tests','menuResumeTests')
     .addItem('Validate Formulas','menuValidate')
     .addItem('Backup Workbook','menuBackup').addToUi();
 }
@@ -25,6 +26,7 @@ function menuRefreshNav()   { run_('Refresh Navigation', applyNavigationToAllShe
 function menuRefreshNames() { run_('Refresh Named Ranges', refreshNamedRanges); }
 function menuInstallTriggers(){ run_('Enable Dependent Dropdowns', installTriggers_); }
 function menuRunTests()     { run_('Run Verification Tests', runVerificationTests); }
+function menuResumeTests()  { run_('Resume Verification Tests', resumeVerificationTests); }
 function menuValidate()     { run_('Validate Formulas', validateWorkbook); }
 function menuBackup()       { run_('Backup Workbook', backupWorkbook); }
 
