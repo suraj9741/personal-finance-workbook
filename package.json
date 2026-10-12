@@ -1,0 +1,11 @@
+{
+  "name": "personal-finance-workbook",
+  "private": true,
+  "description": "Google Apps Script finance workbook. Tests run locally with Node; the script itself runs in Google Sheets.",
+  "scripts": {
+    "test": "node --test tests/node/*.test.js"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

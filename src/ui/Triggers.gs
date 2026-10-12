@@ -45,6 +45,7 @@ function handleEdit_(e){
 }
 /* Installable onEdit trigger — makes the dependent dropdown work even for a STANDALONE script. */
 function installTriggers_(ss){
+  if (TEST_MODE_) { Log_('INFO','Test run — trigger install skipped.'); return; }
   ScriptApp.getProjectTriggers().forEach(t=>{ if(t.getHandlerFunction()==='onEditInstallable') ScriptApp.deleteTrigger(t); });
   ScriptApp.newTrigger('onEditInstallable').forSpreadsheet(ss).onEdit().create();
   Log_('INFO','Installable onEdit trigger created — dependent dropdowns active.');

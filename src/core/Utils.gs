@@ -1,5 +1,8 @@
 /* In-memory log buffer for the current run (flushed to the _Logs sheet by flushLogs_) */
 let   LOGS  = [];
+/* True while runVerificationTests runs, so building the throwaway test workbook never touches
+   your real onEdit trigger (see installTriggers_). */
+let   TEST_MODE_ = false;
 
 /* ============================ LOGGING + UTILITIES ============================ */
 function Log_(level,msg){ LOGS.push([new Date(),level,msg]); Logger.log('['+level+'] '+msg); }

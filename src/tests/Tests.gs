@@ -1,120 +1,363 @@
-/* ============================ PROGRAMMATIC VERIFICATION TEST HARNESS ============================ */
+/* ============================ VERIFICATION TESTS (Finance Tools ▸ Run Verification Tests) ============================
+   Builds a brand-new THROWAWAY workbook, fills it with known transactions, and checks every
+   dashboard number the real formulas calculate. Your real Config and Data are never read or
+   written. Results go to a Test_Report tab in this workbook. The throwaway workbook is moved to
+   Drive Trash when everything passes, and kept (link in the report) when something fails.
+
+   Scenario data (Y = CONFIG.YEAR). Opening balance: Bank HDFC 10,000. Budgets: Debt → Car EMI
+   1,000/month, Wages → Paycheck 60,000/month.
+     10 Jan  Income    50,000  Wages → Paycheck              Bank HDFC
+     15 Jan  Expense      800  Debt → Car EMI                Credit Card HDFC CC
+     20 Jan  Transfer   5,000  Self Transfer → Bank to Credit  Bank HDFC → Credit Card HDFC CC
+     05 Mar  Expense    1,200  Everyday → Groceries          Cash
+     06 Mar  Expense     −200  Everyday → Groceries (refund) Cash
+     31 Dec  Expense      100  Everyday → Food               Bank HDFC
+   February has no rows on purpose (empty month). Later groups add a Quick Add row
+   (14 Jun, 250) and a row dated 1 Jan of the NEXT year. */
+
+const TEST_MONTH_ = m => m + '_' + CONFIG.YEAR;
+
 function runVerificationTests() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  Log_('INFO', '=== Running Verification Tests ===');
-  
-  // 1. Rebuild Workbook first to get a clean state
-  buildNewWorkbook(ss);
-  
-  const dataSheet = ss.getSheetByName('Data');
-  if (!dataSheet) {
-    Log_('ERROR', 'Data sheet not found for testing!');
-    return;
+  const host = SpreadsheetApp.getActiveSpreadsheet();
+  const T = newTestKit_();
+  const saved = { name: CONFIG.WORKBOOK_NAME, folder: CONFIG.DRIVE_FOLDER_ID };
+  let tmp = null;
+  Log_('INFO', '=== Running Verification Tests (throwaway workbook) ===');
+  TEST_MODE_ = true;
+  try {
+    const stamp = Utilities.formatDate(new Date(), Session.getScriptTimeZone() || 'GMT', 'yyyyMMdd_HHmmss');
+    tmp = SpreadsheetApp.create(CONFIG.WORKBOOK_NAME + ' — TEST ' + stamp);
+    T.group('1. Build from scratch', () => { buildNewWorkbook(tmp); testStructure_(T, tmp); });
+    T.group('2. Seed test data', () => { seedTestConfig_(T, tmp); writeTestRows_(tmp, 2, testRows_()); SpreadsheetApp.flush(); });
+    T.group('3. Data sheet auto-columns', () => testDataColumns_(T, tmp));
+    T.group('4. Monthly KPI cards', () => testMonthlyKpis_(T, tmp));
+    T.group('5. Budget vs Actual', () => testBudgetVsActual_(T, tmp));
+    T.group('6. Transfers', () => testTransfers_(T, tmp));
+    T.group('7. Monthly account balances', () => testMonthlyAccounts_(T, tmp));
+    T.group('8. Monthly transactions list', () => testTransactionsPanel_(T, tmp));
+    T.group('9. Accounts sheet (year to date)', () => testAccountsSheet_(T, tmp));
+    T.group('10. Annual Dashboard', () => testAnnual_(T, tmp));
+    T.group('11. Navigation', () => testNavigation_(T, tmp));
+    T.group('12. Dependent Category dropdown', () => testDependentDropdown_(T, tmp));
+    T.group('13. Quick Add', () => testQuickAdd_(T, tmp));
+    T.group('14. Missing month → Validate → Resume', () => testMissingMonthAndResume_(T, tmp));
+    T.group('15. Row dated next year is ignored', () => testOutOfYearRow_(T, tmp));
+    T.group('16. Wrong Drive folder ID fails loudly', () => testBadFolder_(T, saved));
+  } catch (e) {
+    T.ok('Test run', false, 'Stopped: ' + (e && e.message || e));
+  } finally {
+    TEST_MODE_ = false;
+    CONFIG.WORKBOOK_NAME = saved.name;
+    CONFIG.DRIVE_FOLDER_ID = saved.folder;
   }
-  
-  // 2. Insert test data
-  const testRows = [
-    ['14-Jun-'+CONFIG.YEAR, '', 'Test Expense', 100, 'Expense', 'Debt → Car EMI', '', '', 'Credit Card → HDFC CC', '', '', '', '', '', 'Test Case 1'],
-    ['14-Jun-'+CONFIG.YEAR, '', 'Test Income', 300, 'Income', 'Wages → Paycheck', '', '', 'Bank → HDFC', '', '', '', '', '', 'Test Case 2'],
-    ['14-Jun-'+CONFIG.YEAR, '', 'Test Transfer', 5000, 'Transfer', 'Self Transfer → Bank to Credit', '', '', 'Bank → HDFC', '', '', 'Credit Card → HDFC CC', '', '', 'Test Case 3']
+
+  const failed = T.failed();
+  if (tmp && failed === 0) { try { DriveApp.getFileById(tmp.getId()).setTrashed(true); } catch (e) { Log_('WARNING', 'Could not trash test workbook: ' + e); } }
+  writeTestReport_(host, T, failed ? tmp : null);
+  Log_(failed ? 'ERROR' : 'INFO', `Verification: ${T.rows.length - failed} passed, ${failed} failed`);
+  try { host.toast(failed ? `${failed} check(s) FAILED — see Test_Report` : `All ${T.rows.length} checks passed`, 'Verification Tests', 8); } catch (e) {}
+  return { total: T.rows.length, failed: failed };
+}
+
+/* ---------- tiny assertion kit ---------- */
+function newTestKit_() {
+  const rows = []; let group = '';
+  const show = v => (v instanceof Date) ? Utilities.formatDate(v, Session.getScriptTimeZone() || 'GMT', 'yyyy-MM-dd') : v;
+  const add = (name, exp, act, ok) => { rows.push([group, name, show(exp), show(act), ok ? 'PASS' : 'FAIL']); return ok; };
+  return {
+    rows: rows,
+    group(name, fn) { group = name; try { fn(); } catch (e) { add('(group stopped early)', 'no error', String(e && e.message || e), false); } },
+    eq(name, expected, actual, tol) {
+      const num = typeof expected === 'number' && typeof actual === 'number';
+      return add(name, expected, actual, num ? Math.abs(expected - actual) <= (tol === undefined ? 0.005 : tol) : String(show(expected)) === String(show(actual)));
+    },
+    ok(name, cond, detail) { return add(name, 'true', detail === undefined ? String(!!cond) : detail, !!cond); },
+    failed() { return rows.filter(r => r[4] === 'FAIL').length; }
+  };
+}
+
+/* ---------- test data ---------- */
+function testRows_() {
+  const Y = CONFIG.YEAR, d = (m, day) => new Date(Y, m, day);
+  //        Date        Description        Amount  Type        Category                           From                     To
+  return [
+    [d(0, 10),  'Salary',          50000, 'Income',   'Wages → Paycheck',               'Bank → HDFC',          ''],
+    [d(0, 15),  'Car EMI',           800, 'Expense',  'Debt → Car EMI',                 'Credit Card → HDFC CC', ''],
+    [d(0, 20),  'Pay card bill',    5000, 'Transfer', 'Self Transfer → Bank to Credit', 'Bank → HDFC',          'Credit Card → HDFC CC'],
+    [d(2, 5),   'Groceries',        1200, 'Expense',  'Everyday → Groceries',           'Cash → Cash',          ''],
+    [d(2, 6),   'Grocery refund',   -200, 'Expense',  'Everyday → Groceries',           'Cash → Cash',          ''],
+    [d(11, 31), 'Dinner',            100, 'Expense',  'Everyday → Food',                'Bank → HDFC',          '']
   ];
-  
-  dataSheet.getRange(2, 1, testRows.length, 1).setValues(testRows.map(r => [r[0]]));
-  dataSheet.getRange(2, 3, testRows.length, 1).setValues(testRows.map(r => [r[2]]));
-  dataSheet.getRange(2, 4, testRows.length, 1).setValues(testRows.map(r => [r[3]]));
-  dataSheet.getRange(2, 5, testRows.length, 1).setValues(testRows.map(r => [r[4]]));
-  dataSheet.getRange(2, 6, testRows.length, 1).setValues(testRows.map(r => [r[5]]));
-  dataSheet.getRange(2, 9, testRows.length, 1).setValues(testRows.map(r => [r[8]]));
-  dataSheet.getRange(2, 12, testRows.length, 1).setValues(testRows.map(r => [r[11]]));
-  dataSheet.getRange(2, 15, testRows.length, 1).setValues(testRows.map(r => [r[14]]));
-  
+}
+/* Writes only the input columns (A,C,D,E,F,I,L) so the auto-fill formulas in B,G,H,J,K,M,N stay intact. */
+function writeTestRows_(ss, startRow, rows) {
+  const sh = ss.getSheetByName('Data');
+  const cols = [[1, 0], [3, 1], [4, 2], [5, 3], [6, 4], [9, 5], [12, 6]];
+  cols.forEach(([col, i]) => sh.getRange(startRow, col, rows.length, 1).setValues(rows.map(r => [r[i]])));
+}
+function seedTestConfig_(T, ss) {
+  const cfg = ss.getSheetByName('Config');
+  const setBy = (keyCol, a, b, valCol, v) => {
+    const vals = cfg.getRange(2, keyCol, CONFIG.MAX_CATEGORY_ROWS, 2).getValues();
+    const i = vals.findIndex(r => String(r[0]).trim() === a && String(r[1]).trim() === b);
+    T.ok(`Config has ${a} / ${b}`, i > -1);
+    if (i > -1) cfg.getRange(i + 2, valCol).setValue(v);
+  };
+  setBy(15, 'Bank', 'HDFC', 17, 10000);          // O/P → Q opening
+  setBy(1, 'Debt', 'Car EMI', 4, 1000);          // A/B → D budget
+  setBy(6, 'Wages', 'Paycheck', 9, 60000);       // F/G → I planned
+}
+
+/* ---------- reading helpers ---------- */
+function cell_(ss, sheet, a1) { return ss.getSheetByName(sheet).getRange(a1).getValue(); }
+function findRow_(sh, r, c, nr, nc, pred) {
+  const vals = sh.getRange(r, c, nr, nc).getValues();
+  return vals.find(pred) || null;
+}
+function monthAccount_(ss, month, payType, acct) {   // [PayType, Account, Starting, Expense, Income, Remaining]
+  return findRow_(ss.getSheetByName(TEST_MONTH_(month)), 9, LAYOUT.ACCOUNTS_COL, LAYOUT.ACCOUNTS_CAP, 6,
+    r => r[0] === payType && r[1] === acct);
+}
+function ytdAccount_(ss, payType, acct) {
+  return findRow_(ss.getSheetByName('Accounts'), 5, 1, 80, 6, r => r[0] === payType && r[1] === acct);
+}
+
+/* ---------- scenario groups ---------- */
+function testStructure_(T, ss) {
+  const expected = ['Config', 'Data'].concat(CONFIG.MONTHS.map(TEST_MONTH_)).concat(['Accounts', 'Annual Dashboard']);
+  expected.forEach(n => T.ok('Sheet exists: ' + n, !!ss.getSheetByName(n)));
+  T.eq('Tab order starts Config, Data, Jan', ['Config', 'Data', TEST_MONTH_('Jan')].join(','),
+    ss.getSheets().slice(0, 3).map(s => s.getName()).join(','));
+  ['Helper', 'Month_Template'].forEach(n => T.ok(n + ' is hidden', ss.getSheetByName(n) && ss.getSheetByName(n).isSheetHidden()));
+  ['catExpense', 'catIncome', 'catTransfer', 'payList'].forEach(n => T.ok('Named range ' + n, !!ss.getRangeByName(n)));
+  const cfg = ss.getSheetByName('Config');
+  T.eq('Seeded expense categories', flat_(DEFAULT_CATEGORIES.EXPENSE).length,
+    cfg.getRange(2, 1, CONFIG.MAX_CATEGORY_ROWS, 1).getValues().filter(r => r[0] !== '').length);
+  T.eq('Seeded accounts', flatAccounts_(DEFAULT_ACCOUNTS).length,
+    cfg.getRange(2, 16, CONFIG.MAX_CATEGORY_ROWS, 1).getValues().filter(r => r[0] !== '').length);
+  T.eq('Config year setting', CONFIG.YEAR, cfg.getRange('W2').getValue());
+  T.eq('Jan title', 'Jan ' + CONFIG.YEAR, cell_(ss, TEST_MONTH_('Jan'), 'A1'));
+  T.eq('Dec month tag', TEST_MONTH_('Dec'), cell_(ss, TEST_MONTH_('Dec'), 'B1'));
+  T.eq('Mar month start date', new Date(CONFIG.YEAR, 2, 1), cell_(ss, TEST_MONTH_('Mar'), 'B2'));
+  const rep = ss.getSheetByName('Validation_Report');
+  const errs = rep ? rep.getDataRange().getValues().filter(r => r[0] === 'ERROR') : [['no report']];
+  T.eq('Validate Formulas: no errors on an empty workbook', 0, errs.length);
+  T.eq('Every month empty → Jan income', 0, cell_(ss, TEST_MONTH_('Jan'), 'C4'));
+}
+
+function testDataColumns_(T, ss) {
+  const d = ss.getSheetByName('Data');
+  T.eq('Month auto-fill (row 2)', TEST_MONTH_('Jan'), d.getRange('B2').getValue());
+  T.eq('Month auto-fill (Dec row)', TEST_MONTH_('Dec'), d.getRange('B7').getValue());
+  T.eq('Parent from Category', 'Wages', d.getRange('G2').getValue());
+  T.eq('Sub from Category', 'Paycheck', d.getRange('H2').getValue());
+  T.eq('From Pay Type', 'Bank', d.getRange('J2').getValue());
+  T.eq('From Account', 'HDFC', d.getRange('K2').getValue());
+  T.eq('Transfer To Pay Type', 'Credit Card', d.getRange('M4').getValue());
+  T.eq('Transfer To Account', 'HDFC CC', d.getRange('N4').getValue());
+  T.eq('Blank row stays blank', '', d.getRange('B8').getValue());
+}
+
+function testMonthlyKpis_(T, ss) {
+  const k = (m, a1) => cell_(ss, TEST_MONTH_(m), a1);
+  T.eq('Jan opening = Config opening', 10000, k('Jan', 'A4'));
+  T.eq('Jan income', 50000, k('Jan', 'C4'));
+  T.eq('Jan expense (transfer not counted)', 800, k('Jan', 'E4'));
+  T.eq('Jan net savings', 49200, k('Jan', 'G4'));
+  T.eq('Jan savings rate', 0.984, k('Jan', 'I4'), 0.0005);
+  T.eq('Total budget card', 1000, k('Jan', 'K4'));
+  T.eq('Feb (empty) opening carries Jan result', 59200, k('Feb', 'A4'));
+  T.eq('Feb (empty) income', 0, k('Feb', 'C4'));
+  T.eq('Feb (empty) expense', 0, k('Feb', 'E4'));
+  T.eq('Feb (empty) savings rate is 0, not an error', 0, k('Feb', 'I4'));
+  T.eq('Mar expense nets the refund', 1000, k('Mar', 'E4'));
+  T.eq('Mar net savings negative', -1000, k('Mar', 'G4'));
+  T.eq('Apr opening', 58200, k('Apr', 'A4'));
+  T.eq('Dec (31st) expense counted in Dec', 100, k('Dec', 'E4'));
+  T.eq('Dec opening', 58200, k('Dec', 'A4'));
+}
+
+function testBudgetVsActual_(T, ss) {
+  const exp = (m, p, s) => findRow_(ss.getSheetByName(TEST_MONTH_(m)), 9, 1, 146, 5, r => r[0] === p && r[1] === s);
+  const inc = (m, p, s) => findRow_(ss.getSheetByName(TEST_MONTH_(m)), 9, LAYOUT.INCOME_COL, 52, 5, r => r[0] === p && r[1] === s);
+  const car = exp('Jan', 'Debt', 'Car EMI') || [];
+  T.eq('Car EMI budget', 1000, car[2]); T.eq('Car EMI spent', 800, car[3]); T.eq('Car EMI under budget by', 200, car[4]);
+  const gro = exp('Mar', 'Everyday', 'Groceries') || [];
+  T.eq('Groceries spent (refund netted)', 1000, gro[3]); T.eq('Groceries over budget (negative diff)', -1000, gro[4]);
+  T.eq('Car EMI spent in Feb', 0, (exp('Feb', 'Debt', 'Car EMI') || [])[3]);
+  const pay = inc('Jan', 'Wages', 'Paycheck') || [];
+  T.eq('Paycheck planned', 60000, pay[2]); T.eq('Paycheck earned', 50000, pay[3]); T.eq('Paycheck short by', 10000, pay[4]);
+}
+
+function testTransfers_(T, ss) {
+  const row = m => findRow_(ss.getSheetByName(TEST_MONTH_(m)), 9, LAYOUT.TRANSFER_COL, 52, 3,
+    r => r[0] === 'Self Transfer' && r[1] === 'Bank to Credit') || [];
+  T.eq('Jan Bank → Credit transfer', 5000, row('Jan')[2]);
+  T.eq('Feb Bank → Credit transfer', 0, row('Feb')[2]);
+  T.eq('Annual income ignores transfers', 50000, cell_(ss, 'Annual Dashboard', 'B3'));
+}
+
+function testMonthlyAccounts_(T, ss) {
+  const jan = monthAccount_(ss, 'Jan', 'Bank', 'HDFC') || [];
+  T.eq('Jan HDFC starting = opening', 10000, jan[2]); T.eq('Jan HDFC out (transfer)', 5000, jan[3]);
+  T.eq('Jan HDFC in (salary)', 50000, jan[4]); T.eq('Jan HDFC remaining', 55000, jan[5]);
+  const cc = monthAccount_(ss, 'Jan', 'Credit Card', 'HDFC CC') || [];
+  T.eq('Jan HDFC CC out (EMI)', 800, cc[3]); T.eq('Jan HDFC CC in (bill paid)', 5000, cc[4]); T.eq('Jan HDFC CC remaining', 4200, cc[5]);
+  T.eq('Feb HDFC starting carries Jan remaining', 55000, (monthAccount_(ss, 'Feb', 'Bank', 'HDFC') || [])[2]);
+  const cash = monthAccount_(ss, 'Mar', 'Cash', 'Cash') || [];
+  T.eq('Mar Cash out (with refund)', 1000, cash[3]); T.eq('Mar Cash remaining negative', -1000, cash[5]);
+  const sbiCard = monthAccount_(ss, 'Jan', 'Credit Card', 'SBI') || [];
+  T.eq('Same account name, other pay type stays 0', 0, sbiCard[5]);
+  T.eq('Dec HDFC remaining', 54900, (monthAccount_(ss, 'Dec', 'Bank', 'HDFC') || [])[5]);
+  const netCol = LAYOUT.ACCOUNTS_COL + 7 + 4;
+  T.eq('Jan NET (all accounts)', 59200, ss.getSheetByName(TEST_MONTH_('Jan')).getRange(7, netCol).getValue());
+  T.eq('Dec NET (all accounts)', 58100, ss.getSheetByName(TEST_MONTH_('Dec')).getRange(7, netCol).getValue());
+}
+
+function testTransactionsPanel_(T, ss) {
+  const jan = ss.getSheetByName(TEST_MONTH_('Jan')).getRange(9, LAYOUT.TXN_COL, 4, 6).getValues();
+  T.eq('Jan lists 3 transactions', 3, jan.filter(r => r[0] !== '').length);
+  T.eq('Jan first row (sorted by date)', 'Salary', jan[0][1]);
+  T.eq('Jan last row', 'Pay card bill', jan[2][1]);
+  T.eq('Feb shows the empty message', '(no transactions yet)', cell_(ss, TEST_MONTH_('Feb'), colL_(LAYOUT.TXN_COL) + '9'));
+}
+
+function testAccountsSheet_(T, ss) {
+  const h = ytdAccount_(ss, 'Bank', 'HDFC') || [];
+  T.eq('HDFC starting', 10000, h[2]); T.eq('HDFC out', 5100, h[3]); T.eq('HDFC in', 50000, h[4]); T.eq('HDFC remaining', 54900, h[5]);
+  T.eq('HDFC CC remaining', 4200, (ytdAccount_(ss, 'Credit Card', 'HDFC CC') || [])[5]);
+  T.eq('Cash remaining', -1000, (ytdAccount_(ss, 'Cash', 'Cash') || [])[5]);
+  T.eq('Unused account', 0, (ytdAccount_(ss, 'Share Broker', 'Zerodha') || [])[5]);
+  T.eq('NET (all accounts)', 58100, cell_(ss, 'Accounts', 'L3'));
+  const tot = ss.getSheetByName('Accounts').getRange(5, 8, 6, 5).getValues();
+  const t = n => (tot.find(r => r[0] === n) || [])[4];
+  T.eq('Totals: Bank', 54900, t('Bank')); T.eq('Totals: Credit Card', 4200, t('Credit Card')); T.eq('Totals: Cash', -1000, t('Cash'));
+}
+
+function testAnnual_(T, ss) {
+  const a = a1 => cell_(ss, 'Annual Dashboard', a1);
+  T.eq('Total income', 50000, a('B3')); T.eq('Total expense', 1900, a('B4')); T.eq('Total savings', 48100, a('B5'));
+  T.eq('Savings rate', 0.962, a('B6'), 0.0005);
+  T.eq('Avg monthly income (months with income)', 50000, a('B7'));
+  T.eq('Avg monthly expense (months with expense)', 1900 / 3, a('B8'), 0.01);
+  T.eq('Monthly table: Jan income', 50000, a('E4')); T.eq('Monthly table: Mar expense', 1000, a('F6'));
+  const months = ss.getSheetByName('Annual Dashboard').getRange('F4:F15').getValues().reduce((s, r) => s + (Number(r[0]) || 0), 0);
+  T.eq('Sum of monthly expenses = annual expense', a('B4'), months);
+  T.eq('Top category', 'Groceries', a('B14')); T.eq('Top category total', 1000, a('C14'));
+  T.eq('Second category', 'Car EMI', a('B15'));
+  T.eq('Highest spending card', 'Everyday / Groceries', a('C25'));
+  T.eq('Income by source', 'Wages', a('J4')); T.eq('Income by source total', 50000, a('K4'));
+  T.eq('Highest earning month', TEST_MONTH_('Jan'), a('K18'));
+  T.eq('Expense-to-income', 0.038, a('B30'), 0.0005);
+  T.eq('Liquid (Bank + Cash)', 53900, a('B33')); T.eq('Investments', 0, a('B34')); T.eq('Credit card balance', 4200, a('B35'));
+  T.eq('Net worth', 58100, a('B36'));
+  T.eq('Net worth = opening + savings', 10000 + a('B5'), a('B36'));
+  T.eq('Health score', 83, a('J21')); T.eq('Health label', '⬤ Good', a('J22'));
+  T.eq('Cumulative net worth (Helper, Dec)', 48100, cell_(ss, 'Helper', 'M5'));
+}
+
+function testNavigation_(T, ss) {
+  const jan = ss.getSheetByName(TEST_MONTH_('Jan')), feb = ss.getSheetByName(TEST_MONTH_('Feb'));
+  T.ok('Jan nav links to Feb', String(jan.getRange(3, LAYOUT.TXN_COL + 1).getFormula()).indexOf('#gid=' + feb.getSheetId()) > -1,
+    jan.getRange(3, LAYOUT.TXN_COL + 1).getFormula());
+  T.eq('Current month highlighted', STYLE.FLAME, jan.getRange(3, LAYOUT.TXN_COL).getBackground());
+  T.eq('Other months not highlighted', STYLE.SLATE_LIGHT, feb.getRange(3, LAYOUT.TXN_COL).getBackground());
+}
+
+function testDependentDropdown_(T, ss) {
+  const d = ss.getSheetByName('Data'), row = 40;
+  const edit = v => { d.getRange(row, 5).setValue(v); handleEdit_({ range: d.getRange(row, 5), value: v, source: ss }); };
+  const listOf = () => { const dv = d.getRange(row, 6).getDataValidation(); return dv ? dv.getCriteriaValues()[0].getA1Notation() : 'none'; };
+  edit('Expense');
+  T.eq('Expense → expense categories', ss.getRangeByName('catExpense').getA1Notation(), listOf());
+  d.getRange(row, 6).setValue('Debt → Car EMI');
+  edit('Income');
+  T.eq('Changing Type clears the old category', '', d.getRange(row, 6).getValue());
+  T.eq('Income → income categories', ss.getRangeByName('catIncome').getA1Notation(), listOf());
+  edit('Transfer');
+  T.eq('Transfer → transfer categories', ss.getRangeByName('catTransfer').getA1Notation(), listOf());
+  edit('');
+  T.eq('Blank Type → no list', 'none', listOf());
+  handleEdit_({ range: ss.getSheetByName('Config').getRange(row, 5), value: 'Expense', source: ss });
+  T.ok('Edits on other sheets are ignored', true);
+  d.getRange(row, 1, 1, 15).clearContent();
+}
+
+function testQuickAdd_(T, ss) {
+  const f = getFormData_(ss);
+  T.ok('Form lists expense categories', f.Expense.indexOf('Everyday → Food') > -1);
+  T.ok('Form lists income categories', f.Income.indexOf('Wages → Paycheck') > -1);
+  T.ok('Form lists accounts', f.accounts.indexOf('Bank → HDFC') > -1);
+  const msg = addQuickTransaction({ date: CONFIG.YEAR + '-06-14', desc: 'Quick add test', amount: '250', type: 'Expense',
+    category: 'Everyday → Food', account: 'Bank → HDFC' }, ss);
+  T.eq('Quick Add appends after the last row', 'Saved row 8: Expense ' + CONFIG.CURRENCY + '250', msg);
   SpreadsheetApp.flush();
-  Utilities.sleep(1000); // Wait for formulas to calculate
-  
-  // 3. Verify Month Dashboard (Jun_<YEAR>)
-  const monthSheet = ss.getSheetByName('Jun_'+CONFIG.YEAR);
-  if (!monthSheet) {
-    Log_('ERROR', 'Month sheet Jun_'+CONFIG.YEAR+' not found!');
-    return;
-  }
-  
-  const opening = monthSheet.getRange('A4').getValue();
-  const income = monthSheet.getRange('C4').getValue();
-  const expense = monthSheet.getRange('E4').getValue();
-  const savings = monthSheet.getRange('G4').getValue();
-  
-  Log_('INFO', `Month Dashboard Jun_${CONFIG.YEAR}: Opening=${opening}, Income=${income}, Expense=${expense}, Net Savings=${savings}`);
-  
-  // Verify Accounts Master sheet values
-  const accountsSheet = ss.getSheetByName('Accounts');
-  if (!accountsSheet) {
-    Log_('ERROR', 'Accounts sheet not found!');
-    return;
-  }
-  
-  const accValues = accountsSheet.getDataRange().getValues();
-  let hdfcBal = 0, hdfcccBal = 0;
-  accValues.forEach(row => {
-    if (row[0] === 'HDFC') {
-      hdfcBal = row[4];
-    }
-    if (row[0] === 'HDFC CC') {
-      hdfcccBal = row[4];
-    }
-  });
-  
-  Log_('INFO', `Accounts Master: HDFC (Bank) Balance = ${hdfcBal}, HDFC CC (Credit Card) Balance = ${hdfcccBal}`);
-  
-  // 4. Verify Annual Dashboard
-  const annualSheet = ss.getSheetByName('Annual Dashboard');
-  const annIncome = annualSheet.getRange('B3').getValue();
-  const annExpense = annualSheet.getRange('B4').getValue();
-  const annSavings = annualSheet.getRange('B5').getValue();
-  const annNetWorth = annualSheet.getRange('B36').getValue();
-  
-  Log_('INFO', `Annual Dashboard: Income=${annIncome}, Expense=${annExpense}, Savings=${annSavings}, Net Worth=${annNetWorth}`);
-  
-  // Assertions
-  const passIncome = (annIncome === 300);
-  const passExpense = (annExpense === 100);
-  const passSavings = (annSavings === 200);
-  const passHdfc = (hdfcBal === -4700); // 0 + 300 - 5000 = -4700
-  const passHdfccc = (hdfcccBal === 4900); // 0 - 100 + 5000 = 4900
-  const passNetWorth = (annNetWorth === 200); // HDFC (-4700) + HDFC CC (4900) = 200
-  
-  Log_('INFO', `TEST RESULTS:
-  - Income matches 300: ${passIncome ? 'PASS' : 'FAIL'}
-  - Expense matches 100: ${passExpense ? 'PASS' : 'FAIL'}
-  - Savings matches 200: ${passSavings ? 'PASS' : 'FAIL'}
-  - HDFC Bank Balance matches -4700: ${passHdfc ? 'PASS' : 'FAIL'}
-  - HDFC CC Balance matches 4900: ${passHdfccc ? 'PASS' : 'FAIL'}
-  - Net Worth matches 200: ${passNetWorth ? 'PASS' : 'FAIL'}`);
-  
-  // Create Test_Report sheet
-  let rep = ss.getSheetByName('Test_Report');
-  if (rep) rep.clear(); else rep = ss.insertSheet('Test_Report');
+  T.eq('Quick Add row month', TEST_MONTH_('Jun'), ss.getSheetByName('Data').getRange('B8').getValue());
+  T.eq('Jun expense shows it', 250, cell_(ss, TEST_MONTH_('Jun'), 'E4'));
+  T.eq('Annual expense includes it', 2150, cell_(ss, 'Annual Dashboard', 'B4'));
+  T.eq('HDFC remaining drops by 250', 54650, (ytdAccount_(ss, 'Bank', 'HDFC') || [])[5]);
+}
+
+function testMissingMonthAndResume_(T, ss) {
+  const janId = ss.getSheetByName(TEST_MONTH_('Jan')).getSheetId();
+  ss.deleteSheet(ss.getSheetByName(TEST_MONTH_('Apr')));
+  validateWorkbook(ss);
+  const errs = ss.getSheetByName('Validation_Report').getDataRange().getValues().filter(r => r[0] === 'ERROR');
+  T.ok('Validate reports the missing month', errs.some(r => r[1] === 'Missing sheet' && r[2] === TEST_MONTH_('Apr')),
+    errs.map(r => r[1] + ': ' + r[2]).join('; ') || 'no errors');
+  const rowsBefore = ss.getSheetByName('Data').getRange('A2:A').getValues().filter(r => r[0] !== '').length;
+  resumeBuild(ss);
+  SpreadsheetApp.flush();
+  T.ok('Resume recreates the month', !!ss.getSheetByName(TEST_MONTH_('Apr')));
+  T.eq('Resume leaves other months alone', janId, ss.getSheetByName(TEST_MONTH_('Jan')).getSheetId());
+  T.eq('Resume keeps Data rows', rowsBefore, ss.getSheetByName('Data').getRange('A2:A').getValues().filter(r => r[0] !== '').length);
+  T.eq('Resume keeps Config budgets', 1000, (findRow_(ss.getSheetByName('Config'), 2, 1, 200, 4, r => r[0] === 'Debt' && r[1] === 'Car EMI') || [])[3]);
+  T.eq('Recreated Apr opening', 58200, cell_(ss, TEST_MONTH_('Apr'), 'A4'));
+  T.eq('May HDFC starting still carries forward from Apr', 55000, (monthAccount_(ss, 'May', 'Bank', 'HDFC') || [])[2]);
+}
+
+function testOutOfYearRow_(T, ss) {
+  const before = {
+    annual: cell_(ss, 'Annual Dashboard', 'B4'), jan: cell_(ss, TEST_MONTH_('Jan'), 'E4'),
+    dec: cell_(ss, TEST_MONTH_('Dec'), 'E4'), hdfc: (ytdAccount_(ss, 'Bank', 'HDFC') || [])[5], net: cell_(ss, 'Annual Dashboard', 'B36')
+  };
+  writeTestRows_(ss, 9, [[new Date(CONFIG.YEAR + 1, 0, 1), 'Next-year row', 999, 'Expense', 'Everyday → Food', 'Bank → HDFC', '']]);
+  SpreadsheetApp.flush();
+  T.eq('Jan unchanged', before.jan, cell_(ss, TEST_MONTH_('Jan'), 'E4'));
+  T.eq('Dec unchanged', before.dec, cell_(ss, TEST_MONTH_('Dec'), 'E4'));
+  T.eq('Annual expense unchanged', before.annual, cell_(ss, 'Annual Dashboard', 'B4'));
+  T.eq('HDFC remaining unchanged', before.hdfc, (ytdAccount_(ss, 'Bank', 'HDFC') || [])[5]);
+  T.eq('Net worth unchanged', before.net, cell_(ss, 'Annual Dashboard', 'B36'));
+}
+
+function testBadFolder_(T, saved) {
+  let threw = false, msg = '';
+  CONFIG.WORKBOOK_NAME = '__no_such_workbook__';
+  CONFIG.DRIVE_FOLDER_ID = 'not-a-real-folder-id';
+  try { getOrCreateSpreadsheet_(); } catch (e) { threw = true; msg = String(e && e.message || e); }
+  finally { CONFIG.WORKBOOK_NAME = saved.name; CONFIG.DRIVE_FOLDER_ID = saved.folder; }
+  T.ok('Stops with an error instead of creating a workbook elsewhere', threw, msg || 'no error');
+}
+
+/* ---------- report ---------- */
+function writeTestReport_(host, T, keptWorkbook) {
+  let rep = host.getSheetByName('Test_Report');
+  if (rep) rep.clear(); else rep = host.insertSheet('Test_Report');
   rep.setTabColor('#1e3a8a');
-  applyPremiumTheme_(rep, true);
-  
-  const reportData = [
-    ['Test Case', 'Expected Value', 'Actual Value', 'Result'],
-    ['Total Income', 300, annIncome, passIncome ? 'PASS' : 'FAIL'],
-    ['Total Expense', 100, annExpense, passExpense ? 'PASS' : 'FAIL'],
-    ['Net Savings', 200, annSavings, passSavings ? 'PASS' : 'FAIL'],
-    ['HDFC Bank Balance', -4700, hdfcBal, passHdfc ? 'PASS' : 'FAIL'],
-    ['HDFC CC Balance', 4900, hdfcccBal, passHdfccc ? 'PASS' : 'FAIL'],
-    ['Net Worth', 200, annNetWorth, passNetWorth ? 'PASS' : 'FAIL']
-  ];
-  
-  rep.getRange(1, 1, reportData.length, 4).setValues(reportData);
-  rep.getRange('A1:D1').setFontWeight('bold').setBackground(STYLE.SLATE_DARK).setFontColor('white');
-  styleTableBorder_(rep, `A1:D${reportData.length}`);
-  
-  rep.getRange(2, 2, reportData.length - 1, 2).setNumberFormat(CUR);
-  rep.setColumnWidth(1, 180);
-  rep.setColumnWidth(2, 120);
-  rep.setColumnWidth(3, 120);
-  rep.setColumnWidth(4, 100);
-  
-  ss.toast('Verification Tests Complete! View Test_Report tab.', 'Testing', 6);
+  const failed = T.failed();
+  const head = [['Group', 'Check', 'Expected', 'Actual', 'Result']];
+  const summary = `${T.rows.length - failed} passed · ${failed} failed · ${new Date()}` +
+    (keptWorkbook ? ` · test workbook kept for inspection: ${keptWorkbook.getUrl()}` : ' · test workbook moved to Trash');
+  rep.getRange(1, 1).setValue(summary).setFontWeight('bold');
+  rep.getRange(2, 1, 1, 5).setValues(head).setFontWeight('bold').setBackground(STYLE.SLATE_DARK).setFontColor('white');
+  if (T.rows.length) rep.getRange(3, 1, T.rows.length, 5).setValues(T.rows);
+  if (CONFIG.ENABLE_CONDITIONAL_FORMATTING && T.rows.length) {
+    const res = rep.getRange(3, 5, T.rows.length, 1);
+    rep.setConditionalFormatRules([
+      SpreadsheetApp.newConditionalFormatRule().whenTextEqualTo('FAIL').setBackground(STYLE.RED_BG).setFontColor(STYLE.RED).setRanges([res]).build(),
+      SpreadsheetApp.newConditionalFormatRule().whenTextEqualTo('PASS').setFontColor(STYLE.GREEN).setRanges([res]).build()
+    ]);
+  }
+  rep.setFrozenRows(2);
+  rep.setColumnWidth(1, 230); rep.setColumnWidth(2, 300); rep.setColumnWidth(3, 140); rep.setColumnWidth(4, 140); rep.setColumnWidth(5, 70);
 }
