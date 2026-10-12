@@ -11,6 +11,7 @@ x-backend-env: &backend-env
   COOKIE_SECURE: ${COOKIE_SECURE:-false}
   PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-http://localhost:8080}
   CORS_ORIGINS: ${CORS_ORIGINS:-}
+  SEED_CONFIG: /config/seed.yaml
 
 services:
   db:
@@ -40,14 +41,29 @@ services:
       db: { condition: service_healthy }
     restart: "no"
 
+  # One-shot: adds what's missing from config/seed.yaml (accounts, categories, settings).
+  # Add-only, so edits made in the app are never overwritten. Runs on every `make up`.
+  seed:
+    image: expense-tracker-backend:local
+    pull_policy: never
+    command: ["python", "-m", "app.cli", "seed-config"]
+    environment: *backend-env
+    volumes:
+      - ./config:/config:ro
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+    restart: "no"
+
   backend:
     image: expense-tracker-backend:local  # built by the migrate service above
     pull_policy: never
     restart: unless-stopped
     environment: *backend-env
+    volumes:
+      - ./config:/config:ro  # read by `make create-admin`
     depends_on:
       db: { condition: service_healthy }
-      migrate: { condition: service_completed_successfully }
+      seed: { condition: service_completed_successfully }
     ports:
       - "127.0.0.1:${BACKEND_PORT:-8000}:8000"
 

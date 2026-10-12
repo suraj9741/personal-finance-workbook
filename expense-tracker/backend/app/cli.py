@@ -1,6 +1,7 @@
 """Command-line tasks: create the first admin, load demo data.
 
 python -m app.cli create-admin --email you@example.com [--name "Suraj"]
+python -m app.cli seed-config [path]   (default: SEED_CONFIG)
 python -m app.cli seed-demo
 """
 
@@ -14,6 +15,8 @@ from decimal import Decimal
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app import seed
+from app.config import get_settings
 from app.db import get_sessionmaker
 from app.models import Account, Category, HouseholdMember, Transaction, User
 from app.security import hash_password
@@ -23,7 +26,7 @@ MIN_PASSWORD = 10
 
 
 def create_admin(db: Session, email: str, name: str, password: str) -> User:
-    """Site admin with their own household holding the full Defaults.gs category list."""
+    """Site admin with their own household, filled from config/seed.yaml (admin_household)."""
     email = email.strip().lower()
     if db.scalar(select(User).where(User.email == email)):
         raise SystemExit(f"A user with email {email} already exists")
@@ -32,10 +35,18 @@ def create_admin(db: Session, email: str, name: str, password: str) -> User:
     )
     db.add(user)
     db.flush()
-    household = create_household(db, f"{name}'s household", full_seed=True)
+    household = create_household(db, f"{name}'s household")
     db.add(HouseholdMember(household_id=household.id, user_id=user.id, role="owner"))
     db.commit()
+    apply_seed_config(db)
     return user
+
+
+def apply_seed_config(db: Session, path: str | None = None) -> dict[str, int] | None:
+    path = path or get_settings().seed_config
+    if not path:
+        return None
+    return seed.apply(db, seed.load(path))
 
 
 def prompt_password() -> str:
@@ -45,6 +56,19 @@ def prompt_password() -> str:
     if getpass.getpass("Repeat password: ") != first:
         raise SystemExit("Passwords don't match")
     return first
+
+
+DEMO_CATEGORIES = [
+    ("income", "Wages", "Paycheck", "earned"),
+    ("expense", "Room", "Rent/mortgage", "spend"),
+    ("expense", "Debt", "Car EMI", "spend"),
+    ("expense", "Savings", "PPF", "saving"),
+    ("expense", "Everyday", "Food", "spend"),
+    ("expense", "Everyday", "Groceries", "spend"),
+    ("expense", "Transportation", "Fuel", "spend"),
+    ("expense", "Friend", "lent", "lent"),
+    ("transfer", "Self Transfer", "Bank to Credit", "transfer"),
+]
 
 
 def seed_demo(db: Session) -> None:
@@ -71,15 +95,29 @@ def seed_demo(db: Session) -> None:
 
     rng = random.Random(42)
     for household_id, author in ((family.id, users["Asha"]), (solo.id, users["Sam"])):
+        # The template (usually empty) may already have some of these.
         cats = {
             (c.parent_name, c.sub_name): c
             for c in db.scalars(select(Category).where(Category.household_id == household_id))
         }
-        accounts = {
-            a.name: a
-            for a in db.scalars(select(Account).where(Account.household_id == household_id))
-        }
-        bank, card, cash = accounts["HDFC"], accounts["Yes Bank"], accounts["Cash"]
+        for kind, parent, sub, group in DEMO_CATEGORIES:
+            if (parent, sub) in cats:
+                continue
+            category = Category(
+                household_id=household_id,
+                kind=kind,
+                parent_name=parent,
+                sub_name=sub,
+                stats_group=group,
+            )
+            db.add(category)
+            cats[(parent, sub)] = category
+        bank, card, cash = (
+            Account(household_id=household_id, name=name, pay_type=pay_type)
+            for name, pay_type in (("HDFC", "bank"), ("Yes Bank", "credit_card"), ("Cash", "cash"))
+        )
+        db.add_all([bank, card, cash])
+        db.flush()
         first = add_months(date.today().replace(day=1), -2)
         for m in range(3):
             month = add_months(first, m)
@@ -156,6 +194,8 @@ def main(argv: list[str] | None = None) -> None:
     admin = sub.add_parser("create-admin")
     admin.add_argument("--email", required=True)
     admin.add_argument("--name", default=None)
+    seed_config = sub.add_parser("seed-config")
+    seed_config.add_argument("path", nargs="?", default=None)
     sub.add_parser("seed-demo")
     args = parser.parse_args(argv)
     with get_sessionmaker()() as db:
@@ -163,6 +203,9 @@ def main(argv: list[str] | None = None) -> None:
             name = args.name or args.email.split("@")[0].title()
             create_admin(db, args.email, name, prompt_password())
             print(f'Admin {args.email} created with household "{name}\'s household"')
+        elif args.command == "seed-config":
+            totals = apply_seed_config(db, args.path)
+            print(f"Seed: {totals}" if totals is not None else "SEED_CONFIG not set; skipped")
         else:
             seed_demo(db)
 

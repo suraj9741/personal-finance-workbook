@@ -18,7 +18,7 @@ down_revision: str | None = "0001"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
-CATEGORIES = Path(__file__).resolve().parents[2] / "app" / "data" / "categories.json"
+CATEGORIES = Path(__file__).resolve().parents[1] / "data" / "0002_categories.json"
 
 templates = sa.table(
     "category_templates",

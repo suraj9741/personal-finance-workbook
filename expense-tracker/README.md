@@ -31,11 +31,9 @@ Then open:
 
 Both ports bind to `127.0.0.1`, so nothing else on your Wi-Fi can reach the app.
 
-The first admin's household gets everything in `finance-sheet/src/config/Defaults.gs`: the
-full category list, including the family groups (Gotu, Mom, Baba, Pratiksha, Farm), and all
-16 accounts from the script (banks, credit cards, share brokers and cash). Everyone else's new
-household gets the categories without the family groups and only HDFC, Yes Bank and Cash. You
-can change the category template on the Admin page and add or deactivate accounts in Settings.
+Your accounts and categories come from [`config/seed.yaml`](config/seed.yaml) (see
+[Accounts and categories](#accounts-and-categories-configseedyaml) below). People you invite
+into their own household start empty and add their own in Settings.
 
 ### Adding people
 
@@ -83,6 +81,7 @@ make down          stop; data is kept
 make logs          follow logs
 make ps            service status
 make migrate       apply database migrations
+make apply-config  add what's missing from config/seed.yaml (make up does this too)
 make create-admin  EMAIL=... NAME=...
 make seed          demo households with fake data (asha@, ravi@, sam@example.com / demo-password)
 make backup        back up now
@@ -98,6 +97,7 @@ make fmt           auto-format backend code
 browser ──► frontend (nginx, :8080) ──/api──► backend (FastAPI, :8000) ──► db (Postgres 16)
                                                        ▲
                        migrate (one-shot: alembic upgrade head, then exits)
+                       seed    (one-shot: adds what's missing from config/seed.yaml)
                        backup  (nightly pg_dump into ./backups)
 ```
 
@@ -135,18 +135,32 @@ browser ──► frontend (nginx, :8080) ──/api──► backend (FastAPI, 
 
 The full, typed list is at http://localhost:8000/docs.
 
-### Categories and accounts
+### Accounts and categories (config/seed.yaml)
 
-`backend/app/data/categories.json` and `accounts.json` are generated from
-`finance-sheet/src/config/Defaults.gs`:
+`config/seed.yaml` holds your accounts, your categories, an optional starter category list
+for new households, and app settings. On every `make up` the one-shot `seed` service applies
+it right after migrations. To apply an edit without a restart, run `make apply-config`.
+
+The seed only **adds**. It never renames, changes or deletes anything, so the database stays
+the source of truth and edits you make in the app are safe. It also remembers what it has
+already handled (`seed_log` table), so an account or category you delete in the app is not
+added back on the next deploy. To change something that already exists, change it in the app.
+
+- `admin_household`: applied to every household that has a site admin (yours). It started out
+  as the finance sheet's starter list: 16 accounts and 154 categories, including the family
+  groups.
+- `new_household`: categories copied into each household created from an invite. It is empty,
+  so new people build their own. You can also edit this list on the Admin page.
+- A category that isn't plain spend or income says what it counts as (`saving`, `lent`,
+  `repaid`), which keeps savings, money lent and transfers out of "Spent".
+
+To start the file over from the finance sheet's `Defaults.gs`:
 
 ```sh
-cd backend && uv run python scripts/export_categories.py
+cd backend && uv run python scripts/config_from_sheet.py > ../config/seed.yaml
 ```
 
-A test fails if they drift apart. Each category has a `stats_group` (spend, saving,
-lent, earned, repaid, transfer). That keeps savings, money lent and transfers between your
-own accounts out of "Spent".
+Migrations no longer add accounts or categories. Only this file does.
 
 ## Developing without Docker
 

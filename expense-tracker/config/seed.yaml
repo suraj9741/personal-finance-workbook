@@ -1,0 +1,65 @@
+# What the app adds at deploy time (`make up` runs the seed step after migrations).
+#
+# The seed only ADDS what is missing. It never renames, changes or deletes anything, so
+# edits you make in the app are safe. Something you delete in the app is not added back:
+# the app remembers what it has already seeded.
+#
+# Categories: group -> list of categories. A group or a category that is not plain spend
+# (or plain income) says what it counts as: saving, lent, repaid. Example:
+#   Savings: {counts_as: saving, items: [PPF, Gold]}
+#   Friend: [EMI, {name: lent, counts_as: lent}]
+
+settings:
+  currency_symbol: "₹"
+  invite_expiry_days: "7"
+
+# Every household that has a site admin (yours).
+admin_household:
+  accounts:
+    bank: [HDFC, SBI, BOI, Paytm, FI, Amazon Pay]
+    credit_card: [HDFC CC, Amazon Pay, ICICI, Indusland, SBI, Yes Bank]
+    share_broker: [Zerodha, Angel Broker, Dhan]
+    cash: [Cash]
+  categories:
+    expense:
+      Debt: [Credit cards, Car EMI, Electronics EMI, EMI, Tax, GST]
+      Education: [Tuition, Books]
+      Entertainment: [Concerts, Movies / Shows, Games]
+      Everyday: [Groceries, Food, Clothes, Subscriptions, Utilities, Shopping]
+      Savings: {counts_as: saving, items: [PPF, Friend, Share Market, H Gold]}
+      Gifts: [Gifts, Gift card, Other]
+      Health: [Doctors, Pharmacy]
+      Gotu: [Food, Bank, Pharmacy, Doctors, Medical test, Clothes, Phone, Utilities, Fuel, Cash, Tuition]
+      Mom: [Insurance, Bank, Pharmacy, Doctors, Medical test, Clothes, Phone, Utilities, Bachat Gat, Cash]
+      Baba: [Insurance, Bank, Pharmacy, Doctors, Shopping, Phone, Utilities, Fuel, Cash]
+      Room: [Rent/mortgage, Groceries, Maintenance, Improvements, Property taxes, Internet, Electricity, Heat/gas, TV]
+      Farm: [Pharmacy, Pre Farming, Post Farming, Maintenance]
+      Friend: [EMI, borrow, {name: lent, counts_as: lent}]
+      Home: [Rent/mortgage, Clothes, Groceries, Maintenance, Improvements, Property taxes, Internet, Electricity, Heat/gas, TV, Paper bill, Milk bill, Home Food, Wedding]
+      Insurance: [Vehicle, Health, Home, Life]
+      Pets: [Food, Vet/medical, Toys, Supplies]
+      Technology: [Domains & hosting, Online services, Hardware, Software]
+      Transportation: [Fuel, Car, Fast Tag, Bike, Public transit, Trip]
+      Travel: [Airfare, Hotels, Travel Food]
+      Pratiksha: [Food, Bank, Pharmacy, Doctors, Medical test, Clothes, Phone, Utilities, Fuel, Cash, Tuition]
+      Other: [Other]
+    income:
+      Wages: [Paycheck, Bonus, Commission, W Other]
+      Friend: [{name: Refund, counts_as: repaid}, Rent]
+      Savings: [PPF, Friend, Interest Income, FD]
+      Share Market: [Dividends, S Refund, Stock sell]
+      Gifts: [Gifts, Gift card, Other]
+      Trip: [Refund, Fee]
+      Gotu: [Bank, Cash]
+      Mom: [Bank, Cash]
+      Baba: [Bank, Cash]
+      Pratiksha: [Bank, Cash]
+      Other: [Other]
+    transfer:
+      Self Transfer: [Bank to Bank, Bank to Credit, Credit to Bank, Cash to Bank, Bank to Cash, Broker to Bank, Bank to Broker, Credit to Cash]
+
+# Households created from an invite. Empty means new people start with nothing and
+# add their own accounts and categories. Add categories here (same format as above)
+# to give everyone a starting list. You can also edit it on the Admin page.
+new_household:
+  categories: {}

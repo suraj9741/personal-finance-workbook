@@ -10,4 +10,6 @@ def test_downgrade_and_upgrade_again() -> None:
     command.downgrade(config, "base")
     command.upgrade(config, "head")
     with get_engine().connect() as conn:
-        assert conn.execute(text("SELECT count(*) FROM category_templates")).scalar() == 101
+        # 0002's starter template is removed by 0004; the seed config fills it now.
+        assert conn.execute(text("SELECT count(*) FROM category_templates")).scalar() == 0
+        assert conn.execute(text("SELECT count(*) FROM seed_log")).scalar() == 0

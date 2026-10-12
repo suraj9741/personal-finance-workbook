@@ -278,3 +278,17 @@ class AppSetting(Base):
 
     key: Mapped[str] = mapped_column(String(50), primary_key=True)
     value: Mapped[str] = mapped_column(String(200))
+
+
+class SeedLog(Base):
+    """Every item the config seed has added or found, so it is never added twice.
+
+    scope is "template" for the new-household template, else the household id. If someone
+    deletes a seeded account or category in the app, its row here keeps it from coming back.
+    """
+
+    __tablename__ = "seed_log"
+
+    scope: Mapped[str] = mapped_column(String(40), primary_key=True)
+    item: Mapped[str] = mapped_column(String(200), primary_key=True)
+    seeded_at: Mapped[datetime] = created_at()
