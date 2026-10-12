@@ -177,3 +177,23 @@ def test_migration_keeps_past_months_as_they_were(admin: Api, db: Session) -> No
         "3000.00",
         "3000.00",
     ]
+
+
+def test_later_default_wins_and_is_reported(admin: Api) -> None:
+    # Tuition 30000 from this month, 10000 from two months on, then this month edited to 20000.
+    tuition = category_id(admin, "Education", "Tuition")
+    put(admin, 0, {tuition: "30000"})
+    put(admin, 2, {tuition: "10000"})
+    body = put(admin, 0, {tuition: "20000"})
+    assert [budget(admin, m, tuition) for m in range(5)] == [
+        "20000.00",
+        "20000.00",
+        "10000.00",
+        "10000.00",
+        "10000.00",
+    ]
+    assert body["next_changes"] == [
+        {"category_id": tuition, "month": month(2), "amount": "10000.00"}
+    ]
+    later = admin.get(f"/api/v1/budgets?month={month(2)}").json()
+    assert later["next_changes"] == []

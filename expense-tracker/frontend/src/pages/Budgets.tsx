@@ -2,13 +2,14 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { api, put, type Category, type MonthStats } from "../api";
 import { MonthPicker } from "../components/MonthPicker";
-import { budgetDiff, currentMonth, money, monthLabel } from "../format";
+import { budgetDiff, currentMonth, money, monthLabel, shiftMonth } from "../format";
 import { useCategories, useMe, useRefreshMoney } from "../hooks";
 
 interface BudgetsOut {
   month: string;
   carries_forward: boolean;
   items: { category_id: string; amount: string; this_month_only: boolean; set_in: string }[];
+  next_changes: { category_id: string; month: string; amount: string }[];
 }
 
 type Kind = "expense" | "income";
@@ -32,6 +33,7 @@ export function Budgets() {
   const setDraft = (id: string, v: string) => setEdits((e) => ({ month, values: { ...(e.month === month ? e.values : {}), [id]: v } }));
   const changed = Object.entries(pending).filter(([id, v]) => Number(v || 0) !== Number(savedLines.get(id)?.amount ?? 0));
 
+  const nextChange = useMemo(() => new Map((budgets.data?.next_changes ?? []).map((n) => [n.category_id, n])), [budgets.data]);
   const actual = useMemo(() => new Map((stats.data?.categories ?? []).map((l) => [l.category_id, Number(l.actual)])), [stats.data]);
 
   const save = useMutation({
@@ -41,7 +43,18 @@ export function Budgets() {
         items: changed.map(([category_id, amount]) => ({ category_id, amount: amount || "0", this_month_only: onlyThisMonth })),
       }),
     onSuccess: () => {
-      setMessage(carries && !onlyThisMonth ? `Budgets saved for ${monthLabel(month)} and the months after it` : `Budgets saved for ${monthLabel(month)} only`);
+      const forward = carries && !onlyThisMonth;
+      // A default set earlier for a later month still takes over from that month.
+      const stops = forward
+        ? changed.flatMap(([id]) => {
+            const n = nextChange.get(id);
+            const c = allCategories?.find((x) => x.id === id);
+            return n && c ? [`${c.sub_name} keeps ${money(n.amount)} from ${monthLabel(n.month)}, which you set before.`] : [];
+          })
+        : [];
+      setMessage(
+        [forward ? `Budgets saved for ${monthLabel(month)} and the months after it.` : `Budgets saved for ${monthLabel(month)} only.`, ...stops].join(" "),
+      );
       setEdits({ month, values: {} });
       refresh();
     },
@@ -49,11 +62,16 @@ export function Budgets() {
   });
 
   const note = (id: string) => {
-    if (pending[id] !== undefined) return null;
     const line = savedLines.get(id);
-    if (!line) return null;
-    if (line.this_month_only) return "this month only";
-    return line.set_in !== month ? `since ${monthLabel(line.set_in)}` : null;
+    const edited = pending[id] !== undefined;
+    if (line?.this_month_only && !edited) return "this month only";
+    const parts = [];
+    if (line && !edited && line.set_in !== month) parts.push(`since ${monthLabel(line.set_in)}`);
+    const next = nextChange.get(id);
+    if (next && carries && !(edited && onlyThisMonth)) {
+      parts.push(`until ${monthLabel(shiftMonth(next.month, -1))}, then ${money(next.amount)}`);
+    }
+    return parts.length ? parts.join(", ") : null;
   };
 
   return (

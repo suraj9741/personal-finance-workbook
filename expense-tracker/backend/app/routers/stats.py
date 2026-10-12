@@ -24,6 +24,7 @@ from app.schemas import (
     LoanOut,
     Month,
     MonthStats,
+    NextChange,
     TrendPoint,
 )
 from app.services import add_months
@@ -97,7 +98,27 @@ def get_budgets(
             for k, b in budget_rows(db, ctx, start).items()
             if b.amount > 0
         ],
+        next_changes=next_changes(db, ctx, start),
     )
+
+
+def next_changes(db: Session, ctx: Ctx, start: date) -> list[NextChange]:
+    """Each category's next carry-forward row after this month: a default set for later."""
+    first: dict[uuid.UUID, Budget] = {}
+    for b in db.scalars(
+        select(Budget)
+        .where(
+            Budget.household_id == ctx.household_id,
+            Budget.month > start,
+            Budget.carry_forward.is_(True),
+        )
+        .order_by(Budget.month.desc())
+    ):
+        first[b.category_id] = b  # earlier months overwrite later ones
+    return [
+        NextChange(category_id=k, month=month_key(b.month), amount=b.amount)
+        for k, b in first.items()
+    ]
 
 
 def set_budget(db: Session, ctx: Ctx, start: date, item: BudgetItem) -> None:
