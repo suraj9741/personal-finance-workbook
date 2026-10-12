@@ -69,13 +69,6 @@ def test_budget_vs_actual_and_copy(admin: Api) -> None:
     }
     assert lines["Rent/mortgage"]["over_budget"] is True
     assert lines["Food"]["actual"] == "0"
-    salary = category_id(admin, "Wages", "Paycheck", "income")
-    bad = admin.put(
-        "/api/v1/budgets",
-        json={"month": "2026-10", "items": [{"category_id": salary, "amount": "1"}]},
-    )
-    assert bad.status_code == 422
-
     copied = admin.post(
         "/api/v1/budgets/copy", json={"from_month": "2026-10", "to_month": "2026-11"}
     )

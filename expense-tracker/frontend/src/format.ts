@@ -10,6 +10,11 @@ export function money(value: string | number | null | undefined, exact = false):
   return (exact ? inrExact : inr).format(n);
 }
 
+/** Budget minus spent for an expense, earned minus budget for income: positive is good. */
+export function budgetDiff(kind: "expense" | "income", budget: number, actual: number): number {
+  return kind === "expense" ? budget - actual : actual - budget;
+}
+
 export function percent(rate: number | null): string {
   return rate === null ? "—" : `${Math.round(rate * 100)}%`;
 }
