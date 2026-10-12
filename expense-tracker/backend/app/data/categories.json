@@ -1,0 +1,1234 @@
+[
+ {
+  "kind": "expense",
+  "parent_name": "Debt",
+  "sub_name": "Credit cards",
+  "stats_group": "spend",
+  "sort_order": 1,
+  "family_only": false
+ },
+ {
+  "kind": "expense",
+  "parent_name": "Debt",
+  "sub_name": "Car EMI",
+  "stats_group": "spend",
+  "sort_order": 2,
+  "family_only": false
+ },
+ {
+  "kind": "expense",
+  "parent_name": "Debt",
+  "sub_name": "Electronics EMI",
+  "stats_group": "spend",
+  "sort_order": 3,
+  "family_only": false
+ },
+ {
+  "kind": "expense",
+  "parent_name": "Debt",
+  "sub_name": "EMI",
+  "stats_group": "spend",
+  "sort_order": 4,
+  "family_only": false
+ },
+ {
+  "kind": "expense",
+  "parent_name": "Debt",
+  "sub_name": "Tax",
+  "stats_group": "spend",
+  "sort_order": 5,
+  "family_only": false
+ },
+ {
+  "kind": "expense",
+  "parent_name": "Debt",
+  "sub_name": "GST",
+  "stats_group": "spend",
+  "sort_order": 6,
+  "family_only": false
+ },
+ {
+  "kind": "expense",
+  "parent_name": "Education",
+  "sub_name": "Tuition",
+  "stats_group": "spend",
+  "sort_order": 7,
+  "family_only": false
+ },
+ {
+  "kind": "expense",
+  "parent_name": "Education",
+  "sub_name": "Books",
+  "stats_group": "spend",
+  "sort_order": 8,
+  "family_only": false
+ },
+ {
+  "kind": "expense",
+  "parent_name": "Entertainment",
+  "sub_name": "Concerts",
+  "stats_group": "spend",
+  "sort_order": 9,
+  "family_only": false
+ },
+ {
+  "kind": "expense",
+  "parent_name": "Entertainment",
+  "sub_name": "Movies / Shows",
+  "stats_group": "spend",
+  "sort_order": 10,
+  "family_only": false
+ },
+ {
+  "kind": "expense",
+  "parent_name": "Entertainment",
+  "sub_name": "Games",
+  "stats_group": "spend",
+  "sort_order": 11,
+  "family_only": false
+ },
+ {
+  "kind": "expense",
+  "parent_name": "Everyday",
+  "sub_name": "Groceries",
+  "stats_group": "spend",
+  "sort_order": 12,
+  "family_only": false
+ },
+ {
+  "kind": "expense",
+  "parent_name": "Everyday",
+  "sub_name": "Food",
+  "stats_group": "spend",
+  "sort_order": 13,
+  "family_only": false
+ },
+ {
+  "kind": "expense",
+  "parent_name": "Everyday",
+  "sub_name": "Clothes",
+  "stats_group": "spend",
+  "sort_order": 14,
+  "family_only": false
+ },
+ {
+  "kind": "expense",
+  "parent_name": "Everyday",
+  "sub_name": "Subscriptions",
+  "stats_group": "spend",
+  "sort_order": 15,
+  "family_only": false
+ },
+ {
+  "kind": "expense",
+  "parent_name": "Everyday",
+  "sub_name": "Utilities",
+  "stats_group": "spend",
+  "sort_order": 16,
+  "family_only": false
+ },
+ {
+  "kind": "expense",
+  "parent_name": "Everyday",
+  "sub_name": "Shopping",
+  "stats_group": "spend",
+  "sort_order": 17,
+  "family_only": false
+ },
+ {
+  "kind": "expense",
+  "parent_name": "Savings",
+  "sub_name": "PPF",
+  "stats_group": "saving",
+  "sort_order": 18,
+  "family_only": false
+ },
+ {
+  "kind": "expense",
+  "parent_name": "Savings",
+  "sub_name": "Friend",
+  "stats_group": "saving",
+  "sort_order": 19,
+  "family_only": false
+ },
+ {
+  "kind": "expense",
+  "parent_name": "Savings",
+  "sub_name": "Share Market",
+  "stats_group": "saving",
+  "sort_order": 20,
+  "family_only": false
+ },
+ {
+  "kind": "expense",
+  "parent_name": "Savings",
+  "sub_name": "H Gold",
+  "stats_group": "saving",
+  "sort_order": 21,
+  "family_only": false
+ },
+ {
+  "kind": "expense",
+  "parent_name": "Gifts",
+  "sub_name": "Gifts",
+  "stats_group": "spend",
+  "sort_order": 22,
+  "family_only": false
+ },
+ {
+  "kind": "expense",
+  "parent_name": "Gifts",
+  "sub_name": "Gift card",
+  "stats_group": "spend",
+  "sort_order": 23,
+  "family_only": false
+ },
+ {
+  "kind": "expense",
+  "parent_name": "Gifts",
+  "sub_name": "Other",
+  "stats_group": "spend",
+  "sort_order": 24,
+  "family_only": false
+ },
+ {
+  "kind": "expense",
+  "parent_name": "Health",
+  "sub_name": "Doctors",
+  "stats_group": "spend",
+  "sort_order": 25,
+  "family_only": false
+ },
+ {
+  "kind": "expense",
+  "parent_name": "Health",
+  "sub_name": "Pharmacy",
+  "stats_group": "spend",
+  "sort_order": 26,
+  "family_only": false
+ },
+ {
+  "kind": "expense",
+  "parent_name": "Gotu",
+  "sub_name": "Food",
+  "stats_group": "spend",
+  "sort_order": 27,
+  "family_only": true
+ },
+ {
+  "kind": "expense",
+  "parent_name": "Gotu",
+  "sub_name": "Bank",
+  "stats_group": "spend",
+  "sort_order": 28,
+  "family_only": true
+ },
+ {
+  "kind": "expense",
+  "parent_name": "Gotu",
+  "sub_name": "Pharmacy",
+  "stats_group": "spend",
+  "sort_order": 29,
+  "family_only": true
+ },
+ {
+  "kind": "expense",
+  "parent_name": "Gotu",
+  "sub_name": "Doctors",
+  "stats_group": "spend",
+  "sort_order": 30,
+  "family_only": true
+ },
+ {
+  "kind": "expense",
+  "parent_name": "Gotu",
+  "sub_name": "Medical test",
+  "stats_group": "spend",
+  "sort_order": 31,
+  "family_only": true
+ },
+ {
+  "kind": "expense",
+  "parent_name": "Gotu",
+  "sub_name": "Clothes",
+  "stats_group": "spend",
+  "sort_order": 32,
+  "family_only": true
+ },
+ {
+  "kind": "expense",
+  "parent_name": "Gotu",
+  "sub_name": "Phone",
+  "stats_group": "spend",
+  "sort_order": 33,
+  "family_only": true
+ },
+ {
+  "kind": "expense",
+  "parent_name": "Gotu",
+  "sub_name": "Utilities",
+  "stats_group": "spend",
+  "sort_order": 34,
+  "family_only": true
+ },
+ {
+  "kind": "expense",
+  "parent_name": "Gotu",
+  "sub_name": "Fuel",
+  "stats_group": "spend",
+  "sort_order": 35,
+  "family_only": true
+ },
+ {
+  "kind": "expense",
+  "parent_name": "Gotu",
+  "sub_name": "Cash",
+  "stats_group": "spend",
+  "sort_order": 36,
+  "family_only": true
+ },
+ {
+  "kind": "expense",
+  "parent_name": "Gotu",
+  "sub_name": "Tuition",
+  "stats_group": "spend",
+  "sort_order": 37,
+  "family_only": true
+ },
+ {
+  "kind": "expense",
+  "parent_name": "Mom",
+  "sub_name": "Insurance",
+  "stats_group": "spend",
+  "sort_order": 38,
+  "family_only": true
+ },
+ {
+  "kind": "expense",
+  "parent_name": "Mom",
+  "sub_name": "Bank",
+  "stats_group": "spend",
+  "sort_order": 39,
+  "family_only": true
+ },
+ {
+  "kind": "expense",
+  "parent_name": "Mom",
+  "sub_name": "Pharmacy",
+  "stats_group": "spend",
+  "sort_order": 40,
+  "family_only": true
+ },
+ {
+  "kind": "expense",
+  "parent_name": "Mom",
+  "sub_name": "Doctors",
+  "stats_group": "spend",
+  "sort_order": 41,
+  "family_only": true
+ },
+ {
+  "kind": "expense",
+  "parent_name": "Mom",
+  "sub_name": "Medical test",
+  "stats_group": "spend",
+  "sort_order": 42,
+  "family_only": true
+ },
+ {
+  "kind": "expense",
+  "parent_name": "Mom",
+  "sub_name": "Clothes",
+  "stats_group": "spend",
+  "sort_order": 43,
+  "family_only": true
+ },
+ {
+  "kind": "expense",
+  "parent_name": "Mom",
+  "sub_name": "Phone",
+  "stats_group": "spend",
+  "sort_order": 44,
+  "family_only": true
+ },
+ {
+  "kind": "expense",
+  "parent_name": "Mom",
+  "sub_name": "Utilities",
+  "stats_group": "spend",
+  "sort_order": 45,
+  "family_only": true
+ },
+ {
+  "kind": "expense",
+  "parent_name": "Mom",
+  "sub_name": "Bachat Gat",
+  "stats_group": "spend",
+  "sort_order": 46,
+  "family_only": true
+ },
+ {
+  "kind": "expense",
+  "parent_name": "Mom",
+  "sub_name": "Cash",
+  "stats_group": "spend",
+  "sort_order": 47,
+  "family_only": true
+ },
+ {
+  "kind": "expense",
+  "parent_name": "Baba",
+  "sub_name": "Insurance",
+  "stats_group": "spend",
+  "sort_order": 48,
+  "family_only": true
+ },
+ {
+  "kind": "expense",
+  "parent_name": "Baba",
+  "sub_name": "Bank",
+  "stats_group": "spend",
+  "sort_order": 49,
+  "family_only": true
+ },
+ {
+  "kind": "expense",
+  "parent_name": "Baba",
+  "sub_name": "Pharmacy",
+  "stats_group": "spend",
+  "sort_order": 50,
+  "family_only": true
+ },
+ {
+  "kind": "expense",
+  "parent_name": "Baba",
+  "sub_name": "Doctors",
+  "stats_group": "spend",
+  "sort_order": 51,
+  "family_only": true
+ },
+ {
+  "kind": "expense",
+  "parent_name": "Baba",
+  "sub_name": "Shopping",
+  "stats_group": "spend",
+  "sort_order": 52,
+  "family_only": true
+ },
+ {
+  "kind": "expense",
+  "parent_name": "Baba",
+  "sub_name": "Phone",
+  "stats_group": "spend",
+  "sort_order": 53,
+  "family_only": true
+ },
+ {
+  "kind": "expense",
+  "parent_name": "Baba",
+  "sub_name": "Utilities",
+  "stats_group": "spend",
+  "sort_order": 54,
+  "family_only": true
+ },
+ {
+  "kind": "expense",
+  "parent_name": "Baba",
+  "sub_name": "Fuel",
+  "stats_group": "spend",
+  "sort_order": 55,
+  "family_only": true
+ },
+ {
+  "kind": "expense",
+  "parent_name": "Baba",
+  "sub_name": "Cash",
+  "stats_group": "spend",
+  "sort_order": 56,
+  "family_only": true
+ },
+ {
+  "kind": "expense",
+  "parent_name": "Room",
+  "sub_name": "Rent/mortgage",
+  "stats_group": "spend",
+  "sort_order": 57,
+  "family_only": false
+ },
+ {
+  "kind": "expense",
+  "parent_name": "Room",
+  "sub_name": "Groceries",
+  "stats_group": "spend",
+  "sort_order": 58,
+  "family_only": false
+ },
+ {
+  "kind": "expense",
+  "parent_name": "Room",
+  "sub_name": "Maintenance",
+  "stats_group": "spend",
+  "sort_order": 59,
+  "family_only": false
+ },
+ {
+  "kind": "expense",
+  "parent_name": "Room",
+  "sub_name": "Improvements",
+  "stats_group": "spend",
+  "sort_order": 60,
+  "family_only": false
+ },
+ {
+  "kind": "expense",
+  "parent_name": "Room",
+  "sub_name": "Property taxes",
+  "stats_group": "spend",
+  "sort_order": 61,
+  "family_only": false
+ },
+ {
+  "kind": "expense",
+  "parent_name": "Room",
+  "sub_name": "Internet",
+  "stats_group": "spend",
+  "sort_order": 62,
+  "family_only": false
+ },
+ {
+  "kind": "expense",
+  "parent_name": "Room",
+  "sub_name": "Electricity",
+  "stats_group": "spend",
+  "sort_order": 63,
+  "family_only": false
+ },
+ {
+  "kind": "expense",
+  "parent_name": "Room",
+  "sub_name": "Heat/gas",
+  "stats_group": "spend",
+  "sort_order": 64,
+  "family_only": false
+ },
+ {
+  "kind": "expense",
+  "parent_name": "Room",
+  "sub_name": "TV",
+  "stats_group": "spend",
+  "sort_order": 65,
+  "family_only": false
+ },
+ {
+  "kind": "expense",
+  "parent_name": "Farm",
+  "sub_name": "Pharmacy",
+  "stats_group": "spend",
+  "sort_order": 66,
+  "family_only": true
+ },
+ {
+  "kind": "expense",
+  "parent_name": "Farm",
+  "sub_name": "Pre Farming",
+  "stats_group": "spend",
+  "sort_order": 67,
+  "family_only": true
+ },
+ {
+  "kind": "expense",
+  "parent_name": "Farm",
+  "sub_name": "Post Farming",
+  "stats_group": "spend",
+  "sort_order": 68,
+  "family_only": true
+ },
+ {
+  "kind": "expense",
+  "parent_name": "Farm",
+  "sub_name": "Maintenance",
+  "stats_group": "spend",
+  "sort_order": 69,
+  "family_only": true
+ },
+ {
+  "kind": "expense",
+  "parent_name": "Friend",
+  "sub_name": "EMI",
+  "stats_group": "spend",
+  "sort_order": 70,
+  "family_only": false
+ },
+ {
+  "kind": "expense",
+  "parent_name": "Friend",
+  "sub_name": "borrow",
+  "stats_group": "spend",
+  "sort_order": 71,
+  "family_only": false
+ },
+ {
+  "kind": "expense",
+  "parent_name": "Friend",
+  "sub_name": "lent",
+  "stats_group": "lent",
+  "sort_order": 72,
+  "family_only": false
+ },
+ {
+  "kind": "expense",
+  "parent_name": "Home",
+  "sub_name": "Rent/mortgage",
+  "stats_group": "spend",
+  "sort_order": 73,
+  "family_only": false
+ },
+ {
+  "kind": "expense",
+  "parent_name": "Home",
+  "sub_name": "Clothes",
+  "stats_group": "spend",
+  "sort_order": 74,
+  "family_only": false
+ },
+ {
+  "kind": "expense",
+  "parent_name": "Home",
+  "sub_name": "Groceries",
+  "stats_group": "spend",
+  "sort_order": 75,
+  "family_only": false
+ },
+ {
+  "kind": "expense",
+  "parent_name": "Home",
+  "sub_name": "Maintenance",
+  "stats_group": "spend",
+  "sort_order": 76,
+  "family_only": false
+ },
+ {
+  "kind": "expense",
+  "parent_name": "Home",
+  "sub_name": "Improvements",
+  "stats_group": "spend",
+  "sort_order": 77,
+  "family_only": false
+ },
+ {
+  "kind": "expense",
+  "parent_name": "Home",
+  "sub_name": "Property taxes",
+  "stats_group": "spend",
+  "sort_order": 78,
+  "family_only": false
+ },
+ {
+  "kind": "expense",
+  "parent_name": "Home",
+  "sub_name": "Internet",
+  "stats_group": "spend",
+  "sort_order": 79,
+  "family_only": false
+ },
+ {
+  "kind": "expense",
+  "parent_name": "Home",
+  "sub_name": "Electricity",
+  "stats_group": "spend",
+  "sort_order": 80,
+  "family_only": false
+ },
+ {
+  "kind": "expense",
+  "parent_name": "Home",
+  "sub_name": "Heat/gas",
+  "stats_group": "spend",
+  "sort_order": 81,
+  "family_only": false
+ },
+ {
+  "kind": "expense",
+  "parent_name": "Home",
+  "sub_name": "TV",
+  "stats_group": "spend",
+  "sort_order": 82,
+  "family_only": false
+ },
+ {
+  "kind": "expense",
+  "parent_name": "Home",
+  "sub_name": "Paper bill",
+  "stats_group": "spend",
+  "sort_order": 83,
+  "family_only": false
+ },
+ {
+  "kind": "expense",
+  "parent_name": "Home",
+  "sub_name": "Milk bill",
+  "stats_group": "spend",
+  "sort_order": 84,
+  "family_only": false
+ },
+ {
+  "kind": "expense",
+  "parent_name": "Home",
+  "sub_name": "Home Food",
+  "stats_group": "spend",
+  "sort_order": 85,
+  "family_only": false
+ },
+ {
+  "kind": "expense",
+  "parent_name": "Home",
+  "sub_name": "Wedding",
+  "stats_group": "spend",
+  "sort_order": 86,
+  "family_only": false
+ },
+ {
+  "kind": "expense",
+  "parent_name": "Insurance",
+  "sub_name": "Vehicle",
+  "stats_group": "spend",
+  "sort_order": 87,
+  "family_only": false
+ },
+ {
+  "kind": "expense",
+  "parent_name": "Insurance",
+  "sub_name": "Health",
+  "stats_group": "spend",
+  "sort_order": 88,
+  "family_only": false
+ },
+ {
+  "kind": "expense",
+  "parent_name": "Insurance",
+  "sub_name": "Home",
+  "stats_group": "spend",
+  "sort_order": 89,
+  "family_only": false
+ },
+ {
+  "kind": "expense",
+  "parent_name": "Insurance",
+  "sub_name": "Life",
+  "stats_group": "spend",
+  "sort_order": 90,
+  "family_only": false
+ },
+ {
+  "kind": "expense",
+  "parent_name": "Pets",
+  "sub_name": "Food",
+  "stats_group": "spend",
+  "sort_order": 91,
+  "family_only": false
+ },
+ {
+  "kind": "expense",
+  "parent_name": "Pets",
+  "sub_name": "Vet/medical",
+  "stats_group": "spend",
+  "sort_order": 92,
+  "family_only": false
+ },
+ {
+  "kind": "expense",
+  "parent_name": "Pets",
+  "sub_name": "Toys",
+  "stats_group": "spend",
+  "sort_order": 93,
+  "family_only": false
+ },
+ {
+  "kind": "expense",
+  "parent_name": "Pets",
+  "sub_name": "Supplies",
+  "stats_group": "spend",
+  "sort_order": 94,
+  "family_only": false
+ },
+ {
+  "kind": "expense",
+  "parent_name": "Technology",
+  "sub_name": "Domains & hosting",
+  "stats_group": "spend",
+  "sort_order": 95,
+  "family_only": false
+ },
+ {
+  "kind": "expense",
+  "parent_name": "Technology",
+  "sub_name": "Online services",
+  "stats_group": "spend",
+  "sort_order": 96,
+  "family_only": false
+ },
+ {
+  "kind": "expense",
+  "parent_name": "Technology",
+  "sub_name": "Hardware",
+  "stats_group": "spend",
+  "sort_order": 97,
+  "family_only": false
+ },
+ {
+  "kind": "expense",
+  "parent_name": "Technology",
+  "sub_name": "Software",
+  "stats_group": "spend",
+  "sort_order": 98,
+  "family_only": false
+ },
+ {
+  "kind": "expense",
+  "parent_name": "Transportation",
+  "sub_name": "Fuel",
+  "stats_group": "spend",
+  "sort_order": 99,
+  "family_only": false
+ },
+ {
+  "kind": "expense",
+  "parent_name": "Transportation",
+  "sub_name": "Car",
+  "stats_group": "spend",
+  "sort_order": 100,
+  "family_only": false
+ },
+ {
+  "kind": "expense",
+  "parent_name": "Transportation",
+  "sub_name": "Fast Tag",
+  "stats_group": "spend",
+  "sort_order": 101,
+  "family_only": false
+ },
+ {
+  "kind": "expense",
+  "parent_name": "Transportation",
+  "sub_name": "Bike",
+  "stats_group": "spend",
+  "sort_order": 102,
+  "family_only": false
+ },
+ {
+  "kind": "expense",
+  "parent_name": "Transportation",
+  "sub_name": "Public transit",
+  "stats_group": "spend",
+  "sort_order": 103,
+  "family_only": false
+ },
+ {
+  "kind": "expense",
+  "parent_name": "Transportation",
+  "sub_name": "Trip",
+  "stats_group": "spend",
+  "sort_order": 104,
+  "family_only": false
+ },
+ {
+  "kind": "expense",
+  "parent_name": "Travel",
+  "sub_name": "Airfare",
+  "stats_group": "spend",
+  "sort_order": 105,
+  "family_only": false
+ },
+ {
+  "kind": "expense",
+  "parent_name": "Travel",
+  "sub_name": "Hotels",
+  "stats_group": "spend",
+  "sort_order": 106,
+  "family_only": false
+ },
+ {
+  "kind": "expense",
+  "parent_name": "Travel",
+  "sub_name": "Travel Food",
+  "stats_group": "spend",
+  "sort_order": 107,
+  "family_only": false
+ },
+ {
+  "kind": "expense",
+  "parent_name": "Pratiksha",
+  "sub_name": "Food",
+  "stats_group": "spend",
+  "sort_order": 108,
+  "family_only": true
+ },
+ {
+  "kind": "expense",
+  "parent_name": "Pratiksha",
+  "sub_name": "Bank",
+  "stats_group": "spend",
+  "sort_order": 109,
+  "family_only": true
+ },
+ {
+  "kind": "expense",
+  "parent_name": "Pratiksha",
+  "sub_name": "Pharmacy",
+  "stats_group": "spend",
+  "sort_order": 110,
+  "family_only": true
+ },
+ {
+  "kind": "expense",
+  "parent_name": "Pratiksha",
+  "sub_name": "Doctors",
+  "stats_group": "spend",
+  "sort_order": 111,
+  "family_only": true
+ },
+ {
+  "kind": "expense",
+  "parent_name": "Pratiksha",
+  "sub_name": "Medical test",
+  "stats_group": "spend",
+  "sort_order": 112,
+  "family_only": true
+ },
+ {
+  "kind": "expense",
+  "parent_name": "Pratiksha",
+  "sub_name": "Clothes",
+  "stats_group": "spend",
+  "sort_order": 113,
+  "family_only": true
+ },
+ {
+  "kind": "expense",
+  "parent_name": "Pratiksha",
+  "sub_name": "Phone",
+  "stats_group": "spend",
+  "sort_order": 114,
+  "family_only": true
+ },
+ {
+  "kind": "expense",
+  "parent_name": "Pratiksha",
+  "sub_name": "Utilities",
+  "stats_group": "spend",
+  "sort_order": 115,
+  "family_only": true
+ },
+ {
+  "kind": "expense",
+  "parent_name": "Pratiksha",
+  "sub_name": "Fuel",
+  "stats_group": "spend",
+  "sort_order": 116,
+  "family_only": true
+ },
+ {
+  "kind": "expense",
+  "parent_name": "Pratiksha",
+  "sub_name": "Cash",
+  "stats_group": "spend",
+  "sort_order": 117,
+  "family_only": true
+ },
+ {
+  "kind": "expense",
+  "parent_name": "Pratiksha",
+  "sub_name": "Tuition",
+  "stats_group": "spend",
+  "sort_order": 118,
+  "family_only": true
+ },
+ {
+  "kind": "expense",
+  "parent_name": "Other",
+  "sub_name": "Other",
+  "stats_group": "spend",
+  "sort_order": 119,
+  "family_only": false
+ },
+ {
+  "kind": "income",
+  "parent_name": "Wages",
+  "sub_name": "Paycheck",
+  "stats_group": "earned",
+  "sort_order": 120,
+  "family_only": false
+ },
+ {
+  "kind": "income",
+  "parent_name": "Wages",
+  "sub_name": "Bonus",
+  "stats_group": "earned",
+  "sort_order": 121,
+  "family_only": false
+ },
+ {
+  "kind": "income",
+  "parent_name": "Wages",
+  "sub_name": "Commission",
+  "stats_group": "earned",
+  "sort_order": 122,
+  "family_only": false
+ },
+ {
+  "kind": "income",
+  "parent_name": "Wages",
+  "sub_name": "W Other",
+  "stats_group": "earned",
+  "sort_order": 123,
+  "family_only": false
+ },
+ {
+  "kind": "income",
+  "parent_name": "Friend",
+  "sub_name": "Refund",
+  "stats_group": "repaid",
+  "sort_order": 124,
+  "family_only": false
+ },
+ {
+  "kind": "income",
+  "parent_name": "Friend",
+  "sub_name": "Rent",
+  "stats_group": "earned",
+  "sort_order": 125,
+  "family_only": false
+ },
+ {
+  "kind": "income",
+  "parent_name": "Savings",
+  "sub_name": "PPF",
+  "stats_group": "earned",
+  "sort_order": 126,
+  "family_only": false
+ },
+ {
+  "kind": "income",
+  "parent_name": "Savings",
+  "sub_name": "Friend",
+  "stats_group": "earned",
+  "sort_order": 127,
+  "family_only": false
+ },
+ {
+  "kind": "income",
+  "parent_name": "Savings",
+  "sub_name": "Interest Income",
+  "stats_group": "earned",
+  "sort_order": 128,
+  "family_only": false
+ },
+ {
+  "kind": "income",
+  "parent_name": "Savings",
+  "sub_name": "FD",
+  "stats_group": "earned",
+  "sort_order": 129,
+  "family_only": false
+ },
+ {
+  "kind": "income",
+  "parent_name": "Share Market",
+  "sub_name": "Dividends",
+  "stats_group": "earned",
+  "sort_order": 130,
+  "family_only": false
+ },
+ {
+  "kind": "income",
+  "parent_name": "Share Market",
+  "sub_name": "S Refund",
+  "stats_group": "earned",
+  "sort_order": 131,
+  "family_only": false
+ },
+ {
+  "kind": "income",
+  "parent_name": "Share Market",
+  "sub_name": "Stock sell",
+  "stats_group": "earned",
+  "sort_order": 132,
+  "family_only": false
+ },
+ {
+  "kind": "income",
+  "parent_name": "Gifts",
+  "sub_name": "Gifts",
+  "stats_group": "earned",
+  "sort_order": 133,
+  "family_only": false
+ },
+ {
+  "kind": "income",
+  "parent_name": "Gifts",
+  "sub_name": "Gift card",
+  "stats_group": "earned",
+  "sort_order": 134,
+  "family_only": false
+ },
+ {
+  "kind": "income",
+  "parent_name": "Gifts",
+  "sub_name": "Other",
+  "stats_group": "earned",
+  "sort_order": 135,
+  "family_only": false
+ },
+ {
+  "kind": "income",
+  "parent_name": "Trip",
+  "sub_name": "Refund",
+  "stats_group": "earned",
+  "sort_order": 136,
+  "family_only": false
+ },
+ {
+  "kind": "income",
+  "parent_name": "Trip",
+  "sub_name": "Fee",
+  "stats_group": "earned",
+  "sort_order": 137,
+  "family_only": false
+ },
+ {
+  "kind": "income",
+  "parent_name": "Gotu",
+  "sub_name": "Bank",
+  "stats_group": "earned",
+  "sort_order": 138,
+  "family_only": true
+ },
+ {
+  "kind": "income",
+  "parent_name": "Gotu",
+  "sub_name": "Cash",
+  "stats_group": "earned",
+  "sort_order": 139,
+  "family_only": true
+ },
+ {
+  "kind": "income",
+  "parent_name": "Mom",
+  "sub_name": "Bank",
+  "stats_group": "earned",
+  "sort_order": 140,
+  "family_only": true
+ },
+ {
+  "kind": "income",
+  "parent_name": "Mom",
+  "sub_name": "Cash",
+  "stats_group": "earned",
+  "sort_order": 141,
+  "family_only": true
+ },
+ {
+  "kind": "income",
+  "parent_name": "Baba",
+  "sub_name": "Bank",
+  "stats_group": "earned",
+  "sort_order": 142,
+  "family_only": true
+ },
+ {
+  "kind": "income",
+  "parent_name": "Baba",
+  "sub_name": "Cash",
+  "stats_group": "earned",
+  "sort_order": 143,
+  "family_only": true
+ },
+ {
+  "kind": "income",
+  "parent_name": "Pratiksha",
+  "sub_name": "Bank",
+  "stats_group": "earned",
+  "sort_order": 144,
+  "family_only": true
+ },
+ {
+  "kind": "income",
+  "parent_name": "Pratiksha",
+  "sub_name": "Cash",
+  "stats_group": "earned",
+  "sort_order": 145,
+  "family_only": true
+ },
+ {
+  "kind": "income",
+  "parent_name": "Other",
+  "sub_name": "Other",
+  "stats_group": "earned",
+  "sort_order": 146,
+  "family_only": false
+ },
+ {
+  "kind": "transfer",
+  "parent_name": "Self Transfer",
+  "sub_name": "Bank to Bank",
+  "stats_group": "transfer",
+  "sort_order": 147,
+  "family_only": false
+ },
+ {
+  "kind": "transfer",
+  "parent_name": "Self Transfer",
+  "sub_name": "Bank to Credit",
+  "stats_group": "transfer",
+  "sort_order": 148,
+  "family_only": false
+ },
+ {
+  "kind": "transfer",
+  "parent_name": "Self Transfer",
+  "sub_name": "Credit to Bank",
+  "stats_group": "transfer",
+  "sort_order": 149,
+  "family_only": false
+ },
+ {
+  "kind": "transfer",
+  "parent_name": "Self Transfer",
+  "sub_name": "Cash to Bank",
+  "stats_group": "transfer",
+  "sort_order": 150,
+  "family_only": false
+ },
+ {
+  "kind": "transfer",
+  "parent_name": "Self Transfer",
+  "sub_name": "Bank to Cash",
+  "stats_group": "transfer",
+  "sort_order": 151,
+  "family_only": false
+ },
+ {
+  "kind": "transfer",
+  "parent_name": "Self Transfer",
+  "sub_name": "Broker to Bank",
+  "stats_group": "transfer",
+  "sort_order": 152,
+  "family_only": false
+ },
+ {
+  "kind": "transfer",
+  "parent_name": "Self Transfer",
+  "sub_name": "Bank to Broker",
+  "stats_group": "transfer",
+  "sort_order": 153,
+  "family_only": false
+ },
+ {
+  "kind": "transfer",
+  "parent_name": "Self Transfer",
+  "sub_name": "Credit to Cash",
+  "stats_group": "transfer",
+  "sort_order": 154,
+  "family_only": false
+ }
+]
