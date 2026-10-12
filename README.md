@@ -96,6 +96,9 @@ flowchart TB
 
 ## Testing
 
+**Step-by-step guide, including how to run the tests from the script editor and how to read
+`Test_Report`: [docs/testing.md](docs/testing.md).**
+
 There are two test suites. Neither touches your real workbook's data.
 
 **1. Node tests (`npm test`)** run on your computer and on every push (GitHub Actions ▸ Tests).
@@ -109,10 +112,10 @@ no install step.
 npm test
 ```
 
-**2. In-sheet tests (Finance Tools ▸ Run Verification Tests)** run inside Google Sheets, where
-formulas really calculate. The suite builds a throwaway workbook, fills it with a small known
+**2. In-sheet tests (Finance Tools ▸ Run Verification Tests, or `menuRunTests` in the script
+editor for a standalone script)** run inside Google Sheets, where formulas really calculate. The suite builds a throwaway workbook, fills it with a small known
 set of transactions, checks the numbers every sheet shows, and writes the results to a
-`Test_Report` sheet in the workbook you ran it from. If everything passes, the throwaway
+`Test_Report` sheet in your finance workbook. If everything passes, the throwaway
 workbook goes to the Drive trash; if anything fails, it is kept and its link is in the report.
 Your real onEdit trigger is never reinstalled during a test run.
 
