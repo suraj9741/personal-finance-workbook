@@ -22,7 +22,7 @@ Pick one:
 
 - **GitHub:** repo ▸ **Actions** ▸ **Push to Apps Script** ▸ **Run workflow** ▸ branch `main` ▸
   **Run workflow**. Wait for the green tick.
-- **Your Mac:** in the repo folder, `git pull` then `clasp push`.
+- **Your Mac:** in the repo folder, `git pull`, then `cd finance-sheet` and `clasp push`.
 
 Then open the script ([script.google.com](https://script.google.com) ▸ **google finance sheet**)
 and reload the browser tab so the editor shows the new code.
@@ -145,7 +145,7 @@ There are no packages to install: the tests only use what ships with Node.
 
 ### Run them
 
-From the repo folder:
+From the `finance-sheet/` folder of the repo:
 
 ```
 npm test
@@ -177,7 +177,7 @@ not ok 17 - default accounts: unique per pay type, matching the seed list
 
 The `location` line is the test file and line number; `expected` and `actual` show what differed.
 
-The test files, in `tests/node/`:
+The test files, in `finance-sheet/tests/node/`:
 
 | File | Covers |
 | --- | --- |
@@ -197,8 +197,8 @@ calculated numbers are only checked by the in-sheet tests.
 
 ## 3. Tests on GitHub
 
-Every push and every pull request runs `npm test` automatically (workflow **Tests**,
-`.github/workflows/tests.yml`). It does not need any secret, and it never touches Apps Script.
+Every push and every pull request that changes `finance-sheet/` runs `npm test` automatically
+(workflow **Tests**, `.github/workflows/finance-sheet-tests.yml`). It does not need any secret, and it never touches Apps Script.
 
 - **On a pull request:** the checks box at the bottom shows **Tests / node-tests**. A green tick
   means all Node tests passed.

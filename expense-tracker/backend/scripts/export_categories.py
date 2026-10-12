@@ -1,4 +1,6 @@
-"""Regenerate app/data/categories.json from the Apps Script seed list (src/config/Defaults.gs).
+"""Regenerate app/data/categories.json from the Apps Script seed list.
+
+Source: finance-sheet/src/config/Defaults.gs at the repo root.
 
 Run from expense-tracker/backend:  python scripts/export_categories.py
 """
@@ -9,7 +11,7 @@ import re
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
-DEFAULTS = ROOT / "src" / "config" / "Defaults.gs"
+DEFAULTS = ROOT / "finance-sheet" / "src" / "config" / "Defaults.gs"
 OUT = Path(__file__).resolve().parents[1] / "app" / "data" / "categories.json"
 
 # Parents that name Suraj's family members or farm. They stay in Suraj's household

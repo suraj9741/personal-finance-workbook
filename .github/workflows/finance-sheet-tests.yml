@@ -1,0 +1,24 @@
+name: Tests
+
+on:
+  push:
+    paths:
+      - "finance-sheet/**"
+      - ".github/workflows/finance-sheet-tests.yml"
+  pull_request:
+    paths:
+      - "finance-sheet/**"
+      - ".github/workflows/finance-sheet-tests.yml"
+
+jobs:
+  node-tests:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: finance-sheet
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm test

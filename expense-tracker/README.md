@@ -31,7 +31,7 @@ Then open:
 
 Both ports bind to `127.0.0.1`, so nothing else on your Wi-Fi can reach the app.
 
-The first admin's household gets the full category list from `src/config/Defaults.gs`,
+The first admin's household gets the full category list from `finance-sheet/src/config/Defaults.gs`,
 including the family groups (Gotu, Mom, Baba, Pratiksha, Farm). Everyone else's new household
 gets the list without those, and you can change that template on the Admin page.
 
@@ -135,7 +135,7 @@ The full, typed list is at http://localhost:8000/docs.
 
 ### Categories
 
-`backend/app/data/categories.json` is generated from `src/config/Defaults.gs`:
+`backend/app/data/categories.json` is generated from `finance-sheet/src/config/Defaults.gs`:
 
 ```sh
 cd backend && uv run python scripts/export_categories.py

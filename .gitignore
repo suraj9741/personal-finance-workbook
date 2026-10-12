@@ -1,7 +1,9 @@
-# clasp login token — never commit it
-.clasprc.json
-node_modules/
+# Shared
 .DS_Store
+node_modules/
+
+# Finance sheet (Apps Script): clasp login token, never commit it
+.clasprc.json
 
 # Expense tracker web app
 expense-tracker/.env
