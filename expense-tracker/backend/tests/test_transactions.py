@@ -107,9 +107,9 @@ def test_suggest_returns_latest_per_description(admin: Api) -> None:
 
 
 def test_accounts(admin: Api, family_member: Api) -> None:
-    created = admin.post("/api/v1/accounts", json={"name": "SBI", "pay_type": "bank"})
+    created = admin.post("/api/v1/accounts", json={"name": "Kotak", "pay_type": "bank"})
     assert created.status_code == 201
-    dup = admin.post("/api/v1/accounts", json={"name": "SBI", "pay_type": "bank"})
+    dup = admin.post("/api/v1/accounts", json={"name": "Kotak", "pay_type": "bank"})
     assert dup.status_code == 409
     shared_by_member = family_member.post(
         "/api/v1/accounts", json={"name": "Joint", "pay_type": "bank"}

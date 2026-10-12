@@ -1,0 +1,82 @@
+[
+ {
+  "name": "HDFC",
+  "pay_type": "bank",
+  "opening_balance": "0"
+ },
+ {
+  "name": "SBI",
+  "pay_type": "bank",
+  "opening_balance": "0"
+ },
+ {
+  "name": "BOI",
+  "pay_type": "bank",
+  "opening_balance": "0"
+ },
+ {
+  "name": "Paytm",
+  "pay_type": "bank",
+  "opening_balance": "0"
+ },
+ {
+  "name": "FI",
+  "pay_type": "bank",
+  "opening_balance": "0"
+ },
+ {
+  "name": "Amazon Pay",
+  "pay_type": "bank",
+  "opening_balance": "0"
+ },
+ {
+  "name": "HDFC CC",
+  "pay_type": "credit_card",
+  "opening_balance": "0"
+ },
+ {
+  "name": "Amazon Pay",
+  "pay_type": "credit_card",
+  "opening_balance": "0"
+ },
+ {
+  "name": "ICICI",
+  "pay_type": "credit_card",
+  "opening_balance": "0"
+ },
+ {
+  "name": "Indusland",
+  "pay_type": "credit_card",
+  "opening_balance": "0"
+ },
+ {
+  "name": "SBI",
+  "pay_type": "credit_card",
+  "opening_balance": "0"
+ },
+ {
+  "name": "Yes Bank",
+  "pay_type": "credit_card",
+  "opening_balance": "0"
+ },
+ {
+  "name": "Zerodha",
+  "pay_type": "share_broker",
+  "opening_balance": "0"
+ },
+ {
+  "name": "Angel Broker",
+  "pay_type": "share_broker",
+  "opening_balance": "0"
+ },
+ {
+  "name": "Dhan",
+  "pay_type": "share_broker",
+  "opening_balance": "0"
+ },
+ {
+  "name": "Cash",
+  "pay_type": "cash",
+  "opening_balance": "0"
+ }
+]

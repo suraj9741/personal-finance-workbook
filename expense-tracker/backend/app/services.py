@@ -3,6 +3,7 @@
 import json
 import uuid
 from datetime import date
+from decimal import Decimal
 from pathlib import Path
 
 from sqlalchemy import select
@@ -11,8 +12,11 @@ from sqlalchemy.orm import Session
 from app.models import Account, AppSetting, Category, CategoryRule, CategoryTemplate, Household
 
 CATEGORIES_JSON = Path(__file__).parent / "data" / "categories.json"
+ACCOUNTS_JSON = Path(__file__).parent / "data" / "accounts.json"
 
-DEFAULT_ACCOUNTS = [("HDFC", "bank"), ("Yes Bank", "credit_card"), ("Cash", "cash")]
+# What a new, unrelated household starts with. The first admin's household gets every
+# account from the finance script instead (see full_account_list).
+DEFAULT_ACCOUNTS = [("HDFC", "bank", "0"), ("Yes Bank", "credit_card", "0"), ("Cash", "cash", "0")]
 
 
 def full_category_list() -> list[dict[str, object]]:
@@ -21,14 +25,22 @@ def full_category_list() -> list[dict[str, object]]:
     return rows
 
 
-def create_household(
-    db: Session, name: str, *, include_family_categories: bool = False
-) -> Household:
-    """New household with its own copy of the categories and the default accounts."""
+def full_account_list() -> list[dict[str, str]]:
+    """Every account from the Apps Script Defaults.gs (SEED.PAY)."""
+    rows: list[dict[str, str]] = json.loads(ACCOUNTS_JSON.read_text())
+    return rows
+
+
+def create_household(db: Session, name: str, *, full_seed: bool = False) -> Household:
+    """New household with its own categories and accounts.
+
+    full_seed: the first admin's household. It gets everything in the finance script,
+    family categories and all accounts. Other households get the template and the basics.
+    """
     household = Household(id=uuid.uuid4(), name=name)
     db.add(household)
     db.flush()
-    if include_family_categories:
+    if full_seed:
         source = [
             (r["kind"], r["parent_name"], r["sub_name"], r["stats_group"], r["sort_order"])
             for r in full_category_list()
@@ -49,9 +61,19 @@ def create_household(
         )
         for kind, parent, sub, group, order in source
     )
+    accounts = (
+        [(a["name"], a["pay_type"], a["opening_balance"]) for a in full_account_list()]
+        if full_seed
+        else DEFAULT_ACCOUNTS
+    )
     db.add_all(
-        Account(household_id=household.id, name=acc_name, pay_type=pay_type)
-        for acc_name, pay_type in DEFAULT_ACCOUNTS
+        Account(
+            household_id=household.id,
+            name=acc_name,
+            pay_type=pay_type,
+            opening_balance=Decimal(opening),
+        )
+        for acc_name, pay_type, opening in accounts
     )
     db.flush()
     return household

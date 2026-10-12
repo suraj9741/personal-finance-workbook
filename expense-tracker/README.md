@@ -31,9 +31,11 @@ Then open:
 
 Both ports bind to `127.0.0.1`, so nothing else on your Wi-Fi can reach the app.
 
-The first admin's household gets the full category list from `finance-sheet/src/config/Defaults.gs`,
-including the family groups (Gotu, Mom, Baba, Pratiksha, Farm). Everyone else's new household
-gets the list without those, and you can change that template on the Admin page.
+The first admin's household gets everything in `finance-sheet/src/config/Defaults.gs`: the
+full category list, including the family groups (Gotu, Mom, Baba, Pratiksha, Farm), and all
+16 accounts from the script (banks, credit cards, share brokers and cash). Everyone else's new
+household gets the categories without the family groups and only HDFC, Yes Bank and Cash. You
+can change the category template on the Admin page and add or deactivate accounts in Settings.
 
 ### Adding people
 
@@ -133,15 +135,16 @@ browser ──► frontend (nginx, :8080) ──/api──► backend (FastAPI, 
 
 The full, typed list is at http://localhost:8000/docs.
 
-### Categories
+### Categories and accounts
 
-`backend/app/data/categories.json` is generated from `finance-sheet/src/config/Defaults.gs`:
+`backend/app/data/categories.json` and `accounts.json` are generated from
+`finance-sheet/src/config/Defaults.gs`:
 
 ```sh
 cd backend && uv run python scripts/export_categories.py
 ```
 
-A test fails if the two drift apart. Each category has a `stats_group` (spend, saving,
+A test fails if they drift apart. Each category has a `stats_group` (spend, saving,
 lent, earned, repaid, transfer). That keeps savings, money lent and transfers between your
 own accounts out of "Spent".
 

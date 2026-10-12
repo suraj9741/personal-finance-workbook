@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { money, percent, shiftMonth } from "./format";
+import type { Account } from "./api";
+import { accountLabel, money, percent, shiftMonth } from "./format";
 
 describe("format", () => {
   it("uses Indian digit grouping", () => {
@@ -13,5 +14,15 @@ describe("format", () => {
   it("formats savings rate", () => {
     expect(percent(0.756)).toBe("76%");
     expect(percent(null)).toBe("—");
+  });
+  it("adds the account type only when two accounts share a name", () => {
+    const acc = (id: string, name: string, pay_type: Account["pay_type"]): Account => ({
+      id, name, pay_type, opening_balance: "0", visibility: "shared", owner_user_id: null, is_active: true,
+    });
+    const all = [acc("1", "SBI", "bank"), acc("2", "SBI", "credit_card"), acc("3", "HDFC", "bank")];
+    expect(accountLabel(all[0], all)).toBe("SBI · bank");
+    expect(accountLabel(all[1], all)).toBe("SBI · card");
+    expect(accountLabel(all[2], all)).toBe("HDFC");
+    expect(accountLabel(undefined, all)).toBe("");
   });
 });

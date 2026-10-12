@@ -1,4 +1,4 @@
-"""Regenerate app/data/categories.json from the Apps Script seed list.
+"""Regenerate app/data/categories.json and accounts.json from the Apps Script seed list.
 
 Source: finance-sheet/src/config/Defaults.gs at the repo root.
 
@@ -12,7 +12,17 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
 DEFAULTS = ROOT / "finance-sheet" / "src" / "config" / "Defaults.gs"
-OUT = Path(__file__).resolve().parents[1] / "app" / "data" / "categories.json"
+DATA = Path(__file__).resolve().parents[1] / "app" / "data"
+OUT = DATA / "categories.json"
+ACCOUNTS_OUT = DATA / "accounts.json"
+
+# The script's Pay Type names, mapped to the app's pay_type values.
+PAY_TYPES = {
+    "Bank": "bank",
+    "Credit Card": "credit_card",
+    "Share Broker": "share_broker",
+    "Cash": "cash",
+}
 
 # Parents that name Suraj's family members or farm. They stay in Suraj's household
 # but are left out of the template that new, unrelated households get.
@@ -27,6 +37,17 @@ def parse_defaults(text: str) -> dict[str, dict[str, list[str]]]:
             raise ValueError(f"{key} block not found in Defaults.gs")
         blocks[key.lower()] = ast.literal_eval(match.group(1))
     return blocks
+
+
+def parse_accounts(text: str) -> list[dict[str, object]]:
+    """SEED.PAY rows: [Pay Type, Account, Opening]."""
+    match = re.search(r"PAY:\s*(\[.*?\n  \])", text, re.S)
+    if not match:
+        raise ValueError("PAY block not found in Defaults.gs")
+    return [
+        {"name": name, "pay_type": PAY_TYPES[pay_type], "opening_balance": str(opening)}
+        for pay_type, name, opening in ast.literal_eval(match.group(1))
+    ]
 
 
 def stats_group(kind: str, parent: str, sub: str) -> str:
@@ -63,4 +84,5 @@ def build() -> list[dict[str, object]]:
 
 if __name__ == "__main__":
     OUT.write_text(json.dumps(build(), indent=1) + "\n")
-    print(f"wrote {OUT}")
+    ACCOUNTS_OUT.write_text(json.dumps(parse_accounts(DEFAULTS.read_text()), indent=1) + "\n")
+    print(f"wrote {OUT} and {ACCOUNTS_OUT}")

@@ -1,7 +1,7 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useRef, useState, type FormEvent } from "react";
 import { api, post, type Suggestion, type Transaction, type TransactionInput } from "../api";
-import { categoryLabel, money, today } from "../format";
+import { accountLabel, categoryLabel, money, today } from "../format";
 import { useAccounts, useCategories, useRefreshMoney } from "../hooks";
 
 const LAST_ACCOUNT = "et:lastAccount";
@@ -151,7 +151,7 @@ export function QuickAdd() {
       <select aria-label="Account" value={account} onChange={(e) => setAccountId(e.target.value)}>
         {accounts.map((a) => (
           <option key={a.id} value={a.id}>
-            {a.name}
+            {accountLabel(a, accounts)}
             {a.visibility === "private" ? " (private)" : ""}
           </option>
         ))}

@@ -1,4 +1,4 @@
-import type { Category } from "./api";
+import type { Account, Category } from "./api";
 
 const inr = new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 });
 const inrExact = new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", minimumFractionDigits: 2 });
@@ -44,3 +44,18 @@ export const PAY_TYPE_LABEL: Record<string, string> = {
   share_broker: "Share broker",
   cash: "Cash",
 };
+
+const PAY_TYPE_SHORT: Record<string, string> = {
+  bank: "bank",
+  credit_card: "card",
+  share_broker: "broker",
+  cash: "cash",
+};
+
+/** "SBI · card" when another account shares the name (SBI bank vs SBI card), else just "SBI". */
+export function accountLabel(account: Account | undefined, all: Account[]): string {
+  if (!account) return "";
+  const key = account.name.toLowerCase();
+  const shared = all.some((a) => a.id !== account.id && a.name.toLowerCase() === key);
+  return shared ? `${account.name} · ${PAY_TYPE_SHORT[account.pay_type]}` : account.name;
+}

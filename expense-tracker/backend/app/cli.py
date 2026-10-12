@@ -32,7 +32,7 @@ def create_admin(db: Session, email: str, name: str, password: str) -> User:
     )
     db.add(user)
     db.flush()
-    household = create_household(db, f"{name}'s household", include_family_categories=True)
+    household = create_household(db, f"{name}'s household", full_seed=True)
     db.add(HouseholdMember(household_id=household.id, user_id=user.id, role="owner"))
     db.commit()
     return user
