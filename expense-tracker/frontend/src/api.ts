@@ -72,11 +72,13 @@ export interface Suggestion {
 }
 export interface CategoryLine {
   category_id: string;
+  kind: Kind;
   parent_name: string;
   sub_name: string;
   stats_group: StatsGroup;
   budget: string | null;
   actual: string;
+  diff: string;
   over_budget: boolean;
 }
 export interface MonthStats {

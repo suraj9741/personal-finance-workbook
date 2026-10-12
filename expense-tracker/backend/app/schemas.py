@@ -311,11 +311,24 @@ class SuggestionOut(BaseModel):
 class BudgetItem(BaseModel):
     category_id: uuid.UUID
     amount: Annotated[Decimal, Field(ge=0, max_digits=12, decimal_places=2)]
+    # Only this month; later months keep the default. Months before the current one are
+    # always saved this way, so a past month never changes the months after it.
+    this_month_only: bool = False
+
+
+class BudgetLine(BaseModel):
+    category_id: uuid.UUID
+    amount: Decimal
+    this_month_only: bool
+    # The month the amount was set in. Earlier than `month` means it carried forward.
+    set_in: str
 
 
 class BudgetsOut(BaseModel):
     month: str
-    items: list[BudgetItem]
+    # False for past months: changes there apply to that month only.
+    carries_forward: bool
+    items: list[BudgetLine]
 
 
 class BudgetsIn(Strict):
@@ -338,11 +351,14 @@ class BudgetCopyIn(Strict):
 
 class CategoryLine(BaseModel):
     category_id: uuid.UUID
+    kind: Kind
     parent_name: str
     sub_name: str
     stats_group: StatsGroup
     budget: Decimal | None
     actual: Decimal
+    # Positive is good: money left for an expense, more earned than planned for income.
+    diff: Decimal
     over_budget: bool
 
 

@@ -81,13 +81,13 @@ export function Dashboard() {
         <h2>
           Budget vs actual <small className="muted">budget total {money(s?.budget_total)}</small>
         </h2>
-        {s && s.categories.length === 0 && (
+        {s && !s.categories.some((l) => l.kind === "expense") && (
           <p className="muted">
             No spending yet this month. <Link to="/budgets">Set budgets</Link>
           </p>
         )}
         <ul className="bars">
-          {s?.categories.map((line) => {
+          {s?.categories.filter((l) => l.kind === "expense").map((line) => {
             const actual = Number(line.actual);
             const budget = line.budget ? Number(line.budget) : null;
             const pct = budget ? Math.min(100, (actual / budget) * 100) : 100;

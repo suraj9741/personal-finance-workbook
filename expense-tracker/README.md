@@ -54,7 +54,11 @@ only to them.
 - Settings › Auto-categorization rules: "swiggy" → Everyday › Food, and so on. Rules also
   fill in old uncategorized rows when you press "Apply to uncategorized".
 - On Transactions, "Save as rule" turns a row's category into a rule.
-- Budgets: set this month's amounts, or copy last month's.
+- Budgets: set a category's budget once and it carries forward to every later month until
+  you change it. A change applies from the month you make it in; earlier months keep their
+  budgets. Tick "Only this month" for a one-off. Each expense and income line shows Budget,
+  Spent (or Earned) and Diff, where a positive Diff is good: money left, or more earned
+  than planned.
 - Pay a credit card bill as a **Transfer** (Self Transfer › Bank to Credit), not as an
   expense, or the card spends are counted twice. The dashboard warns you if
   Debt › Credit cards gets used.

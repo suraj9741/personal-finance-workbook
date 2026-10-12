@@ -64,3 +64,29 @@ it("asks a new household to add its first account", async () => {
   expect(within(welcome).getByRole("link", { name: "Settings" })).toBeTruthy();
   expect(screen.queryByRole("form", { name: "Quick add" })).toBeNull();
 });
+
+it("shows budget, spent and diff for expense and income", async () => {
+  const cat = (id: string, kind: string, parent_name: string, sub_name: string) => ({ id, kind, parent_name, sub_name, stats_group: kind === "income" ? "earned" : "spend", is_active: true, sort_order: 0 });
+  const categories = [cat("c1", "expense", "Everyday", "Food"), cat("c2", "expense", "Debt", "Tax"), cat("c3", "income", "Wages", "Paycheck")];
+  const line = (category_id: string, kind: string, actual: string) => ({ category_id, kind, parent_name: "", sub_name: "", stats_group: "spend", budget: null, actual, diff: "0", over_budget: false });
+  const stats = { month: "2026-10", scope: "household", income: "52000", spend: "1200", saved: "0", savings_rate: null, invested: "0", lent: "0", repaid: "0", budget_total: "3000", categories: [line("c1", "expense", "1200"), line("c3", "income", "52000")] };
+  const budgets = { month: "2026-10", carries_forward: true, items: [{ category_id: "c1", amount: "3000.00", this_month_only: false, set_in: "2026-09" }, { category_id: "c3", amount: "50000.00", this_month_only: false, set_in: "2026-10" }] };
+  vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+    const url = String(input);
+    const body = url.includes("/auth/me") ? ME
+      : url.includes("/budgets") ? budgets
+      : url.includes("/stats/month") ? stats
+      : url.includes("/stats/attention") ? null
+      : url.includes("/categories") ? categories
+      : url.includes("/accounts") ? [HDFC]
+      : url.includes("/transactions") ? { items: [], total: 0 }
+      : [];
+    return new Response(JSON.stringify(body), { status: 200 });
+  });
+  renderAt("/budgets");
+  expect((await screen.findByLabelText("Everyday Food diff")).textContent).toBe("₹1,800");
+  expect(screen.getByLabelText("Debt Tax diff").textContent).toBe("₹0");
+  expect(screen.getByLabelText("Wages Paycheck diff").textContent).toBe("₹2,000");
+  expect(screen.getByText("since September 2026")).toBeTruthy();
+  expect(within(screen.getByLabelText("Expense totals")).getByText("₹1,800")).toBeTruthy();
+});

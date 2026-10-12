@@ -1,8 +1,13 @@
 import { describe, expect, it } from "vitest";
 import type { Account } from "./api";
-import { accountLabel, money, percent, shiftMonth } from "./format";
+import { accountLabel, budgetDiff, money, percent, shiftMonth } from "./format";
 
 describe("format", () => {
+  it("makes a positive budget diff mean good news", () => {
+    expect(budgetDiff("expense", 3000, 1200)).toBe(1800);
+    expect(budgetDiff("expense", 0, 500)).toBe(-500);
+    expect(budgetDiff("income", 50000, 52000)).toBe(2000);
+  });
   it("uses Indian digit grouping", () => {
     expect(money("108811")).toBe("₹1,08,811");
     expect(money(null)).toBe("—");

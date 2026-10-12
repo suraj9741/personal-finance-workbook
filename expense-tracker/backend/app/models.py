@@ -15,6 +15,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     func,
+    true,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
@@ -240,6 +241,13 @@ class Transaction(Base):
 
 
 class Budget(Base):
+    """A category's budget from `month` on.
+
+    A carry-forward row is the default for its month and every later month until the next
+    carry-forward row. A row with carry_forward false applies to its own month only. An
+    amount of 0 means no budget.
+    """
+
     __tablename__ = "budgets"
     __table_args__ = (
         UniqueConstraint("category_id", "month", name="uq_budgets_category_month"),
@@ -254,6 +262,7 @@ class Budget(Base):
     category_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("categories.id", ondelete="CASCADE"))
     month: Mapped[date] = mapped_column(Date)
     amount: Mapped[Decimal] = mapped_column(Numeric(12, 2))
+    carry_forward: Mapped[bool] = mapped_column(Boolean, default=True, server_default=true())
 
 
 class CategoryRule(Base):
