@@ -137,6 +137,9 @@ rather hide the IDs anyway, make the repo private.
 
 ### Optional: push from GitHub Actions
 
+How the login token works, what it can access, and how to revoke it:
+[docs/authentication.md](docs/authentication.md).
+
 `.github/workflows/clasp-push.yml` runs `clasp push` when you start it by hand
 (Actions ▸ Push to Apps Script ▸ Run workflow). It never runs on its own. To enable it, add
 a repository secret named `CLASPRC_JSON` containing the contents of your `~/.clasprc.json`.
