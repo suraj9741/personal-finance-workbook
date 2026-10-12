@@ -1,0 +1,4 @@
+# Only Apps Script sources and the manifest are uploaded by `clasp push`.
+**/**
+!appsscript.json
+!**/*.gs
