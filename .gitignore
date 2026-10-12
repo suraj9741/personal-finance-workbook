@@ -1,0 +1,4 @@
+# clasp login token — never commit it
+.clasprc.json
+node_modules/
+.DS_Store

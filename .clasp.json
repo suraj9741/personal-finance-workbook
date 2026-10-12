@@ -1,0 +1,7 @@
+{
+  "scriptId": "1G0900nl3YVvPwEdMEv6oNXmTC6CavL_G12XQ2tFJj-k8ZjYGkjAjnzAH",
+  "rootDir": "src",
+  "fileExtension": "gs",
+  "scriptExtensions": [".gs", ".js"],
+  "filePushOrder": ["src/config/Config.gs", "src/config/Defaults.gs"]
+}
