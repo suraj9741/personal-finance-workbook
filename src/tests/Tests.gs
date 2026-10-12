@@ -14,9 +14,9 @@ function runVerificationTests() {
   
   // 2. Insert test data
   const testRows = [
-    ['14-Jun-2026', '', 'Test Expense', 100, 'Expense', 'Debt → Car EMI', '', '', 'Credit Card → HDFC CC', '', '', '', '', '', 'Test Case 1'],
-    ['14-Jun-2026', '', 'Test Income', 300, 'Income', 'Wages → Paycheck', '', '', 'Bank → HDFC', '', '', '', '', '', 'Test Case 2'],
-    ['14-Jun-2026', '', 'Test Transfer', 5000, 'Transfer', 'Self Transfer → Bank to Credit', '', '', 'Bank → HDFC', '', '', 'Credit Card → HDFC CC', '', '', 'Test Case 3']
+    ['14-Jun-'+CONFIG.YEAR, '', 'Test Expense', 100, 'Expense', 'Debt → Car EMI', '', '', 'Credit Card → HDFC CC', '', '', '', '', '', 'Test Case 1'],
+    ['14-Jun-'+CONFIG.YEAR, '', 'Test Income', 300, 'Income', 'Wages → Paycheck', '', '', 'Bank → HDFC', '', '', '', '', '', 'Test Case 2'],
+    ['14-Jun-'+CONFIG.YEAR, '', 'Test Transfer', 5000, 'Transfer', 'Self Transfer → Bank to Credit', '', '', 'Bank → HDFC', '', '', 'Credit Card → HDFC CC', '', '', 'Test Case 3']
   ];
   
   dataSheet.getRange(2, 1, testRows.length, 1).setValues(testRows.map(r => [r[0]]));
@@ -31,10 +31,10 @@ function runVerificationTests() {
   SpreadsheetApp.flush();
   Utilities.sleep(1000); // Wait for formulas to calculate
   
-  // 3. Verify Month Dashboard (Jun_2026)
-  const monthSheet = ss.getSheetByName('Jun_2026');
+  // 3. Verify Month Dashboard (Jun_<YEAR>)
+  const monthSheet = ss.getSheetByName('Jun_'+CONFIG.YEAR);
   if (!monthSheet) {
-    Log_('ERROR', 'Month sheet Jun_2026 not found!');
+    Log_('ERROR', 'Month sheet Jun_'+CONFIG.YEAR+' not found!');
     return;
   }
   
@@ -43,7 +43,7 @@ function runVerificationTests() {
   const expense = monthSheet.getRange('E4').getValue();
   const savings = monthSheet.getRange('G4').getValue();
   
-  Log_('INFO', `Month Dashboard Jun_2026: Opening=${opening}, Income=${income}, Expense=${expense}, Net Savings=${savings}`);
+  Log_('INFO', `Month Dashboard Jun_${CONFIG.YEAR}: Opening=${opening}, Income=${income}, Expense=${expense}, Net Savings=${savings}`);
   
   // Verify Accounts Master sheet values
   const accountsSheet = ss.getSheetByName('Accounts');

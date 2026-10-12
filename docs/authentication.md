@@ -133,7 +133,7 @@ Run. The real risks are:
 1. **Don't enable the Action.** Run `clasp push` from your Mac. The token never leaves
    your machine. For one person this is the right default.
 2. **A dedicated Google account** that owns only this script and has edit access only to
-   the Budgets/2026 folder. Put *its* token in GitHub. A leak then exposes one folder, not
+   the Budgets/<year> folder. Put *its* token in GitHub. A leak then exposes one folder, not
    your whole account.
 3. If you do use your own token: keep the repo's write access to yourself, pin the action
    SHAs, and revoke and replace the token if anything looks off.

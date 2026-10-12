@@ -29,9 +29,9 @@
 
 /* ============================ CENTRAL CONFIGURATION ============================ */
 const CONFIG = {
-  YEAR: 2026,
-  WORKBOOK_NAME: "2026 Finance",
-  DRIVE_FOLDER_ID: "1ofrTW2Kc_C-2bOUwfL_CzhXout_OCqzj",
+  YEAR: 2027,
+  WORKBOOK_NAME: "2027 Finance",
+  DRIVE_FOLDER_ID: "1245tVfCnmVPpoHCEdc9lDIJUzMRYhKUg",
   REBUILD_MODE: "BACKUP",                 // DELETE | BACKUP | SKIP
   MONTHS: ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"],
   TRANSACTION_START_ROW: 240,
