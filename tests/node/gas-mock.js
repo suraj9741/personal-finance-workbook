@@ -147,8 +147,8 @@ function createGas() {
   const state = { created: [], triggers: [], logs: [], trashed: [] };
   const active = new Spreadsheet('Host workbook');
   const SpreadsheetApp = {
-    getActiveSpreadsheet: () => state.active.self,
-    getActive: () => state.active.self,
+    getActiveSpreadsheet: () => (state.active ? state.active.self : null),   // null = standalone script
+    getActive: () => (state.active ? state.active.self : null),
     create: (name) => { const s = new Spreadsheet(name); state.created.push(s); return s.self; },
     open: (f) => f._ss.self,
     openById: (id) => { const s = state.created.find(x => x.getId() === id); if (!s) throw new Error('Spreadsheet not found: ' + id); return s.self; },

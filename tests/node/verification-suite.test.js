@@ -101,3 +101,25 @@ test('nothing runs the tests automatically: no trigger or simple trigger calls t
     assert.doesNotMatch(P.g(fn).toString(), /VerificationTests|runTests_/, fn + ' must not start the tests');
   }
 });
+
+// The live script is standalone (not attached to a sheet), so there is no active workbook and
+// the tests are started from the editor with menuRunTests / menuResumeTests.
+test('standalone script: menuRunTests writes Test_Report to the finance workbook, not a crash', () => {
+  const P = loadProject();
+  P.gas.state.active = null;
+  P.g('menuRunTests')();
+  const [finance, tmp] = P.gas.state.created;
+  assert.equal(finance.name, P.g('CONFIG').WORKBOOK_NAME, 'opened the finance workbook the build uses');
+  assert.ok(finance.self.getSheetByName('Test_Report'), 'report in the finance workbook');
+  assert.ok(!tmp.self.getSheetByName('Test_Report'), 'not in the throwaway workbook');
+  assert.ok(P.gas.state.logs.some(l => l.includes('Throwaway test workbook: https://')), 'test workbook link in the execution log');
+  assert.ok(P.gas.state.logs.some(l => l.includes('Results: Test_Report tab in')), 'report location in the execution log');
+});
+
+test('standalone script: runVerificationTests picked straight from the editor also works', () => {
+  const P = loadProject();
+  P.gas.state.active = null;
+  const r = P.g('runVerificationTests')();
+  assert.ok(r.total > 120);
+  assert.ok(P.gas.state.created[0].self.getSheetByName('Test_Report'));
+});

@@ -24,11 +24,18 @@ const TEST_MONTH_ = m => m + '_' + CONFIG.YEAR;
 let   TEST_TIME_BUDGET_MS_ = 4.5 * 60 * 1000;
 const TEST_STATE_KEY_ = 'VERIFICATION_TEST_STATE';
 
-function runVerificationTests()    { return runTests_(null); }
-function resumeVerificationTests() {
+/* host: the workbook that gets Test_Report. The menu items (menuRunTests / menuResumeTests)
+   pass your finance workbook. A standalone script has no "active" workbook, so when nothing is
+   passed we fall back to the same lookup the build uses (CONFIG.WORKBOOK_NAME in the Drive folder). */
+function runVerificationTests(host)    { return runTests_(null, host); }
+function resumeVerificationTests(host) {
   const st = loadTestState_();
   if (!st) Log_('INFO', 'No paused test run found — starting a new one.');
-  return runTests_(st);
+  return runTests_(st, host);
+}
+function testHost_(host) {
+  if (host && typeof host.getSheetByName === 'function') return host;
+  return SpreadsheetApp.getActiveSpreadsheet() || getOrCreateSpreadsheet_();
 }
 
 function testGroups_(saved) {
@@ -55,9 +62,9 @@ function testGroups_(saved) {
 /* st: saved place of a paused run, or null for a fresh run.
    State is saved BEFORE each group, so even if Apps Script kills the run mid-group,
    Resume knows which group was cut off. */
-function runTests_(st) {
+function runTests_(st, hostOpt) {
   const started = Date.now();
-  const host = SpreadsheetApp.getActiveSpreadsheet();
+  const host = testHost_(hostOpt);
   const saved = { name: CONFIG.WORKBOOK_NAME, folder: CONFIG.DRIVE_FOLDER_ID };
   const groups = testGroups_(saved);
   let tmp = null, T, next = 0, paused = false;
@@ -85,6 +92,7 @@ function runTests_(st) {
       T = newTestKit_([]);
       const stamp = Utilities.formatDate(new Date(), Session.getScriptTimeZone() || 'GMT', 'yyyyMMdd_HHmmss');
       tmp = SpreadsheetApp.create(CONFIG.WORKBOOK_NAME + ' — TEST ' + stamp);
+      Log_('INFO', 'Throwaway test workbook: ' + tmp.getUrl());
     }
     for (let i = next, first = true; i < groups.length; i++, first = false) {
       if (!first && Date.now() - started > TEST_TIME_BUDGET_MS_) { paused = true; break; }
@@ -104,10 +112,11 @@ function runTests_(st) {
   }
 
   const failed = T.failed();
+  Log_('INFO', 'Results: Test_Report tab in "' + host.getName() + '" ' + host.getUrl());
   if (paused) {
     saveTestState_({ tmpId: tmp.getId(), next: next });
     writeTestReport_(host, T, tmp, 'paused', next, groups.length);
-    Log_('INFO', `Verification paused after ${next} of ${groups.length} groups — run Resume Verification Tests.`);
+    Log_('INFO', `Verification paused after ${next} of ${groups.length} groups — run menuResumeTests (Finance Tools ▸ Resume Verification Tests).`);
     try { host.toast(`Paused after ${next} of ${groups.length} groups (time limit). Run Finance Tools ▸ Resume Verification Tests.`, 'Verification Tests', 10); } catch (e) {}
     return { total: T.rows.length, failed: failed, paused: true, next: next };
   }
@@ -432,7 +441,7 @@ function writeTestReport_(host, T, keptWorkbook, status, groupsDone, groupsTotal
   const summary = status === 'done'
     ? counts + (keptWorkbook ? ` · test workbook kept for inspection: ${keptWorkbook.getUrl()}` : ' · test workbook moved to Trash')
     : `${status === 'paused' ? 'PAUSED (time limit)' : 'IN PROGRESS'} after ${groupsDone} of ${groupsTotal} groups — ` +
-      `if this run has stopped, use Finance Tools ▸ Resume Verification Tests · ${counts} so far · test workbook: ${keptWorkbook.getUrl()}`;
+      `if this run has stopped, use Finance Tools ▸ Resume Verification Tests (or run menuResumeTests in the script editor) · ${counts} so far · test workbook: ${keptWorkbook.getUrl()}`;
   rep.getRange(1, 1).setValue(summary).setFontWeight('bold');
   rep.getRange(2, 1, 1, 5).setValues(head).setFontWeight('bold').setBackground(STYLE.SLATE_DARK).setFontColor('white');
   if (T.rows.length) rep.getRange(3, 1, T.rows.length, 5).setValues(T.rows);
