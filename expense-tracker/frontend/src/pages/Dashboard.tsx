@@ -53,8 +53,6 @@ export function Dashboard() {
       </div>
       {scope === "household" && <p className="muted small">Household totals include shared accounts and your own private accounts.</p>}
 
-      <FinancialOverview month={month} />
-
       <h2 className="section-title">
         This month by category {scope === "me" && <small className="muted">(just me)</small>}
       </h2>
@@ -115,6 +113,8 @@ export function Dashboard() {
           })}
         </ul>
       </div>
+
+      <FinancialOverview month={month} />
     </section>
   );
 }
