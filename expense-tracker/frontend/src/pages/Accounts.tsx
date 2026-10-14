@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import type { Account, AccountFigures } from "../api";
 import { AccountForm } from "../components/AccountForm";
 import { Modal } from "../components/Modal";
@@ -90,7 +90,9 @@ export function Accounts() {
                   {items.map((r) => (
                     <li key={r.account.id} className="row">
                       <span className={r.account.is_active ? "" : "muted"}>
-                        <strong>{r.account.name}</strong>
+                        <Link to={`/accounts/${r.account.id}`}>
+                          <strong>{r.account.name}</strong>
+                        </Link>
                         {r.account.pay_type === "cash" && <small className="tag">cash</small>}
                         {r.account.institution && <small className="muted"> · {r.account.institution}</small>}
                         {r.account.visibility === "private" && <small className="tag">private</small>}

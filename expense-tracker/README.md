@@ -55,7 +55,11 @@ only to them.
 - The full form (Transactions › Full form) also records transfers, refunds, and broker buys
   and sells. Pay a card bill or fund a broker with a **Transfer**.
 - Accounts: your accounts grouped by type, with balances, card outstanding and available
-  credit, and broker invested amounts. Add, rename, edit or deactivate accounts there.
+  credit, and broker invested amounts. Add, rename, edit or deactivate accounts there. Click
+  an account for its details page: figures, the month, and its entries with filters.
+- Dashboard: the financial overview (bank balance, card outstanding, available credit, net
+  cash, invested, portfolio value, the month's income and expenses, and a table per account
+  type) sits above the monthly category view.
 - Settings › Auto-categorization rules: "swiggy" → Everyday › Food, and so on. Rules also
   fill in old uncategorized rows when you press "Apply to uncategorized".
 - On Transactions, "Save as rule" turns a row's category into a rule.

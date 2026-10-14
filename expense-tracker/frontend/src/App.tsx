@@ -3,6 +3,7 @@ import { NavLink, Navigate, Outlet, Route, Routes, useNavigate } from "react-rou
 import { post } from "./api";
 import { QuickAdd } from "./components/QuickAdd";
 import { useMe } from "./hooks";
+import { AccountDetails } from "./pages/AccountDetails";
 import { Accounts } from "./pages/Accounts";
 import { Admin } from "./pages/Admin";
 import { AcceptInvite, Login, ResetPassword } from "./pages/Auth";
@@ -63,6 +64,7 @@ export function App() {
         <Route index element={<Dashboard />} />
         <Route path="transactions" element={<Transactions />} />
         <Route path="accounts" element={<Accounts />} />
+        <Route path="accounts/:id" element={<AccountDetails />} />
         <Route path="budgets" element={<Budgets />} />
         <Route path="settings" element={<Settings />} />
         <Route path="admin" element={<Admin />} />
