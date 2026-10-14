@@ -8,12 +8,14 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import ColumnElement, and_, case, func, select
 from sqlalchemy.orm import Session
 
+from app import balances
 from app.db import get_db
 from app.deps import Ctx, get_ctx, require_owner
-from app.models import Budget, Category, Transaction
-from app.routers.catalog import get_category
+from app.models import Account, Budget, Category, Transaction
+from app.routers.catalog import get_account, get_category
 from app.routers.transactions import month_range
 from app.schemas import (
+    AccountFigures,
     AttentionOut,
     BudgetCopyIn,
     BudgetItem,
@@ -25,6 +27,7 @@ from app.schemas import (
     Month,
     MonthStats,
     NextChange,
+    OverviewOut,
     TrendPoint,
 )
 from app.services import add_months
@@ -215,23 +218,27 @@ def scoped(ctx: Ctx, scope: str) -> list[ColumnElement[bool]]:
     return conditions
 
 
+# A refund takes money back off its expense category, so it counts negative.
+SIGNED_AMOUNT = case((Transaction.type == "refund", -Transaction.amount), else_=Transaction.amount)
+
+
 def group_totals(
     db: Session, conditions: list[ColumnElement[bool]], start: date, end: date
 ) -> dict[str, Decimal]:
     rows = db.execute(
-        select(Category.stats_group, func.sum(Transaction.amount))
+        select(Category.stats_group, func.sum(SIGNED_AMOUNT))
         .join(Category, Category.id == Transaction.category_id)
         .where(*conditions, Transaction.date >= start, Transaction.date < end)
         .group_by(Category.stats_group)
     )
     totals = {group: total or ZERO for group, total in rows}
-    # Uncategorized rows still count: expense as spend, income as earned.
-    for kind, group in (("expense", "spend"), ("income", "earned")):
+    # Uncategorized rows still count: expense (less refunds) as spend, income as earned.
+    for kinds, group in ((("expense", "refund"), "spend"), (("income",), "earned")):
         loose = db.scalar(
-            select(func.sum(Transaction.amount)).where(
+            select(func.sum(SIGNED_AMOUNT)).where(
                 *conditions,
                 Transaction.category_id.is_(None),
-                Transaction.type == kind,
+                Transaction.type.in_(kinds),
                 Transaction.date >= start,
                 Transaction.date < end,
             )
@@ -248,12 +255,12 @@ def category_lines(
     db: Session, ctx: Ctx, conditions: list[ColumnElement[bool]], start: date, end: date
 ) -> list[CategoryLine]:
     budgets = budgets_for(db, ctx, start)
-    actuals = dict(
+    actuals: dict[uuid.UUID | None, Decimal] = dict(
         db.execute(
-            select(Transaction.category_id, func.sum(Transaction.amount))
+            select(Transaction.category_id, func.sum(SIGNED_AMOUNT))
             .where(
                 *conditions,
-                Transaction.type.in_(("expense", "income")),
+                Transaction.type.in_(("expense", "income", "refund")),
                 Transaction.date >= start,
                 Transaction.date < end,
             )
@@ -376,7 +383,9 @@ def attention(
     in_month = and_(ctx.visible_transaction(), Transaction.date >= start, Transaction.date < end)
     uncategorized = db.scalar(
         select(func.count()).where(
-            in_month, Transaction.category_id.is_(None), Transaction.type != "transfer"
+            in_month,
+            Transaction.category_id.is_(None),
+            Transaction.type.in_(("expense", "income", "refund")),
         )
     )
     income_rows = db.scalar(select(func.count()).where(in_month, Transaction.type == "income"))
@@ -396,3 +405,38 @@ def attention(
         no_income=(income_rows or 0) == 0,
         credit_card_category_used=card_bill or 0,
     )
+
+
+# ---- accounts overview ----------------------------------------------------------------
+
+
+def today() -> date:
+    return datetime.now(UTC).date()
+
+
+@router.get("/stats/overview", response_model=OverviewOut)
+def overview(
+    month: Month = Query(default_factory=this_month),
+    ctx: Ctx = Depends(get_ctx),
+    db: Session = Depends(get_db),
+) -> OverviewOut:
+    """Every visible account with its balance and the month's activity, plus the totals.
+
+    Inactive accounts are listed (flagged) so history stays visible; balance totals skip them.
+    The month only changes the month figures, never a balance.
+    """
+    start, end = month_range(month)
+    accounts = list(db.scalars(select(Account).where(ctx.visible_account()).order_by(Account.name)))
+    rows = balances.figures(db, accounts, start, end, today())
+    return OverviewOut(month=month, totals=balances.totals(rows), accounts=rows)
+
+
+@router.get("/accounts/{account_id}/summary", response_model=AccountFigures)
+def account_summary(
+    account_id: uuid.UUID,
+    month: Month = Query(default_factory=this_month),
+    ctx: Ctx = Depends(get_ctx),
+    db: Session = Depends(get_db),
+) -> AccountFigures:
+    start, end = month_range(month)
+    return balances.figures(db, [get_account(db, ctx, account_id)], start, end, today())[0]

@@ -124,6 +124,23 @@ def can_manage(ctx: Ctx, account: Account) -> bool:
     return ctx.is_owner
 
 
+CARD_FIELDS = ("credit_limit", "statement_day", "due_day")
+BROKER_FIELDS = ("opening_invested", "current_value", "valued_on")
+REQUIRED_FIELDS = ("name", "opening_balance", "is_active")
+
+
+def check_type_fields(pay_type: str, values: dict[str, object]) -> None:
+    """Card fields only on cards and broker fields only on brokers (the DB checks this too)."""
+    for fields, owner, label in (
+        (CARD_FIELDS, "credit_card", "credit cards"),
+        (BROKER_FIELDS, "share_broker", "share market brokers"),
+    ):
+        if pay_type != owner:
+            used = [f for f in fields if values.get(f) not in (None, 0)]
+            if used:
+                raise HTTPException(422, f"{', '.join(used)} only apply to {label}")
+
+
 @router.get("/accounts", response_model=list[AccountOut])
 def list_accounts(
     include_inactive: bool = False, ctx: Ctx = Depends(get_ctx), db: Session = Depends(get_db)
@@ -132,6 +149,13 @@ def list_accounts(
     if not include_inactive:
         query = query.where(Account.is_active.is_(True))
     return list(db.scalars(query.order_by(Account.pay_type, Account.name)))
+
+
+@router.get("/accounts/{account_id}", response_model=AccountOut)
+def read_account(
+    account_id: uuid.UUID, ctx: Ctx = Depends(get_ctx), db: Session = Depends(get_db)
+) -> Account:
+    return get_account(db, ctx, account_id)
 
 
 @router.post("/accounts", response_model=AccountOut, status_code=status.HTTP_201_CREATED)
@@ -143,14 +167,10 @@ def create_account(
         raise HTTPException(
             status.HTTP_403_FORBIDDEN, "Only the household owner adds shared accounts"
         )
-    account = Account(
-        household_id=ctx.household_id,
-        name=body.name,
-        pay_type=body.pay_type,
-        opening_balance=body.opening_balance,
-        visibility=body.visibility,
-        owner_user_id=ctx.user.id,
-    )
+    values = body.model_dump()
+    check_type_fields(body.pay_type, values)
+    values["opening_invested"] = values["opening_invested"] or 0
+    account = Account(household_id=ctx.household_id, owner_user_id=ctx.user.id, **values)
     db.add(account)
     commit_or_conflict(db, "An account with that name and type already exists")
     return account
@@ -166,9 +186,14 @@ def patch_account(
     account = get_account(db, ctx, account_id)
     if not can_manage(ctx, account):
         raise HTTPException(status.HTTP_403_FORBIDDEN, "You can't change this account")
-    for field, value in body.model_dump(exclude_unset=True).items():
-        if value is not None:
-            setattr(account, field, value)
+    changes = body.model_dump(exclude_unset=True)
+    check_type_fields(account.pay_type, changes)
+    for field, value in changes.items():
+        if value is None and field in REQUIRED_FIELDS:
+            continue
+        if value is None and field == "opening_invested":
+            value = 0
+        setattr(account, field, value)
     commit_or_conflict(db, "An account with that name and type already exists")
     return account
 
