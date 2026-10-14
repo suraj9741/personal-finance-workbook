@@ -6,7 +6,7 @@ import { CategoryPicker } from "../components/CategoryPicker";
 import { Modal } from "../components/Modal";
 import { MonthPicker } from "../components/MonthPicker";
 import { TransactionForm } from "../components/TransactionForm";
-import { accountLabel, currentMonth, money } from "../format";
+import { TX_TYPE_LABEL, accountLabel, categoryKind, currentMonth, money, txSign } from "../format";
 import { useAccounts, useCategories, useMembers, useRefreshMoney } from "../hooks";
 
 const PAGE = 100;
@@ -67,9 +67,11 @@ export function Transactions() {
         <input type="search" placeholder="Search description or person" aria-label="Search" defaultValue={params.get("q") ?? ""} onChange={(e) => setFilter("q", e.target.value)} />
         <select aria-label="Type" value={params.get("type") ?? ""} onChange={(e) => setFilter("type", e.target.value)}>
           <option value="">All types</option>
-          <option value="expense">Expense</option>
-          <option value="income">Income</option>
-          <option value="transfer">Transfer</option>
+          {Object.entries(TX_TYPE_LABEL).map(([value, label]) => (
+            <option key={value} value={value}>
+              {label}
+            </option>
+          ))}
         </select>
         <select aria-label="Category filter" value={params.get("category_id") ?? ""} onChange={(e) => setFilter("category_id", e.target.value)}>
           <option value="">All categories</option>
@@ -130,19 +132,24 @@ export function Transactions() {
                   {t.counterparty && <small className="muted"> · {t.counterparty}</small>}
                 </td>
                 <td>
-                  <CategoryPicker categories={categories.filter((c) => c.is_active || c.id === t.category_id)} kind={t.type} value={t.category_id} onChange={(id) => recategorize.mutate({ id: t.id, category_id: id })} />
+                  {categoryKind(t.type) ? (
+                    <CategoryPicker categories={categories.filter((c) => c.is_active || c.id === t.category_id)} kind={categoryKind(t.type)!} value={t.category_id} onChange={(id) => recategorize.mutate({ id: t.id, category_id: id })} />
+                  ) : (
+                    <span className="muted">{TX_TYPE_LABEL[t.type]}</span>
+                  )}
+                  {t.type === "refund" && <small className="tag">refund</small>}
                 </td>
                 <td>
                   {accountName(t.account_id)}
                   {t.to_account_id && ` → ${accountName(t.to_account_id)}`}
                 </td>
                 <td className={`num ${t.type}`}>
-                  {t.type === "income" ? "+" : t.type === "expense" ? "−" : ""}
+                  {txSign(t.type)}
                   {money(t.amount, true)}
                 </td>
                 {members.length > 1 && <td className="muted">{t.created_by_name}</td>}
                 <td className="actions">
-                  {t.category_id && t.description && t.type !== "transfer" && (
+                  {t.category_id && t.description && t.type !== "transfer" && t.type !== "refund" && (
                     <button type="button" className="ghost small" title="Use this category for this description from now on" onClick={() => makeRule.mutate(t.id)}>
                       Save as rule
                     </button>

@@ -34,7 +34,7 @@ Both ports bind to `127.0.0.1`, so nothing else on your Wi-Fi can reach the app.
 Your accounts and categories come from [`config/seed.yaml`](config/seed.yaml) (see
 [Accounts and categories](#accounts-and-categories-configseedyaml) below). People you invite
 into their own household start with no accounts and the starter categories (without your
-family groups). They add their own accounts in Settings.
+family groups). They add their own accounts on the Accounts page.
 
 ### Adding people
 
@@ -44,13 +44,18 @@ Open **Admin › Invite someone** and pick one of:
 - **Their own new household**: a separate private tracker that you can't see into.
 
 Copy the link and send it yourself; it is valid for 7 days. Inside a shared household,
-anyone can add a **private** account under Settings › Accounts. Entries on it are visible
+anyone can add a **private** account on the Accounts page. Entries on it are visible
 only to them.
 
 ### Day to day
 
 - Type an amount and a description in the bar at the top and press Enter. Past
-  descriptions are suggested as you type.
+  descriptions are suggested as you type. Pick the account type (Bank, Credit Card, Share
+  Market Broker) and then the account; cash is under Bank.
+- The full form (Transactions › Full form) also records transfers, refunds, and broker buys
+  and sells. Pay a card bill or fund a broker with a **Transfer**.
+- Accounts: your accounts grouped by type, with balances, card outstanding and available
+  credit, and broker invested amounts. Add, rename, edit or deactivate accounts there.
 - Settings › Auto-categorization rules: "swiggy" → Everyday › Food, and so on. Rules also
   fill in old uncategorized rows when you press "Apply to uncategorized".
 - On Transactions, "Save as rule" turns a row's category into a rule.

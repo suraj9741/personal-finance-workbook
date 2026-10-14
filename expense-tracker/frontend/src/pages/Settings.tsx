@@ -1,9 +1,10 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useState, type FormEvent } from "react";
-import { del, patch, post, type Category, type InviteLink, type Kind, type PayType, type StatsGroup } from "../api";
+import { useState } from "react";
+import { Link } from "react-router-dom";
+import { del, patch, post, type Category, type InviteLink, type Kind, type StatsGroup } from "../api";
 import { CategoryPicker } from "../components/CategoryPicker";
-import { categoryLabel, PAY_TYPE_LABEL } from "../format";
-import { useAccounts, useCategories, useMe, useMembers, useRules } from "../hooks";
+import { categoryLabel } from "../format";
+import { useCategories, useMe, useMembers, useRules } from "../hooks";
 
 const GROUP_LABEL: Record<StatsGroup, string> = {
   spend: "Spending",
@@ -22,7 +23,7 @@ export function Settings() {
       <h1>Settings · {me?.household_name}</h1>
       <Profile />
       <Members isOwner={isOwner} />
-      <Accounts isOwner={isOwner} />
+      <Accounts />
       <Rules />
       <Categories isOwner={isOwner} />
     </section>
@@ -150,71 +151,13 @@ export function InviteBox({ invite }: { invite: InviteLink }) {
   );
 }
 
-function Accounts({ isOwner }: { isOwner: boolean }) {
-  const accounts = useAccounts(true).data ?? [];
-  const me = useMe().data;
-  const refresh = useInvalidate("accounts");
-  const [name, setName] = useState("");
-  const [payType, setPayType] = useState<PayType>("bank");
-  const [visibility, setVisibility] = useState<"shared" | "private">(isOwner ? "shared" : "private");
-  const [error, setError] = useState("");
-  const add = useMutation({
-    mutationFn: () => post("/accounts", { name, pay_type: payType, visibility }),
-    onSuccess: () => {
-      setName("");
-      refresh();
-    },
-    onError: (e: Error) => setError(e.message),
-  });
-  const toggle = useMutation({
-    mutationFn: ({ id, active }: { id: string; active: boolean }) => patch(`/accounts/${id}`, { is_active: active }),
-    onSuccess: refresh,
-    onError: (e: Error) => setError(e.message),
-  });
+function Accounts() {
   return (
     <div className="card">
       <h2>Accounts</h2>
-      <ul className="plain">
-        {accounts.map((a) => {
-          const canManage = a.visibility === "private" ? a.owner_user_id === me?.id : isOwner;
-          return (
-            <li key={a.id} className="row">
-              <span className={a.is_active ? "" : "muted"}>
-                {a.name} <small className="muted">{PAY_TYPE_LABEL[a.pay_type]}</small>
-                {a.visibility === "private" && <small className="tag">private</small>}
-              </span>
-              {canManage && (
-                <button type="button" className="ghost small" onClick={() => toggle.mutate({ id: a.id, active: !a.is_active })}>
-                  {a.is_active ? "Deactivate" : "Activate"}
-                </button>
-              )}
-            </li>
-          );
-        })}
-      </ul>
-      <form
-        className="row wrap"
-        onSubmit={(e: FormEvent) => {
-          e.preventDefault();
-          setError("");
-          add.mutate();
-        }}
-      >
-        <input placeholder="Account name" value={name} onChange={(e) => setName(e.target.value)} required />
-        <select aria-label="Account type" value={payType} onChange={(e) => setPayType(e.target.value as PayType)}>
-          {Object.entries(PAY_TYPE_LABEL).map(([value, label]) => (
-            <option key={value} value={value}>
-              {label}
-            </option>
-          ))}
-        </select>
-        <select aria-label="Visibility" value={visibility} onChange={(e) => setVisibility(e.target.value as "shared" | "private")}>
-          {isOwner && <option value="shared">Shared with household</option>}
-          <option value="private">Private (only me)</option>
-        </select>
-        <button type="submit">Add account</button>
-      </form>
-      {error && <p className="error">{error}</p>}
+      <p>
+        Bank accounts, credit cards, brokers and cash are managed on the <Link to="/accounts">Accounts</Link> page.
+      </p>
     </div>
   );
 }

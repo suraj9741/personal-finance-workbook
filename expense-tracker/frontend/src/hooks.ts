@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { api, ApiError, type Account, type Category, type Me, type Member, type Rule } from "./api";
+import { api, ApiError, type Account, type Category, type Me, type Member, type Overview, type Rule } from "./api";
 
 export function useMe() {
   return useQuery({
@@ -30,6 +30,10 @@ export const useAccounts = (includeInactive = false) =>
     staleTime: 60_000,
   });
 
+/** Every visible account (inactive too) with its balance and the month's activity. */
+export const useOverview = (month: string) =>
+  useQuery({ queryKey: ["overview", month], queryFn: () => api<Overview>(`/stats/overview?month=${month}`) });
+
 export const useRules = () => useQuery({ queryKey: ["rules"], queryFn: () => api<Rule[]>("/rules") });
 
 export const useMembers = () =>
@@ -40,7 +44,7 @@ export function useRefreshMoney() {
   const client = useQueryClient();
   return () =>
     Promise.all(
-      ["transactions", "stats", "trend", "attention", "suggest", "rules", "budgets"].map((key) =>
+      ["transactions", "stats", "trend", "attention", "suggest", "rules", "budgets", "overview", "account-summary"].map((key) =>
         client.invalidateQueries({ queryKey: [key] }),
       ),
     );

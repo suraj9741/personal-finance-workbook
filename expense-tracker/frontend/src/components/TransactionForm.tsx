@@ -1,18 +1,31 @@
 import { useMutation } from "@tanstack/react-query";
 import { useState, type FormEvent } from "react";
-import { del, patch, post, type Kind, type Transaction, type TransactionInput } from "../api";
-import { accountLabel, today } from "../format";
+import { del, patch, post, type Transaction, type TransactionInput, type TxType } from "../api";
+import { TX_TYPE_LABEL, categoryKind, groupOf, today } from "../format";
 import { useAccounts, useCategories, useRefreshMoney } from "../hooks";
+import { AccountPicker } from "./AccountPicker";
 import { CategoryPicker } from "./CategoryPicker";
+
+const TYPES: TxType[] = ["expense", "income", "transfer", "refund", "buy", "sell"];
+const TYPE_HINT: Partial<Record<TxType, string>> = {
+  transfer: "Moving your own money: bank to bank, paying a card bill, adding money to a broker. Not income or expense.",
+  refund: "Money back on something you bought. Lowers that category's spend (and the card's outstanding).",
+  buy: "Shares or funds bought with the broker account's cash. Not an expense.",
+  sell: "Shares or funds sold. Not income. Add what they cost to track realized profit.",
+};
 
 interface Props {
   existing?: Transaction;
   onDone: () => void;
 }
 
-/** Every field: transfers (from/to), lending (person), notes. Add or edit. */
+/** Every field: type, account (type first), transfers, lending (person), notes. Add or edit. */
 export function TransactionForm({ existing, onDone }: Props) {
-  const accounts = useAccounts().data ?? [];
+  const allAccounts = useAccounts(true).data ?? [];
+  // Active accounts, plus inactive ones this entry already uses so editing doesn't lose them.
+  const accounts = allAccounts.filter(
+    (a) => a.is_active || a.id === existing?.account_id || a.id === existing?.to_account_id,
+  );
   const categories = useCategories().data ?? [];
   const refresh = useRefreshMoney();
   const [form, setForm] = useState<TransactionInput>(() => ({
@@ -23,6 +36,7 @@ export function TransactionForm({ existing, onDone }: Props) {
     to_account_id: existing?.to_account_id ?? null,
     category_id: existing?.category_id ?? null,
     description: existing?.description ?? "",
+    cost_basis: existing?.cost_basis ?? "",
     counterparty: existing?.counterparty ?? "",
     notes: existing?.notes ?? "",
   }));
@@ -37,6 +51,8 @@ export function TransactionForm({ existing, onDone }: Props) {
         ...form,
         account_id: form.account_id || accounts[0]?.id,
         to_account_id: form.type === "transfer" ? form.to_account_id : null,
+        category_id: categoryKind(form.type) ? form.category_id : null,
+        cost_basis: form.type === "sell" && form.cost_basis ? form.cost_basis : null,
         counterparty: form.counterparty || null,
         notes: form.notes || null,
       };
@@ -64,66 +80,78 @@ export function TransactionForm({ existing, onDone }: Props) {
 
   return (
     <form className="tx-form" onSubmit={submit}>
-      <div className="segmented" role="radiogroup" aria-label="Type">
-        {(["expense", "income", "transfer"] as Kind[]).map((k) => (
+      <div className="segmented wrap" role="radiogroup" aria-label="Transaction type">
+        {TYPES.map((k) => (
           <button
             type="button"
             key={k}
             role="radio"
             aria-checked={form.type === k}
             className={form.type === k ? "active" : ""}
-            onClick={() => set({ type: k, category_id: null })}
+            onClick={() => {
+              const changes: Partial<TransactionInput> = { type: k, category_id: null };
+              const current = accounts.find((a) => a.id === form.account_id);
+              if ((k === "buy" || k === "sell") && current && groupOf(current.pay_type) !== "share_broker")
+                changes.account_id = accounts.find((a) => a.pay_type === "share_broker")?.id ?? "";
+              set(changes);
+            }}
           >
-            {k[0].toUpperCase() + k.slice(1)}
+            {TX_TYPE_LABEL[k]}
           </button>
         ))}
       </div>
+      {TYPE_HINT[form.type] && <p className="hint">{TYPE_HINT[form.type]}</p>}
+      <fieldset className="plain-fieldset">
+        <legend>{form.type === "transfer" ? "From account" : "Account"}</legend>
+        <AccountPicker
+          accounts={accounts}
+          value={form.account_id}
+          label={form.type === "transfer" ? "From" : undefined}
+          groups={form.type === "buy" || form.type === "sell" ? ["share_broker"] : undefined}
+          onChange={(id) => set({ account_id: id })}
+        />
+      </fieldset>
+      {form.type === "transfer" && (
+        <fieldset className="plain-fieldset">
+          <legend>To account</legend>
+          <AccountPicker
+            accounts={accounts}
+            value={form.to_account_id ?? ""}
+            label="To"
+            exclude={form.account_id}
+            onChange={(id) => set({ to_account_id: id || null })}
+          />
+        </fieldset>
+      )}
       <label>
         Amount (₹)
         <input inputMode="decimal" required value={form.amount} onChange={(e) => set({ amount: e.target.value })} />
       </label>
+      {form.type === "sell" && (
+        <label>
+          What the sold units cost (₹, optional)
+          <input inputMode="decimal" value={form.cost_basis ?? ""} onChange={(e) => set({ cost_basis: e.target.value })} />
+        </label>
+      )}
       <label>
         Date
         <input type="date" required value={form.date} onChange={(e) => set({ date: e.target.value })} />
       </label>
-      <label>
-        {form.type === "transfer" ? "From account" : "Account"}
-        <select value={form.account_id} onChange={(e) => set({ account_id: e.target.value })}>
-          {accounts.map((a) => (
-            <option key={a.id} value={a.id}>
-              {accountLabel(a, accounts)}
-            </option>
-          ))}
-        </select>
-      </label>
-      {form.type === "transfer" && (
+      {categoryKind(form.type) && (
         <label>
-          To account
-          <select value={form.to_account_id ?? ""} onChange={(e) => set({ to_account_id: e.target.value || null })}>
-            <option value="">Choose…</option>
-            {accounts
-              .filter((a) => a.id !== form.account_id)
-              .map((a) => (
-                <option key={a.id} value={a.id}>
-                  {accountLabel(a, accounts)}
-                </option>
-              ))}
-          </select>
+          Category
+          <CategoryPicker
+            categories={categories}
+            kind={categoryKind(form.type)!}
+            value={form.category_id ?? null}
+            onChange={(id) => set({ category_id: id })}
+          />
         </label>
       )}
-      <label>
-        Category
-        <CategoryPicker
-          categories={categories}
-          kind={form.type}
-          value={form.category_id ?? null}
-          onChange={(id) => set({ category_id: id })}
-        />
-      </label>
       {category?.parent_name === "Debt" && category.sub_name === "Credit cards" && (
         <p className="hint">
-          Paying a card bill with this category counts your card spends twice. Use Transfer › Self Transfer › Bank to
-          Credit instead.
+          Paying a card bill with this category counts your card spends twice. Use a Transfer from the bank to the card
+          instead.
         </p>
       )}
       <label>

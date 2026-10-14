@@ -3,6 +3,7 @@ import { NavLink, Navigate, Outlet, Route, Routes, useNavigate } from "react-rou
 import { post } from "./api";
 import { QuickAdd } from "./components/QuickAdd";
 import { useMe } from "./hooks";
+import { Accounts } from "./pages/Accounts";
 import { Admin } from "./pages/Admin";
 import { AcceptInvite, Login, ResetPassword } from "./pages/Auth";
 import { Budgets } from "./pages/Budgets";
@@ -32,6 +33,7 @@ function Shell() {
             Dashboard
           </NavLink>
           <NavLink to="/transactions">Transactions</NavLink>
+          <NavLink to="/accounts">Accounts</NavLink>
           <NavLink to="/budgets">Budgets</NavLink>
           <NavLink to="/settings">Settings</NavLink>
           {me.is_site_admin && <NavLink to="/admin">Admin</NavLink>}
@@ -60,6 +62,7 @@ export function App() {
       <Route element={<Shell />}>
         <Route index element={<Dashboard />} />
         <Route path="transactions" element={<Transactions />} />
+        <Route path="accounts" element={<Accounts />} />
         <Route path="budgets" element={<Budgets />} />
         <Route path="settings" element={<Settings />} />
         <Route path="admin" element={<Admin />} />
