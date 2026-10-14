@@ -7,12 +7,17 @@ from typing import Annotated, Literal
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator
 
 Kind = Literal["expense", "income", "transfer"]
+TxType = Literal["expense", "income", "transfer", "refund", "buy", "sell"]
 StatsGroup = Literal["spend", "saving", "lent", "earned", "repaid", "transfer"]
 PayType = Literal["bank", "credit_card", "share_broker", "cash"]
 Visibility = Literal["shared", "private"]
 Role = Literal["owner", "member"]
 Name = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=60)]
 Money = Annotated[Decimal, Field(max_digits=12, decimal_places=2)]
+PositiveMoney = Annotated[Decimal, Field(ge=0, max_digits=12, decimal_places=2)]
+Day = Annotated[int, Field(ge=1, le=31)]
+Institution = Annotated[str, StringConstraints(strip_whitespace=True, max_length=60)]
+Description = Annotated[str, StringConstraints(strip_whitespace=True, max_length=500)]
 Password = Annotated[str, StringConstraints(min_length=10, max_length=200)]
 Email = Annotated[
     str,
@@ -196,21 +201,49 @@ class TemplateOut(Orm):
 class AccountOut(Orm):
     id: uuid.UUID
     name: str
+    institution: str | None
+    description: str | None
     pay_type: PayType
     opening_balance: Decimal
+    opening_date: date | None
+    credit_limit: Decimal | None
+    statement_day: int | None
+    due_day: int | None
+    opening_invested: Decimal
+    current_value: Decimal | None
+    valued_on: date | None
     visibility: Visibility
     owner_user_id: uuid.UUID | None
     is_active: bool
 
 
-class AccountIn(Strict):
+class AccountFields(Strict):
+    """Fields shared by create and edit. Card and broker fields only fit their own type."""
+
+    institution: Institution | None = None
+    description: Description | None = None
+    opening_date: date | None = None
+    credit_limit: PositiveMoney | None = None
+    statement_day: Day | None = None
+    due_day: Day | None = None
+    opening_invested: PositiveMoney | None = None
+    current_value: Annotated[Decimal, Field(ge=0, max_digits=14, decimal_places=2)] | None = None
+    valued_on: date | None = None
+
+
+class AccountIn(AccountFields):
     name: Name
     pay_type: PayType
     opening_balance: Money = Decimal("0")
     visibility: Visibility = "shared"
 
 
-class AccountPatchIn(Strict):
+class AccountPatchIn(AccountFields):
+    """The type can't change: it decides what every past transaction means for the balance.
+
+    Optional fields can be cleared by sending null.
+    """
+
     name: Name | None = None
     opening_balance: Money | None = None
     is_active: bool | None = None
@@ -245,12 +278,13 @@ class RulePatchIn(Strict):
 class TransactionIn(Strict):
     date: dt.date
     amount: Annotated[Decimal, Field(gt=0, max_digits=12, decimal_places=2)]
-    type: Kind = "expense"
+    type: TxType = "expense"
     account_id: uuid.UUID
     to_account_id: uuid.UUID | None = None
     # Omitted: a matching rule fills it in. Explicit null: leave uncategorized.
     category_id: uuid.UUID | None = None
     description: Annotated[str, StringConstraints(strip_whitespace=True, max_length=200)] = ""
+    cost_basis: PositiveMoney | None = None
     counterparty: (
         Annotated[str, StringConstraints(strip_whitespace=True, max_length=100)] | None
     ) = None
@@ -260,13 +294,14 @@ class TransactionIn(Strict):
 class TransactionPatchIn(Strict):
     date: dt.date | None = None
     amount: Annotated[Decimal, Field(gt=0, max_digits=12, decimal_places=2)] | None = None
-    type: Kind | None = None
+    type: TxType | None = None
     account_id: uuid.UUID | None = None
     to_account_id: uuid.UUID | None = None
     category_id: uuid.UUID | None = None
     description: Annotated[str, StringConstraints(strip_whitespace=True, max_length=200)] | None = (
         None
     )
+    cost_basis: PositiveMoney | None = None
     counterparty: (
         Annotated[str, StringConstraints(strip_whitespace=True, max_length=100)] | None
     ) = None
@@ -277,11 +312,12 @@ class TransactionOut(Orm):
     id: uuid.UUID
     date: dt.date
     amount: Decimal
-    type: Kind
+    type: TxType
     account_id: uuid.UUID
     to_account_id: uuid.UUID | None
     category_id: uuid.UUID | None
     description: str
+    cost_basis: Decimal | None
     counterparty: str | None
     notes: str | None
     created_by: uuid.UUID | None
@@ -299,7 +335,7 @@ class TransactionPage(BaseModel):
 
 class SuggestionOut(BaseModel):
     description: str
-    type: Kind
+    type: TxType
     category_id: uuid.UUID | None
     account_id: uuid.UUID
     amount: Decimal
@@ -407,3 +443,66 @@ class AttentionOut(BaseModel):
     old_loans: list[LoanOut]
     no_income: bool
     credit_card_category_used: int
+
+
+# ---- account balances / overview --------------------------------------------------------
+
+
+class AccountFigures(BaseModel):
+    """One account's numbers. All-time figures ignore the month; month figures use it only.
+
+    Fields that don't apply to the account's type are null.
+    """
+
+    account: AccountOut
+    # Bank, cash and broker cash: money in the account now.
+    balance: Decimal | None
+    # Credit card: owed now (negative means the card is in credit).
+    outstanding: Decimal | None
+    # Credit card: limit minus outstanding, never below 0. Null without a limit.
+    available_credit: Decimal | None
+    next_due_date: date | None
+    # Broker: cost of what is held (opening invested + buys - cost of what was sold).
+    invested: Decimal | None
+    deposited: Decimal | None
+    withdrawn: Decimal | None
+    # Broker: only from the value the user entered; null when there is none.
+    current_value: Decimal | None
+    unrealized_pl: Decimal | None
+    # Broker: from sells that carry a cost. realized_complete is false when some sells don't.
+    realized_pl: Decimal | None
+    realized_complete: bool
+    # The month's activity on this account.
+    month_income: Decimal
+    month_expenses: Decimal
+    month_refunds: Decimal
+    month_transfers_in: Decimal
+    month_transfers_out: Decimal
+    month_buys: Decimal
+    month_sells: Decimal
+
+
+class OverviewTotals(BaseModel):
+    """Active accounts only for balances; every visible account for the month's activity."""
+
+    bank_balance: Decimal
+    card_outstanding: Decimal
+    # Null when no active card has a credit limit set.
+    available_credit: Decimal | None
+    broker_cash: Decimal
+    invested: Decimal
+    # Null unless every active broker has a value entered.
+    portfolio_value: Decimal | None
+    brokers_valued: int
+    brokers: int
+    month_income: Decimal
+    # Expenses less refunds. Transfers, buys and sells are never in either.
+    month_expenses: Decimal
+    # Bank balance minus card outstanding. Investments are not in it.
+    net_cash: Decimal
+
+
+class OverviewOut(BaseModel):
+    month: str
+    totals: OverviewTotals
+    accounts: list[AccountFigures]

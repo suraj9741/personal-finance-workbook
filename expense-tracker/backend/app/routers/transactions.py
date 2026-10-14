@@ -12,7 +12,6 @@ from app.deps import Ctx, get_ctx, not_found
 from app.models import Category, CategoryRule, Transaction, User
 from app.routers.catalog import ensure_unique_pattern, get_account, get_category
 from app.schemas import (
-    Kind,
     Month,
     RuleOut,
     SuggestionOut,
@@ -20,13 +19,14 @@ from app.schemas import (
     TransactionOut,
     TransactionPage,
     TransactionPatchIn,
+    TxType,
 )
 from app.services import add_months, match_rule
 
 router = APIRouter(prefix="/transactions", tags=["transactions"])
 
 CREATED = Counter("transactions_created_total", "Transactions created", ["type"])
-for _label in ("expense", "income", "transfer"):
+for _label in ("expense", "income", "transfer", "refund", "buy", "sell"):
     CREATED.labels(_label)  # export zeros from boot
 
 
@@ -35,9 +35,25 @@ def month_range(month: str) -> tuple[date, date]:
     return start, add_months(start, 1)
 
 
+# The category kind each transaction type takes. Buys and sells take none.
+CATEGORY_KIND = {
+    "expense": "expense",
+    "income": "income",
+    "transfer": "transfer",
+    "refund": "expense",
+}
+
+
 def validate(db: Session, ctx: Ctx, row: Transaction) -> None:
     """Rules the database can't express: visibility, household and kind matching."""
-    get_account(db, ctx, row.account_id)
+    account = get_account(db, ctx, row.account_id)
+    if row.type in ("buy", "sell"):
+        if account.pay_type != "share_broker":
+            raise HTTPException(422, "Buys and sells are on share market broker accounts")
+        if row.category_id is not None:
+            raise HTTPException(422, "Buys and sells don't take a category")
+    if row.cost_basis is not None and row.type != "sell":
+        raise HTTPException(422, "Only a sell has a cost basis")
     if row.type == "transfer":
         if row.to_account_id is None:
             raise HTTPException(422, "A transfer needs a 'to' account")
@@ -48,7 +64,7 @@ def validate(db: Session, ctx: Ctx, row: Transaction) -> None:
         raise HTTPException(422, "Only transfers have a 'to' account")
     if row.category_id is not None:
         category = get_category(db, ctx, row.category_id)
-        if category.kind != row.type:
+        if category.kind != CATEGORY_KIND.get(row.type):
             raise HTTPException(422, f"Category is for {category.kind}, not {row.type}")
 
 
@@ -77,7 +93,9 @@ def get_visible(db: Session, ctx: Ctx, transaction_id: uuid.UUID) -> Transaction
 @router.get("", response_model=TransactionPage)
 def list_transactions(
     month: Month | None = None,
-    type: Kind | None = None,
+    date_from: date | None = None,
+    date_to: date | None = None,
+    type: TxType | None = None,
     category_id: uuid.UUID | None = None,
     account_id: uuid.UUID | None = None,
     created_by: uuid.UUID | None = None,
@@ -95,12 +113,19 @@ def list_transactions(
     if month:
         start, end = month_range(month)
         conditions += [Transaction.date >= start, Transaction.date < end]
+    if date_from:
+        conditions.append(Transaction.date >= date_from)
+    if date_to:
+        conditions.append(Transaction.date <= date_to)
     if type:
         conditions.append(Transaction.type == type)
     if category_id:
         conditions.append(Transaction.category_id == category_id)
     if uncategorized:
-        conditions += [Transaction.category_id.is_(None), Transaction.type != "transfer"]
+        conditions += [
+            Transaction.category_id.is_(None),
+            Transaction.type.in_(("expense", "income", "refund")),
+        ]
     if account_id:
         conditions.append(
             (Transaction.account_id == account_id) | (Transaction.to_account_id == account_id)
@@ -136,8 +161,8 @@ def create_transaction(
         source="manual",
         **body.model_dump(),
     )
-    if "category_id" not in body.model_fields_set and row.type != "transfer":
-        category = match_rule(db, ctx.household_id, row.description, row.type)
+    if "category_id" not in body.model_fields_set and row.type in ("expense", "income", "refund"):
+        category = match_rule(db, ctx.household_id, row.description, CATEGORY_KIND[row.type])
         row.category_id = category.id if category else None
     validate(db, ctx, row)
     db.add(row)
@@ -201,6 +226,8 @@ def patch_transaction(
         setattr(row, field, value)
     if changes.get("type") and changes["type"] != "transfer" and "to_account_id" not in changes:
         row.to_account_id = None
+    if changes.get("type") and changes["type"] != "sell" and "cost_basis" not in changes:
+        row.cost_basis = None
     validate(db, ctx, row)
     db.commit()
     db.refresh(row)

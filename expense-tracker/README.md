@@ -133,12 +133,40 @@ browser ──► frontend (nginx, :8080) ──/api──► backend (FastAPI, 
 | --- | --- |
 | Auth | `POST /auth/login`, `POST /auth/logout`, `GET /auth/me`, `POST /auth/password`, `POST /auth/reset/{token}` |
 | Household | `POST /invites`, `GET /invites/{token}`, `POST /invites/{token}/accept`, `GET /household/members`, `PATCH/DELETE /household/members/{user_id}` |
-| Catalog | `/categories`, `/accounts`, `/rules`, `POST /rules/apply` |
+| Catalog | `/categories`, `/accounts`, `GET /accounts/{id}`, `GET /accounts/{id}/summary`, `/rules`, `POST /rules/apply` |
 | Transactions | `GET/POST /transactions`, `GET /transactions/suggest`, `GET/PATCH/DELETE /transactions/{id}`, `POST /transactions/{id}/make-rule` |
-| Budgets and stats | `GET/PUT /budgets`, `POST /budgets/copy`, `GET /stats/month`, `GET /stats/trend`, `GET /stats/attention` |
+| Budgets and stats | `GET/PUT /budgets`, `POST /budgets/copy`, `GET /stats/month`, `GET /stats/trend`, `GET /stats/attention`, `GET /stats/overview` |
 | Admin | `/admin/users`, `/admin/invites`, `/admin/households`, `/admin/category-template`, `/admin/settings` |
 
 The full, typed list is at http://localhost:8000/docs.
+
+### Balances and transaction types
+
+Balances are worked out on the server from stored transactions (`app/balances.py`); nothing
+is stored or typed in by hand except opening balances and a broker's current value.
+
+| Type | Moves money | Counts as |
+| --- | --- | --- |
+| `expense` | out of the account | spend (by category group) |
+| `income` | into the account | earned |
+| `refund` | into the account | takes spend back off its expense category |
+| `transfer` | out of one account, into the "to" account | neither income nor expense |
+| `buy` / `sell` | broker cash into / out of securities | neither; changes the invested amount |
+
+- **Bank and cash**: balance = opening balance + money in - money out.
+- **Credit card**: outstanding = opening balance (owed on the opening date) + purchases -
+  payments - refunds. Available credit = credit limit - outstanding, never below 0, and it is
+  not money you have. Pay a card bill with a **transfer** from the bank, not an expense, or it
+  counts twice.
+- **Share market broker**: the balance is the cash in the broker account. Moving money in is a
+  transfer, not an investment. Invested = opening invested + buys - cost of what was sold (a
+  sell without a cost basis comes off at its proceeds). Current value is only what you enter;
+  without it, profit/loss stays empty. Realized profit/loss needs a cost basis on each sell.
+- **Opening date**: when set, only transactions on or after it count toward the balance.
+- Month figures (income, expenses, purchases, payments) use the chosen month; balances never do.
+- Overview totals use active accounts; inactive accounts keep their history and still show
+  in month figures. Net cash = bank and cash balances - card outstanding. Investments are
+  shown apart from cash.
 
 ### Accounts and categories (config/seed.yaml)
 

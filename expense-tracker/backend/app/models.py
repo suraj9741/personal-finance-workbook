@@ -11,6 +11,7 @@ from sqlalchemy import (
     Index,
     Integer,
     Numeric,
+    SmallInteger,
     String,
     Text,
     UniqueConstraint,
@@ -20,6 +21,9 @@ from sqlalchemy import (
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 KINDS = ("expense", "income", "transfer")
+# A refund takes money back on an expense category. Buy and sell move a broker account's
+# cash into and out of securities; they are neither income nor expense.
+TX_TYPES = (*KINDS, "refund", "buy", "sell")
 STATS_GROUPS = ("spend", "saving", "lent", "earned", "repaid", "transfer")
 PAY_TYPES = ("bank", "credit_card", "share_broker", "cash")
 
@@ -178,15 +182,47 @@ class Account(Base):
         CheckConstraint(
             "visibility = 'shared' OR owner_user_id IS NOT NULL", name="private_has_owner"
         ),
+        CheckConstraint(
+            "pay_type = 'credit_card' OR "
+            "(credit_limit IS NULL AND statement_day IS NULL AND due_day IS NULL)",
+            name="card_fields_on_cards",
+        ),
+        CheckConstraint(
+            "pay_type = 'share_broker' OR "
+            "(current_value IS NULL AND valued_on IS NULL AND opening_invested = 0)",
+            name="broker_fields_on_brokers",
+        ),
+        CheckConstraint("credit_limit IS NULL OR credit_limit >= 0", name="credit_limit_valid"),
+        CheckConstraint("statement_day BETWEEN 1 AND 31", name="statement_day_valid"),
+        CheckConstraint("due_day BETWEEN 1 AND 31", name="due_day_valid"),
+        CheckConstraint("opening_invested >= 0", name="opening_invested_valid"),
+        CheckConstraint("current_value IS NULL OR current_value >= 0", name="current_value_valid"),
     )
 
     id: Mapped[uuid.UUID] = uuid_pk()
     household_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("households.id", ondelete="CASCADE"), index=True
     )
+    # The display name; renaming never touches transactions, which link by id.
     name: Mapped[str] = mapped_column(String(60))
+    # Bank, card issuer or broker, e.g. "HDFC Bank" for both "HDFC" and "HDFC CC".
+    institution: Mapped[str | None] = mapped_column(String(60))
+    description: Mapped[str | None] = mapped_column(String(500))
     pay_type: Mapped[str] = mapped_column(String(15))
+    # Bank, cash and broker: money held on opening_date. Credit card: amount owed then.
     opening_balance: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=Decimal("0"))
+    # Set: only transactions on or after it count toward the balance. NULL: all of them.
+    opening_date: Mapped[date | None] = mapped_column(Date)
+    credit_limit: Mapped[Decimal | None] = mapped_column(Numeric(12, 2))
+    statement_day: Mapped[int | None] = mapped_column(SmallInteger)
+    due_day: Mapped[int | None] = mapped_column(SmallInteger)
+    # Broker: cost of holdings already owned on opening_date.
+    opening_invested: Mapped[Decimal] = mapped_column(
+        Numeric(12, 2), default=Decimal("0"), server_default="0"
+    )
+    # Broker: the latest value the user entered. Never fetched or estimated.
+    current_value: Mapped[Decimal | None] = mapped_column(Numeric(14, 2))
+    valued_on: Mapped[date | None] = mapped_column(Date)
     visibility: Mapped[str] = mapped_column(String(10), default="shared")
     owner_user_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL")
@@ -199,7 +235,10 @@ class Transaction(Base):
     __tablename__ = "transactions"
     __table_args__ = (
         CheckConstraint("amount > 0", name="amount_positive"),
-        CheckConstraint(_in("type", KINDS), name="type_valid"),
+        CheckConstraint(_in("type", TX_TYPES), name="type_valid"),
+        CheckConstraint(
+            "cost_basis IS NULL OR (type = 'sell' AND cost_basis >= 0)", name="cost_basis_on_sell"
+        ),
         CheckConstraint("source IN ('manual', 'import')", name="source_valid"),
         CheckConstraint(
             "(type = 'transfer') = (to_account_id IS NOT NULL)", name="transfer_has_to_account"
@@ -226,6 +265,8 @@ class Transaction(Base):
         ForeignKey("categories.id", ondelete="RESTRICT")
     )
     description: Mapped[str] = mapped_column(String(200), default="")
+    # Sell only: what the units sold had cost. Gives realized profit/loss when present.
+    cost_basis: Mapped[Decimal | None] = mapped_column(Numeric(12, 2))
     counterparty: Mapped[str | None] = mapped_column(String(100))
     notes: Mapped[str | None] = mapped_column(Text)
     created_by: Mapped[uuid.UUID | None] = mapped_column(
