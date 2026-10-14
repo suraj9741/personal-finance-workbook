@@ -167,3 +167,33 @@ it("picks the account type first, then only accounts of that type", async () => 
   expect(options()).toEqual(["Zerodha"]);
   expect(within(dialog).queryByRole("combobox", { name: "Category group" })).toBeNull();
 });
+
+it("shows the financial overview above the monthly dashboard", async () => {
+  mockApi();
+  renderAt("/");
+  const overview = await screen.findByRole("region", { name: "Financial overview" });
+  expect(within(overview).getByText("Total bank balance").nextSibling?.textContent).toBe("₹42,000");
+  expect(within(overview).getByText("Available credit", { selector: ".kpi-label" }).parentElement?.textContent).toContain("Not cash");
+  expect(within(overview).getByText("Portfolio value").nextSibling?.textContent).toBe("Not valued");
+  expect(within(overview).getByText("0 of 1 brokers have a value entered")).toBeTruthy();
+  expect(within(overview).getByRole("link", { name: "HDFC CC" }).getAttribute("href")).toBe("/accounts/a4");
+  // The inactive account with no activity this month stays out of the table.
+  expect(within(overview).queryByText("Old SBI")).toBeNull();
+});
+
+it("shows an account's figures and history on its page", async () => {
+  const tx = { id: "t1", date: "2026-10-05", amount: "1000.00", type: "transfer", account_id: "a1", to_account_id: "a4", category_id: null, description: "Card bill", cost_basis: null, counterparty: null, notes: null, created_by: null, created_by_name: null };
+  mockApi((url) =>
+    url.includes("/accounts/a4/summary") ? figures(ACCOUNTS[3], { outstanding: "25000.00", available_credit: "75000.00", next_due_date: "2026-11-05", month_expenses: "3000.00", month_transfers_in: "1000.00" })
+    : url.includes("/transactions?account_id=a4") ? { items: [tx], total: 1 }
+    : undefined,
+  );
+  renderAt("/accounts/a4");
+  expect(await screen.findByRole("heading", { name: /HDFC CC/ })).toBeTruthy();
+  expect(screen.getByText("Outstanding").nextSibling?.textContent).toBe("₹25,000");
+  expect(screen.getByText("Next due date").nextSibling?.textContent).toBe("2026-11-05");
+  expect(screen.getByText("Payments").nextSibling?.textContent).toBe("₹1,000");
+  expect(await screen.findByText("from HDFC")).toBeTruthy();
+  expect(screen.getByText("+₹1,000.00")).toBeTruthy();
+  expect(screen.getByRole("button", { name: "Edit account" })).toBeTruthy();
+});

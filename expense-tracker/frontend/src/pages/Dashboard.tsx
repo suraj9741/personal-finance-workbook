@@ -2,9 +2,11 @@ import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { api, type Attention, type MonthStats, type TrendPoint } from "../api";
+import { FinancialOverview } from "../components/FinancialOverview";
 import { MonthPicker } from "../components/MonthPicker";
 import { TrendChart } from "../components/TrendChart";
 import { currentMonth, money, percent } from "../format";
+import { Kpi } from "../components/Kpi";
 
 type Scope = "household" | "me";
 
@@ -51,6 +53,11 @@ export function Dashboard() {
       </div>
       {scope === "household" && <p className="muted small">Household totals include shared accounts and your own private accounts.</p>}
 
+      <FinancialOverview month={month} />
+
+      <h2 className="section-title">
+        This month by category {scope === "me" && <small className="muted">(just me)</small>}
+      </h2>
       <div className="kpis">
         <Kpi label="Income" value={money(s?.income)} />
         <Kpi label="Spent" value={money(s?.spend)} />
@@ -109,14 +116,5 @@ export function Dashboard() {
         </ul>
       </div>
     </section>
-  );
-}
-
-function Kpi({ label, value, tone }: { label: string; value: string; tone?: "good" | "bad" }) {
-  return (
-    <div className={`kpi ${tone ?? ""}`}>
-      <span className="kpi-label">{label}</span>
-      <span className="kpi-value">{value}</span>
-    </div>
   );
 }

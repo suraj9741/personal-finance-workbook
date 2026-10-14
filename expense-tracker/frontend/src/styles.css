@@ -287,3 +287,10 @@ td.transfer { color: var(--transfer); }
 @media (max-width: 640px) {
   .form-pair { grid-template-columns: 1fr; }
 }
+.section-title { font-size: 1.1rem; margin: 1.25rem 0 0.25rem; }
+.kpi-note { color: var(--muted); font-size: 0.75rem; margin-top: 0.15rem; }
+tfoot th { background: var(--surface); color: var(--ink); border-top: 1px solid var(--border); }
+.pos-text { color: var(--good); }
+.neg-text { color: var(--bad); }
+.detail-head { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; justify-content: space-between; }
+.detail-head h1 { margin: 0; }

@@ -16,11 +16,13 @@ const TYPE_HINT: Partial<Record<TxType, string>> = {
 
 interface Props {
   existing?: Transaction;
+  /** For a new entry: start on this account (from an account's page). */
+  accountId?: string;
   onDone: () => void;
 }
 
 /** Every field: type, account (type first), transfers, lending (person), notes. Add or edit. */
-export function TransactionForm({ existing, onDone }: Props) {
+export function TransactionForm({ existing, accountId, onDone }: Props) {
   const allAccounts = useAccounts(true).data ?? [];
   // Active accounts, plus inactive ones this entry already uses so editing doesn't lose them.
   const accounts = allAccounts.filter(
@@ -32,7 +34,7 @@ export function TransactionForm({ existing, onDone }: Props) {
     date: existing?.date ?? today(),
     amount: existing?.amount ?? "",
     type: existing?.type ?? "expense",
-    account_id: existing?.account_id ?? accounts[0]?.id ?? "",
+    account_id: existing?.account_id ?? accountId ?? accounts[0]?.id ?? "",
     to_account_id: existing?.to_account_id ?? null,
     category_id: existing?.category_id ?? null,
     description: existing?.description ?? "",
