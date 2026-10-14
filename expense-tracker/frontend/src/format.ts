@@ -1,4 +1,4 @@
-import type { Account, Category } from "./api";
+import type { Account, Category, PayType, TxType } from "./api";
 
 const inr = new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 });
 const inrExact = new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", minimumFractionDigits: 2 });
@@ -43,13 +43,6 @@ export function categoryLabel(c: Category | undefined): string {
   return c ? `${c.parent_name} › ${c.sub_name}` : "Uncategorized";
 }
 
-export const PAY_TYPE_LABEL: Record<string, string> = {
-  bank: "Bank",
-  credit_card: "Credit card",
-  share_broker: "Share broker",
-  cash: "Cash",
-};
-
 const PAY_TYPE_SHORT: Record<string, string> = {
   bank: "bank",
   credit_card: "card",
@@ -63,4 +56,46 @@ export function accountLabel(account: Account | undefined, all: Account[]): stri
   const key = account.name.toLowerCase();
   const shared = all.some((a) => a.id !== account.id && a.name.toLowerCase() === key);
   return shared ? `${account.name} · ${PAY_TYPE_SHORT[account.pay_type]}` : account.name;
+}
+
+/** The three primary account types. Cash lives under Bank. */
+export type AccountGroup = "bank" | "credit_card" | "share_broker";
+export const ACCOUNT_GROUPS: AccountGroup[] = ["bank", "credit_card", "share_broker"];
+export const GROUP_LABEL: Record<AccountGroup, string> = {
+  bank: "Bank",
+  credit_card: "Credit Card",
+  share_broker: "Share Market Broker",
+};
+export const GROUP_PLURAL: Record<AccountGroup, string> = {
+  bank: "Bank accounts",
+  credit_card: "Credit cards",
+  share_broker: "Share market brokers",
+};
+export const GROUP_ICON: Record<AccountGroup, string> = { bank: "🏦", credit_card: "💳", share_broker: "📈" };
+
+export function groupOf(payType: PayType): AccountGroup {
+  return payType === "cash" ? "bank" : payType;
+}
+
+export const TX_TYPE_LABEL: Record<TxType, string> = {
+  expense: "Expense",
+  income: "Income",
+  transfer: "Transfer",
+  refund: "Refund",
+  buy: "Buy",
+  sell: "Sell",
+};
+
+/** Money into the account the row is on ("+"), out of it ("−"), or a transfer (no sign). */
+export function txSign(type: TxType): string {
+  if (type === "income" || type === "refund" || type === "sell") return "+";
+  if (type === "transfer") return "";
+  return "−";
+}
+
+/** The category kind a transaction type takes; null when it takes none (buy, sell). */
+export function categoryKind(type: TxType): "expense" | "income" | "transfer" | null {
+  if (type === "refund") return "expense";
+  if (type === "buy" || type === "sell") return null;
+  return type;
 }

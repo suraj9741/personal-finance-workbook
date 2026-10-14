@@ -226,6 +226,9 @@ th { font-size: 0.8rem; color: var(--muted); font-weight: 600; background: var(-
 .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
 td.income { color: var(--income); }
 td.expense { color: var(--expense); }
+td.refund, td.sell { color: var(--income); }
+td.buy { color: var(--transfer); }
+.num.expense { color: var(--expense); }
 td.transfer { color: var(--transfer); }
 .actions { white-space: nowrap; text-align: right; }
 
@@ -269,4 +272,18 @@ td.transfer { color: var(--transfer); }
   .qa-amount { width: 100%; }
   .quick-add > select, .quick-add > input[type="date"] { flex: 1; }
   .content { padding: 0.75rem; }
+}
+
+/* Accounts */
+.segmented.wrap { flex-wrap: wrap; }
+.plain-fieldset { border: 0; padding: 0; margin: 0; display: grid; gap: 0.3rem; min-width: 0; }
+.plain-fieldset legend { font-size: 0.9rem; color: var(--muted); padding: 0; margin-bottom: 0.2rem; }
+.account-picker { display: inline-flex; gap: 0.4rem; flex-wrap: wrap; align-items: center; }
+.account-picker.buttons { display: grid; gap: 0.35rem; }
+.account-picker.buttons .segmented { margin-bottom: 0; }
+.form-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem; }
+.account-list li { padding: 0.4rem 0; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+.account-list li:last-child { border-bottom: 0; }
+@media (max-width: 640px) {
+  .form-pair { grid-template-columns: 1fr; }
 }

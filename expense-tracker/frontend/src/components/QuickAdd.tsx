@@ -2,8 +2,9 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { useRef, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { api, post, type Suggestion, type Transaction, type TransactionInput } from "../api";
-import { accountLabel, categoryLabel, money, today } from "../format";
+import { categoryLabel, money, today } from "../format";
 import { useAccounts, useCategories, useRefreshMoney } from "../hooks";
+import { AccountPicker } from "./AccountPicker";
 
 const LAST_ACCOUNT = "et:lastAccount";
 
@@ -46,7 +47,7 @@ export function QuickAdd() {
       const d = new Date(Date.now() - 86400000);
       const iso = new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
       return api<{ items: Transaction[] }>(`/transactions?scope=me&limit=50&month=${iso.slice(0, 7)}`).then((page) =>
-        page.items.filter((t) => t.date === iso && t.type !== "transfer"),
+        page.items.filter((t) => t.date === iso && (t.type === "expense" || t.type === "income")),
       );
     },
     staleTime: 60_000,
@@ -116,8 +117,8 @@ export function QuickAdd() {
     return (
       <div className="quick-add" role="status">
         <p className="qa-msg hint">
-          Welcome! Add your first account (a bank, card or cash) in <Link to="/settings">Settings</Link>. Your
-          categories are ready, and you can change them there too. Then you can start adding expenses here.
+          Welcome! Add your first account (a bank, card, broker or cash) on the <Link to="/accounts">Accounts</Link>{" "}
+          page. Your categories are ready, and you can change them in Settings. Then you can start adding expenses here.
         </p>
       </div>
     );
@@ -161,14 +162,7 @@ export function QuickAdd() {
           </ul>
         )}
       </span>
-      <select aria-label="Account" value={account} onChange={(e) => setAccountId(e.target.value)}>
-        {accounts.map((a) => (
-          <option key={a.id} value={a.id}>
-            {accountLabel(a, accounts)}
-            {a.visibility === "private" ? " (private)" : ""}
-          </option>
-        ))}
-      </select>
+      <AccountPicker accounts={accounts} value={account} onChange={setAccountId} variant="select" />
       <input type="date" aria-label="Date" value={date} onChange={(e) => setDate(e.target.value)} />
       <button type="submit" className="primary" disabled={save.isPending}>
         Add
@@ -185,7 +179,7 @@ export function QuickAdd() {
       )}
       {/debt|credit card bill|card bill/i.test(description) && (
         <p className="qa-msg hint">
-          Paying a card bill? Use the full form: Transfer › Self Transfer › Bank to Credit, so card spends aren't counted twice.
+          Paying a card bill? Use the full form: a Transfer from the bank to the card, so card spends aren't counted twice.
         </p>
       )}
     </form>
