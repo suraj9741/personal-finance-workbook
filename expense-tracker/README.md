@@ -29,12 +29,41 @@ Then open:
 | Health / readiness | http://localhost:8000/healthz, http://localhost:8000/readyz |
 | Prometheus metrics | http://localhost:8000/metrics |
 
-Both ports bind to `127.0.0.1`, so nothing else on your Wi-Fi can reach the app.
+The app (`:8080`) binds to `0.0.0.0` so other devices can reach it over Tailscale (see
+[Reach it from other devices](#reach-it-from-other-devices-tailscale)). That also opens it to
+anyone on your Wi-Fi. The API (`:8000`) still binds to `127.0.0.1`; other devices reach it
+only through nginx's `/api` proxy.
 
 Your accounts and categories come from [`config/seed.yaml`](config/seed.yaml) (see
 [Accounts and categories](#accounts-and-categories-configseedyaml) below). People you invite
 into their own household start with no accounts and the starter categories (without your
 family groups). They add their own accounts on the Accounts page.
+
+### Reach it from other devices (Tailscale)
+
+With Tailscale on the Mac and on your phone or other laptop, open
+http://apples-macbook-air.minmi-saiph.ts.net:8080 from any device on the tailnet.
+
+Two settings make this work:
+
+1. **Port binding** in `docker-compose.yml`: `"0.0.0.0:${FRONTEND_PORT:-8080}:8080"`.
+   With `127.0.0.1:` in front, Docker accepts connections from the Mac only. A request
+   arriving on the Mac's Tailscale address (`100.x.x.x`) finds nothing listening and is
+   refused.
+2. **`PUBLIC_BASE_URL`** in `.env`: `http://apples-macbook-air.minmi-saiph.ts.net:8080`.
+   The backend builds invite and password-reset links from it. With the default
+   `http://localhost:8080`, a link opened on a phone points at the phone itself and fails.
+
+![Phone or laptop reaches the Mac over Tailscale; nginx on 0.0.0.0:8080 proxies /api to the backend on 127.0.0.1:8000](docs/diagrams/tailscale-access.drawio.svg)
+
+After changing either setting, run `docker compose up -d` to recreate the containers (the
+data volume is kept). If another device still can't connect, allow Docker under System
+Settings › Network › Firewall › Options.
+
+To keep the app off your Wi-Fi, put `127.0.0.1:` back in the port binding and use
+`tailscale serve --bg 8080` instead. Tailscale then forwards
+`https://apples-macbook-air.minmi-saiph.ts.net` to localhost for tailnet devices only, over
+HTTPS. In that case set `PUBLIC_BASE_URL` to the `https://` address and `COOKIE_SECURE=true`.
 
 ### Adding people
 
@@ -121,6 +150,55 @@ browser ──► frontend (nginx, :8080) ──/api──► backend (FastAPI, 
   once and served by nginx, which also proxies `/api` to the backend, so the browser sees a
   single origin.
 - **migrate** runs before the backend starts. The backend never changes the schema itself.
+
+### CORS, and why this app doesn't need it
+
+An **origin** is scheme + host + port. `http://localhost:5173` and `http://localhost:8000`
+are different origins (different port), as are `app.com` and `api.app.com` (different host)
+and `http` and `https` (different scheme).
+
+CORS (Cross-Origin Resource Sharing) is a rule the **browser** enforces: JavaScript on a page
+from origin A may read a response from origin B only if B says A is allowed, with an
+`Access-Control-Allow-Origin` header. It exists so a page on `evil.com` can't call your API
+with your cookies and read the answer.
+
+Same origin, so no CORS. This is how the app runs, in Docker (nginx) and with `npm run dev`
+(Vite's proxy):
+
+![Same-origin request: browser to nginx to backend, no CORS check](docs/diagrams/cors-same-origin.drawio.svg)
+
+Cross origin, so CORS applies. This happens only if the browser calls the API on another
+origin directly:
+
+![Cross-origin request: OPTIONS preflight, then DELETE, each answered with Access-Control-Allow-Origin](docs/diagrams/cors-cross-origin.drawio.svg)
+
+The diagrams are draw.io files in [`docs/diagrams/`](docs/diagrams). Open a `.drawio.svg` in
+draw.io (desktop or app.diagrams.net) to edit it; the image and the diagram stay in one file.
+
+Things worth knowing:
+
+- **The server still runs the request.** CORS only stops the page's JavaScript from reading
+  the response. It does not protect the API, which is why every route here still checks the
+  session and household.
+- **Preflight.** `PUT`, `DELETE`, JSON bodies and custom headers (like `X-Requested-With`)
+  make the browser send an `OPTIONS` request first. The real request goes out only if the
+  answer allows it.
+- **Cookies are stricter.** A cross-origin request with cookies needs an exact origin (no
+  `*`) and `Access-Control-Allow-Credentials: true`.
+- **No browser, no CORS.** Service-to-service calls, `curl` and Postman never involve it.
+  In a microservice setup, CORS matters only where the browser meets your system. A gateway
+  or reverse proxy in front of every service (what nginx does here) avoids it altogether.
+
+| Situation | CORS? |
+| --- | --- |
+| Page and API behind the same nginx / gateway | No |
+| Page and API on different ports, subdomains or domains | Yes: the API sends `Access-Control-Allow-*` and answers `OPTIONS` |
+| Backend calling another backend, or `curl` | No |
+
+The frontend always calls a relative `/api/v1` (`frontend/src/api.ts`), and both nginx and
+the Vite dev server proxy it, so `CORS_ORIGINS` in `.env` (comma-separated) is only needed if
+a page on another origin calls the API directly, such as a separate app or a frontend
+changed to use a full API URL. Exposing the app over Tailscale does not need it.
 
 ### Security model
 
