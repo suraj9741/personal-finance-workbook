@@ -1,10 +1,14 @@
 import { useMutation } from "@tanstack/react-query";
-import { useState, type FormEvent } from "react";
+import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 import { del, patch, post, type Transaction, type TransactionInput, type TxType } from "../api";
-import { TX_TYPE_LABEL, categoryKind, groupOf, today } from "../format";
+import { TX_TYPE_LABEL, categoryKind, groupOf, money, today } from "../format";
+import { focusFirstInvalid, invalidProps, splitServerError, type FieldErrors } from "../forms";
 import { useAccounts, useCategories, useRefreshMoney } from "../hooks";
 import { AccountPicker } from "./AccountPicker";
 import { CategoryPicker } from "./CategoryPicker";
+import { BusyLabel, FieldError } from "./FormBits";
+import { useModal } from "./modal-context";
+import { useToasts } from "./toast-context";
 
 const TYPES: TxType[] = ["expense", "income", "transfer", "refund", "buy", "sell"];
 const TYPE_HINT: Partial<Record<TxType, string>> = {
@@ -13,6 +17,21 @@ const TYPE_HINT: Partial<Record<TxType, string>> = {
   buy: "Shares or funds bought with the broker account's cash. Not an expense.",
   sell: "Shares or funds sold. Not income. Add what they cost to track realized profit.",
 };
+
+const FIELDS = ["amount", "date", "account_id", "to_account_id", "category_id", "description", "cost_basis", "counterparty", "notes"];
+
+/** What can be checked before sending; the server checks the rest. */
+function validate(form: TransactionInput): FieldErrors {
+  const errors: FieldErrors = {};
+  if (!form.account_id) errors.account_id = "Choose an account.";
+  if (form.type === "transfer") {
+    if (!form.to_account_id) errors.to_account_id = "Choose the account the money goes to.";
+    else if (form.to_account_id === form.account_id) errors.to_account_id = "Pick a different account from the one it comes from.";
+  }
+  if (!(Number(form.amount) > 0)) errors.amount = "Enter an amount more than 0.";
+  if (!form.date) errors.date = "Pick a date.";
+  return errors;
+}
 
 interface Props {
   existing?: Transaction;
@@ -42,8 +61,29 @@ export function TransactionForm({ existing, accountId, onDone }: Props) {
     counterparty: existing?.counterparty ?? "",
     notes: existing?.notes ?? "",
   }));
+  const [initial] = useState(() => JSON.stringify(form));
+  const [errors, setErrors] = useState<FieldErrors>({});
+  // Bumped on each failed submit, so the cursor jumps to the problem then and not while typing.
+  const [attempt, setAttempt] = useState(0);
   const [error, setError] = useState("");
-  const set = (changes: Partial<TransactionInput>) => setForm((f) => ({ ...f, ...changes }));
+  const formId = useId();
+  const formRef = useRef<HTMLFormElement>(null);
+  const modal = useModal();
+  const toasts = useToasts();
+  const done = modal?.close ?? onDone;
+  const set = (changes: Partial<TransactionInput>) => {
+    setForm((f) => ({ ...f, ...changes }));
+    // A fixed field stops showing its old message.
+    setErrors((e) => (Object.keys(changes).some((k) => e[k]) ? Object.fromEntries(Object.entries(e).filter(([k]) => !(k in changes))) : e));
+  };
+
+  useEffect(() => {
+    modal?.setDirty(JSON.stringify(form) !== initial);
+  }, [form, initial, modal]);
+
+  useEffect(() => {
+    if (attempt) focusFirstInvalid(formRef.current);
+  }, [attempt]);
   const category = categories.find((c) => c.id === form.category_id);
   const needsPerson = category?.stats_group === "lent" || category?.stats_group === "repaid";
 
@@ -62,26 +102,44 @@ export function TransactionForm({ existing, accountId, onDone }: Props) {
     },
     onSuccess: () => {
       refresh();
-      onDone();
+      done();
     },
-    onError: (e: Error) => setError(e.message),
-  });
-  const remove = useMutation({
-    mutationFn: () => del(`/transactions/${existing!.id}`),
-    onSuccess: () => {
-      refresh();
-      onDone();
+    onError: (e: Error) => {
+      const split = splitServerError(e, FIELDS);
+      setErrors(split.errors);
+      setError(split.general);
+      setAttempt((n) => n + 1);
     },
   });
 
   function submit(event: FormEvent) {
     event.preventDefault();
+    if (save.isPending) return;
     setError("");
-    save.mutate();
+    // Same fallback as the save: accounts can arrive after the form opened with none chosen.
+    const found = validate({ ...form, account_id: form.account_id || accounts[0]?.id || "" });
+    setErrors(found);
+    if (Object.keys(found).length === 0) save.mutate();
+    else setAttempt((n) => n + 1);
   }
 
+  // Gone from the list at once; the delete is sent when Undo runs out.
+  function remove() {
+    const t = existing!;
+    toasts.deferDelete({
+      id: t.id,
+      text: `Deleted ${t.description || TX_TYPE_LABEL[t.type]} ${money(t.amount)}`,
+      commit: (keepalive) => del(`/transactions/${t.id}`, keepalive),
+      after: refresh,
+    });
+    done();
+  }
+
+  const busy = save.isPending;
+  const field = (name: string) => invalidProps(errors, name, formId);
+
   return (
-    <form className="tx-form" onSubmit={submit}>
+    <form ref={formRef} className="tx-form" onSubmit={submit} noValidate aria-busy={busy}>
       <div className="segmented wrap" role="radiogroup" aria-label="Transaction type">
         {TYPES.map((k) => (
           <button
@@ -103,7 +161,7 @@ export function TransactionForm({ existing, accountId, onDone }: Props) {
         ))}
       </div>
       {TYPE_HINT[form.type] && <p className="hint">{TYPE_HINT[form.type]}</p>}
-      <fieldset className="plain-fieldset">
+      <fieldset className="plain-fieldset" {...field("account_id")}>
         <legend>{form.type === "transfer" ? "From account" : "Account"}</legend>
         <AccountPicker
           accounts={accounts}
@@ -112,9 +170,10 @@ export function TransactionForm({ existing, accountId, onDone }: Props) {
           groups={form.type === "buy" || form.type === "sell" ? ["share_broker"] : undefined}
           onChange={(id) => set({ account_id: id })}
         />
+        <FieldError errors={errors} name="account_id" formId={formId} />
       </fieldset>
       {form.type === "transfer" && (
-        <fieldset className="plain-fieldset">
+        <fieldset className="plain-fieldset" {...field("to_account_id")}>
           <legend>To account</legend>
           <AccountPicker
             accounts={accounts}
@@ -123,21 +182,25 @@ export function TransactionForm({ existing, accountId, onDone }: Props) {
             exclude={form.account_id}
             onChange={(id) => set({ to_account_id: id || null })}
           />
+          <FieldError errors={errors} name="to_account_id" formId={formId} />
         </fieldset>
       )}
       <label>
         Amount (₹)
-        <input inputMode="decimal" required value={form.amount} onChange={(e) => set({ amount: e.target.value })} />
+        <input inputMode="decimal" required data-autofocus value={form.amount} onChange={(e) => set({ amount: e.target.value })} {...field("amount")} />
+        <FieldError errors={errors} name="amount" formId={formId} />
       </label>
       {form.type === "sell" && (
         <label>
           What the sold units cost (₹, optional)
-          <input inputMode="decimal" value={form.cost_basis ?? ""} onChange={(e) => set({ cost_basis: e.target.value })} />
+          <input inputMode="decimal" value={form.cost_basis ?? ""} onChange={(e) => set({ cost_basis: e.target.value })} {...field("cost_basis")} />
+          <FieldError errors={errors} name="cost_basis" formId={formId} />
         </label>
       )}
       <label>
         Date
-        <input type="date" required value={form.date} onChange={(e) => set({ date: e.target.value })} />
+        <input type="date" required value={form.date} onChange={(e) => set({ date: e.target.value })} {...field("date")} />
+        <FieldError errors={errors} name="date" formId={formId} />
       </label>
       {categoryKind(form.type) && (
         <label>
@@ -158,7 +221,8 @@ export function TransactionForm({ existing, accountId, onDone }: Props) {
       )}
       <label>
         Description
-        <input value={form.description} maxLength={200} onChange={(e) => set({ description: e.target.value })} />
+        <input value={form.description} maxLength={200} onChange={(e) => set({ description: e.target.value })} {...field("description")} />
+        <FieldError errors={errors} name="description" formId={formId} />
       </label>
       {(needsPerson || form.counterparty) && (
         <label>
@@ -170,20 +234,20 @@ export function TransactionForm({ existing, accountId, onDone }: Props) {
         Notes
         <textarea rows={2} value={form.notes ?? ""} onChange={(e) => set({ notes: e.target.value })} />
       </label>
-      {error && <p className="error">{error}</p>}
+      {error && (
+        <p className="error" role="alert">
+          {error}
+        </p>
+      )}
       <div className="row">
-        <button type="submit" className="primary" disabled={save.isPending}>
-          {existing ? "Save changes" : "Add transaction"}
+        <button type="submit" className="primary" disabled={busy}>
+          <BusyLabel busy={busy} idle={existing ? "Save changes" : "Add transaction"} working={existing ? "Saving…" : "Adding…"} />
         </button>
-        <button type="button" onClick={onDone}>
+        <button type="button" disabled={busy} onClick={modal?.requestClose ?? onDone}>
           Cancel
         </button>
         {existing && (
-          <button
-            type="button"
-            className="danger"
-            onClick={() => window.confirm("Delete this transaction?") && remove.mutate()}
-          >
+          <button type="button" className="danger" disabled={busy} onClick={remove}>
             Delete
           </button>
         )}

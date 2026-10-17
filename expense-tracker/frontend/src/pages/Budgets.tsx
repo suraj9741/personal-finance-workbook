@@ -1,6 +1,7 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { api, put, type Category, type MonthStats } from "../api";
+import { BusyLabel } from "../components/FormBits";
 import { MonthPicker } from "../components/MonthPicker";
 import { budgetDiff, currentMonth, money, monthLabel, shiftMonth } from "../format";
 import { useCategories, useMe, useRefreshMoney } from "../hooks";
@@ -13,6 +14,19 @@ interface BudgetsOut {
 }
 
 type Kind = "expense" | "income";
+/** Unsaved budget edits, per month: month → category id → amount typed. */
+type Drafts = Record<string, Record<string, string>>;
+
+// Per tab, so edits survive switching month or page but not closing the tab (which warns first).
+const DRAFTS_KEY = "et:budgetDrafts";
+
+function readDrafts(): Drafts {
+  try {
+    return JSON.parse(sessionStorage.getItem(DRAFTS_KEY) ?? "{}") as Drafts;
+  } catch {
+    return {};
+  }
+}
 
 export function Budgets() {
   const [month, setMonth] = useState(currentMonth);
@@ -21,17 +35,41 @@ export function Budgets() {
   const refresh = useRefreshMoney();
   const budgets = useQuery({ queryKey: ["budgets", month], queryFn: () => api<BudgetsOut>(`/budgets?month=${month}`) });
   const stats = useQuery({ queryKey: ["stats", month, "household"], queryFn: () => api<MonthStats>(`/stats/month?month=${month}&scope=household`) });
-  // Unsaved edits sit on top of the saved budgets, and are dropped when the month changes.
-  const [edits, setEdits] = useState<{ month: string; values: Record<string, string> }>({ month, values: {} });
+  // Unsaved edits sit on top of the saved budgets and are kept per month until saved or discarded.
+  const [drafts, setDrafts] = useState<Drafts>(readDrafts);
   const [onlyThisMonth, setOnlyThisMonth] = useState(false);
   const [message, setMessage] = useState("");
   const carries = budgets.data?.carries_forward ?? true;
 
   const savedLines = useMemo(() => new Map((budgets.data?.items ?? []).map((i) => [i.category_id, i])), [budgets.data]);
-  const pending = edits.month === month ? edits.values : {};
+  const pending = useMemo(() => drafts[month] ?? {}, [drafts, month]);
   const value = (id: string) => pending[id] ?? savedLines.get(id)?.amount ?? "";
-  const setDraft = (id: string, v: string) => setEdits((e) => ({ month, values: { ...(e.month === month ? e.values : {}), [id]: v } }));
+  const setDraft = (id: string, v: string) => setDrafts((d) => ({ ...d, [month]: { ...(d[month] ?? {}), [id]: v } }));
   const changed = Object.entries(pending).filter(([id, v]) => Number(v || 0) !== Number(savedLines.get(id)?.amount ?? 0));
+  const discard = () =>
+    setDrafts((d) => {
+      const next = { ...d };
+      delete next[month];
+      return next;
+    });
+  const hasDrafts = Object.values(drafts).some((values) => Object.keys(values).length > 0);
+
+  useEffect(() => {
+    try {
+      if (hasDrafts) sessionStorage.setItem(DRAFTS_KEY, JSON.stringify(drafts));
+      else sessionStorage.removeItem(DRAFTS_KEY);
+    } catch {
+      /* storage unavailable: drafts last until reload */
+    }
+  }, [drafts, hasDrafts]);
+
+  // Closing or reloading the tab with unsaved budgets asks first.
+  useEffect(() => {
+    if (!hasDrafts) return;
+    const warn = (event: BeforeUnloadEvent) => event.preventDefault();
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [hasDrafts]);
 
   const nextChange = useMemo(() => new Map((budgets.data?.next_changes ?? []).map((n) => [n.category_id, n])), [budgets.data]);
   const actual = useMemo(() => new Map((stats.data?.categories ?? []).map((l) => [l.category_id, Number(l.actual)])), [stats.data]);
@@ -55,7 +93,7 @@ export function Budgets() {
       setMessage(
         [forward ? `Budgets saved for ${monthLabel(month)} and the months after it.` : `Budgets saved for ${monthLabel(month)} only.`, ...stops].join(" "),
       );
-      setEdits({ month, values: {} });
+      discard();
       refresh();
     },
     onError: (e: Error) => setMessage(e.message),
@@ -84,18 +122,11 @@ export function Budgets() {
             setMessage("");
           }}
         />
-        {isOwner && (
-          <div className="row">
-            {carries ? (
-              <label className="row small">
-                <input type="checkbox" checked={onlyThisMonth} onChange={(e) => setOnlyThisMonth(e.target.checked)} />
-                Only this month
-              </label>
-            ) : null}
-            <button type="button" className="primary" disabled={changed.length === 0} onClick={() => save.mutate()}>
-              Save budgets
-            </button>
-          </div>
+        {isOwner && carries && (
+          <label className="row small">
+            <input type="checkbox" checked={onlyThisMonth} onChange={(e) => setOnlyThisMonth(e.target.checked)} />
+            Only this month
+          </label>
         )}
       </div>
       <p className="muted small">
@@ -108,6 +139,21 @@ export function Budgets() {
               : "A budget you set applies to this month and every month after it, until you change it. Earlier months keep theirs."}
       </p>
       {message && <p className="notice">{message}</p>}
+      {isOwner && changed.length > 0 && (
+        <div className="unsaved-bar" role="region" aria-label="Unsaved budgets">
+          <span>
+            {changed.length} unsaved {changed.length === 1 ? "change" : "changes"} for {monthLabel(month)}
+          </span>
+          <div className="row">
+            <button type="button" className="ghost" disabled={save.isPending} onClick={discard}>
+              Discard
+            </button>
+            <button type="button" className="primary" disabled={save.isPending} onClick={() => save.mutate()}>
+              <BusyLabel busy={save.isPending} idle="Save budgets" working="Saving…" />
+            </button>
+          </div>
+        </div>
+      )}
       {allCategories &&
         (["expense", "income"] as const).map((kind) => (
           <BudgetSection

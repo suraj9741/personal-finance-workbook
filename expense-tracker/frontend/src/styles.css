@@ -426,27 +426,120 @@ td.transfer { color: var(--color-transfer); }
 .tx-form { display: grid; gap: var(--space-3); }
 .tx-form label { display: grid; gap: var(--space-1); font-size: var(--text-callout-size); color: var(--color-text-secondary); }
 .tx-form label > input, .tx-form label > select, .tx-form label > textarea { color: var(--color-text); }
-.modal-backdrop {
-  position: fixed;
-  inset: 0;
-  background: var(--color-scrim);
-  display: grid;
-  place-items: center;
-  padding: var(--space-4);
-  z-index: 50;
-}
+/* A native <dialog>: showModal() makes the page behind inert. Enter springs in from --modal-enter-scale. */
 .modal {
+  padding: 0;
+  border: 0;
+  color: var(--color-text);
   background: var(--color-surface-raised);
   border-radius: var(--radius-xl);
   box-shadow: var(--shadow-modal);
-  padding: var(--space-5) var(--space-6) var(--space-6);
-  width: min(var(--modal-width), 100%);
+  width: min(var(--modal-width), calc(100% - 2 * var(--space-4)));
+  max-width: none;
   max-height: calc(100dvh - 2 * var(--space-4));
   overflow: auto;
+  overscroll-behavior: contain;
+  transition:
+    opacity var(--motion-fast) var(--motion-ease),
+    transform var(--motion-spring-duration) var(--motion-spring);
 }
+@starting-style {
+  .modal[open] { opacity: 0; transform: scale(var(--modal-enter-scale)); }
+}
+.modal[data-closing] { opacity: 0; transform: scale(var(--modal-enter-scale)); }
+.modal::backdrop { background: var(--color-scrim); transition: opacity var(--motion-fast) var(--motion-ease); }
+@starting-style {
+  .modal[open]::backdrop { opacity: 0; }
+}
+.modal[data-closing]::backdrop { opacity: 0; }
+html:has(.modal[open]) { overflow: hidden; }
+.modal-body { padding: var(--space-5) var(--space-6) var(--space-6); }
 .modal header { display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--space-3); }
 .modal header h2 { margin: 0; font-size: var(--text-title-size); letter-spacing: var(--text-title-tracking); }
 .modal header button { min-width: var(--control-h-sm); min-height: var(--control-h-sm); padding: 0; border-radius: var(--radius-pill); }
+.sheet-grabber { display: none; }
+/* "Discard your changes?" sits at the bottom of the popup, over the form's own buttons. */
+.discard-bar {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin: var(--space-4) calc(-1 * var(--space-6)) calc(-1 * var(--space-6));
+  padding: var(--space-3) var(--space-6);
+  background: var(--color-surface-raised);
+  box-shadow: 0 -0.5px 0 var(--color-separator);
+}
+.discard-bar p { margin: 0; font-weight: 600; }
+
+/* ---- form feedback ---- */
+.field-error { margin: 0; color: var(--color-negative); font-size: var(--text-footnote-size); }
+[aria-invalid="true"]:is(input, select, textarea) { border-color: var(--color-negative); }
+.fields { align-items: flex-end; }
+.field { display: grid; gap: var(--space-1); font-size: var(--text-footnote-size); color: var(--color-text-secondary); }
+.field > :is(input, select) { color: var(--color-text); font-size: var(--text-callout-size); }
+.inline-rename { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.inline-rename input { width: var(--field-md); }
+.unsaved-bar {
+  position: sticky;
+  bottom: var(--space-4);
+  z-index: 30;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin: var(--space-3) 0;
+  padding: var(--space-3) var(--card-padding);
+  background: var(--color-surface-raised);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-popover);
+  font-weight: 600;
+}
+
+/* ---- toasts: bottom centre, above the home indicator ---- */
+.toasts {
+  position: fixed;
+  z-index: 60;
+  left: 50%;
+  bottom: calc(var(--space-6) + env(safe-area-inset-bottom));
+  translate: -50% 0;
+  display: grid;
+  gap: var(--space-2);
+  justify-items: center;
+  width: min(var(--modal-width), calc(100% - 2 * var(--gutter)));
+  pointer-events: none;
+}
+.toast {
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  max-width: 100%;
+  padding: var(--space-2) var(--space-2) var(--space-2) var(--space-4);
+  min-height: var(--control-h);
+  border-radius: var(--radius-pill);
+  background: var(--color-toast-bg);
+  color: var(--color-toast-text);
+  box-shadow: var(--shadow-popover);
+  font-size: var(--text-callout-size);
+  transition: opacity var(--motion-fast) var(--motion-ease), transform var(--motion-spring-duration) var(--motion-spring);
+}
+@starting-style {
+  .toast { opacity: 0; transform: translateY(var(--toast-enter-y)); }
+}
+.toast.error { padding-right: var(--space-4); }
+.toast button.toast-action {
+  min-height: var(--control-h-sm);
+  padding: 0 var(--space-3);
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--color-toast-action);
+  font-weight: 600;
+}
+
 .auth { min-height: 100dvh; display: grid; place-items: center; padding: var(--space-4); }
 .auth form {
   width: min(var(--auth-width), 100%);
@@ -529,7 +622,27 @@ tfoot th { color: var(--color-text); font-weight: 600; border-top: 1px solid var
   .qa-amount { width: 100%; }
   .quick-add > select, .quick-add > input[type="date"] { flex: 1; }
   .form-pair { grid-template-columns: 1fr; }
-  .modal { padding: var(--space-4); }
+  /* Popups become bottom sheets: full width, rising from the bottom edge. */
+  .modal {
+    width: 100%;
+    margin: auto 0 0;
+    max-height: calc(100dvh - var(--space-8));
+    border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+  }
+  @starting-style {
+    .modal[open] { opacity: 1; transform: translateY(var(--sheet-enter-y)); }
+  }
+  .modal[data-closing] { opacity: 1; transform: translateY(var(--sheet-enter-y)); }
+  .modal-body { padding: var(--space-2) var(--space-4) calc(var(--space-4) + env(safe-area-inset-bottom)); }
+  .discard-bar { margin: var(--space-4) calc(-1 * var(--space-4)) calc(-1 * var(--space-4) - env(safe-area-inset-bottom)); padding: var(--space-3) var(--space-4) calc(var(--space-3) + env(safe-area-inset-bottom)); }
+  .sheet-grabber {
+    display: block;
+    width: var(--space-10);
+    height: var(--space-1);
+    margin: 0 auto var(--space-2);
+    border-radius: var(--radius-pill);
+    background: var(--color-fill-hover);
+  }
   /* Tabs move to their own scrollable row under the brand. */
   .topbar { gap: var(--space-2); }
   .topbar nav { order: 3; flex-basis: 100%; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }

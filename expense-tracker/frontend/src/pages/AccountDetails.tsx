@@ -1,9 +1,10 @@
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { api, ApiError, type AccountFigures, type Transaction } from "../api";
 import { AccountForm } from "../components/AccountForm";
 import { Modal } from "../components/Modal";
+import { useToasts } from "../components/toast-context";
 import { MonthPicker } from "../components/MonthPicker";
 import { TransactionForm } from "../components/TransactionForm";
 import {
@@ -31,6 +32,8 @@ export function AccountDetails() {
   const [filters, setFilters] = useState({ date_from: "", date_to: "", type: "", category_id: "" });
   const [limit, setLimit] = useState(PAGE);
   const [editing, setEditing] = useState<"account" | "new" | Transaction | null>(null);
+  const { hidden } = useToasts();
+  const navigate = useNavigate();
 
   const summary = useQuery({
     queryKey: ["account-summary", id, month],
@@ -56,7 +59,7 @@ export function AccountDetails() {
   const account = s.account;
   const group = groupOf(account.pay_type);
   const canManage = account.visibility === "private" ? account.owner_user_id === me?.id : me?.role === "owner";
-  const items = list.data?.items ?? [];
+  const items = (list.data?.items ?? []).filter((t) => !hidden.has(t.id));
   const setFilter = (key: keyof typeof filters, value: string) => {
     setFilters((f) => ({ ...f, [key]: value }));
     setLimit(PAGE);
@@ -86,7 +89,7 @@ export function AccountDetails() {
         </div>
         <div className="row wrap">
           {account.is_active && (
-            <button type="button" className="primary" onClick={() => setEditing("new")}>
+            <button type="button" className="primary" data-return-focus onClick={() => setEditing("new")}>
               Add transaction
             </button>
           )}
@@ -244,7 +247,7 @@ export function AccountDetails() {
 
       {editing === "account" && (
         <Modal title={`Edit ${account.name}`} onClose={() => setEditing(null)}>
-          <AccountForm existing={account} onDone={() => setEditing(null)} />
+          <AccountForm existing={account} onDone={() => setEditing(null)} onDeleted={() => navigate("/accounts")} />
         </Modal>
       )}
       {editing && editing !== "account" && (

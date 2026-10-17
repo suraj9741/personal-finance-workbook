@@ -43,6 +43,10 @@
   --color-transfer: var(--color-text-secondary);
 
   /* ---- materials ---- */
+  /* Toasts are a dark HUD in light mode and a light one in dark mode. */
+  --color-toast-bg: light-dark(#1d1d1f, #f5f5f7);
+  --color-toast-text: light-dark(#f5f5f7, #1d1d1f);
+  --color-toast-action: light-dark(#2997ff, #0066cc);
   --color-scrim: light-dark(rgb(0 0 0 / 0.32), rgb(0 0 0 / 0.6));
   --material-bar: light-dark(rgb(255 255 255 / 0.72), rgb(28 28 30 / 0.72));
   --material-blur: blur(20px) saturate(180%);
@@ -145,6 +149,10 @@
   /* Critically damped spring (damping 1, response .3s). */
   --motion-spring: linear(0, 0.142, 0.38, 0.588, 0.74, 0.841, 0.905, 0.945, 0.968, 0.982, 0.99, 0.994, 0.997, 0.998, 1);
   --motion-spring-duration: 440ms;
+  /* Popups grow in from this scale; phone sheets rise from this far below. */
+  --modal-enter-scale: 0.96;
+  --sheet-enter-y: 100%;
+  --toast-enter-y: 0.5rem;
 }
 
 :root[data-theme="light"] { color-scheme: light; }
@@ -173,6 +181,9 @@
     --motion-spring: var(--motion-ease);
     --motion-spring-duration: 200ms;
     --motion-slow: 200ms;
+    --modal-enter-scale: 1;
+    --sheet-enter-y: 0;
+    --toast-enter-y: 0;
   }
 }
 

@@ -193,23 +193,27 @@ export class ApiError extends Error {
   constructor(
     public status: number,
     message: string,
+    /** For a 422 on one input: the field's name and the message without it. */
+    public field?: string,
+    public fieldMessage?: string,
   ) {
     super(message);
   }
 }
 
-function errorText(body: unknown, status: number): string {
+function errorParts(body: unknown, status: number): { message: string; field?: string; fieldMessage?: string } {
   const detail = (body as { detail?: unknown } | null)?.detail;
-  if (typeof detail === "string") return detail;
+  if (typeof detail === "string") return { message: detail };
   if (Array.isArray(detail) && detail.length > 0) {
     const first = detail[0] as { loc?: unknown[]; msg?: string };
     const field = first.loc?.[first.loc.length - 1];
-    return field ? `${String(field)}: ${first.msg}` : (first.msg ?? "Invalid input");
+    const msg = first.msg ?? "Invalid input";
+    return field ? { message: `${String(field)}: ${msg}`, field: String(field), fieldMessage: msg } : { message: msg };
   }
-  return `Request failed (${status})`;
+  return { message: `Request failed (${status})` };
 }
 
-export async function api<T>(path: string, init: { method?: string; body?: unknown } = {}): Promise<T> {
+export async function api<T>(path: string, init: { method?: string; body?: unknown; keepalive?: boolean } = {}): Promise<T> {
   const response = await fetch(`/api/v1${path}`, {
     method: init.method ?? "GET",
     credentials: "same-origin",
@@ -218,14 +222,19 @@ export async function api<T>(path: string, init: { method?: string; body?: unkno
       ...(init.body !== undefined ? { "Content-Type": "application/json" } : {}),
     },
     body: init.body !== undefined ? JSON.stringify(init.body) : undefined,
+    // Lets a delete still reach the server when it's sent as the page closes.
+    ...(init.keepalive ? { keepalive: true } : {}),
   });
   if (response.status === 204) return undefined as T;
   const body: unknown = await response.json().catch(() => null);
-  if (!response.ok) throw new ApiError(response.status, errorText(body, response.status));
+  if (!response.ok) {
+    const { message, field, fieldMessage } = errorParts(body, response.status);
+    throw new ApiError(response.status, message, field, fieldMessage);
+  }
   return body as T;
 }
 
 export const post = <T>(path: string, body: unknown = {}) => api<T>(path, { method: "POST", body });
 export const patch = <T>(path: string, body: unknown) => api<T>(path, { method: "PATCH", body });
 export const put = <T>(path: string, body: unknown) => api<T>(path, { method: "PUT", body });
-export const del = (path: string) => api<void>(path, { method: "DELETE" });
+export const del = (path: string, keepalive = false) => api<void>(path, { method: "DELETE", keepalive });

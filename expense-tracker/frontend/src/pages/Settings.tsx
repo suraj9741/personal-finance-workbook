@@ -1,8 +1,11 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { del, patch, post, type Category, type InviteLink, type Kind, type StatsGroup } from "../api";
+import { api, del, patch, post, type Category, type InviteLink, type Kind, type Member, type StatsGroup } from "../api";
 import { CategoryPicker } from "../components/CategoryPicker";
+import { BusyLabel, InlineRename } from "../components/FormBits";
+import { Modal } from "../components/Modal";
+import { useToasts } from "../components/toast-context";
 import { categoryLabel } from "../format";
 import { useCategories, useMe, useMembers, useRules } from "../hooks";
 
@@ -52,15 +55,24 @@ function Profile() {
     <details className="card">
       <summary>My password</summary>
       <form
-        className="row wrap"
+        className="row wrap fields"
+        aria-busy={change.isPending}
         onSubmit={(e) => {
           e.preventDefault();
-          change.mutate();
+          if (!change.isPending) change.mutate();
         }}
       >
-        <input type="password" placeholder="Current password" autoComplete="current-password" value={current} onChange={(e) => setCurrent(e.target.value)} required />
-        <input type="password" placeholder="New password (10+ characters)" autoComplete="new-password" minLength={10} value={next} onChange={(e) => setNext(e.target.value)} required />
-        <button type="submit">Change</button>
+        <label className="field">
+          Current password
+          <input type="password" autoComplete="current-password" value={current} onChange={(e) => setCurrent(e.target.value)} required />
+        </label>
+        <label className="field">
+          New password (10+ characters)
+          <input type="password" autoComplete="new-password" minLength={10} value={next} onChange={(e) => setNext(e.target.value)} required />
+        </label>
+        <button type="submit" disabled={change.isPending}>
+          <BusyLabel busy={change.isPending} idle="Change password" working="Changing…" />
+        </button>
       </form>
       {message && <p className="notice">{message}</p>}
     </details>
@@ -73,6 +85,7 @@ function Members({ isOwner }: { isOwner: boolean }) {
   const refresh = useInvalidate("members");
   const [invite, setInvite] = useState<InviteLink | null>(null);
   const [error, setError] = useState("");
+  const [removing, setRemoving] = useState<Member | null>(null);
   const create = useMutation({
     mutationFn: (role: string) => post<InviteLink>("/invites", { role }),
     onSuccess: setInvite,
@@ -85,8 +98,10 @@ function Members({ isOwner }: { isOwner: boolean }) {
   });
   const remove = useMutation({
     mutationFn: (id: string) => del(`/household/members/${id}`),
-    onSuccess: refresh,
-    onError: (e: Error) => setError(e.message),
+    onSuccess: () => {
+      refresh();
+      setRemoving(null);
+    },
   });
   return (
     <div className="card">
@@ -103,7 +118,14 @@ function Members({ isOwner }: { isOwner: boolean }) {
                   <option value="owner">Owner</option>
                   <option value="member">Member</option>
                 </select>
-                <button type="button" className="ghost small danger" onClick={() => window.confirm(`Remove ${m.display_name}? Their past entries stay.`) && remove.mutate(m.user_id)}>
+                <button
+                  type="button"
+                  className="ghost small danger"
+                  onClick={() => {
+                    remove.reset();
+                    setRemoving(m);
+                  }}
+                >
                   Remove
                 </button>
               </>
@@ -122,6 +144,25 @@ function Members({ isOwner }: { isOwner: boolean }) {
       )}
       {invite && <InviteBox invite={invite} />}
       {error && <p className="error">{error}</p>}
+      {removing && (
+        // Removing someone logs them out and only a site admin can bring them back, so this one still asks first.
+        <Modal title={`Remove ${removing.display_name}?`} onClose={() => setRemoving(null)}>
+          <p>They'll be logged out and can't sign in. Their past entries stay. Only a site admin can undo this.</p>
+          {remove.error && (
+            <p className="error" role="alert">
+              {remove.error.message}
+            </p>
+          )}
+          <div className="row">
+            <button type="button" data-autofocus disabled={remove.isPending} onClick={() => setRemoving(null)}>
+              Cancel
+            </button>
+            <button type="button" className="danger filled" disabled={remove.isPending} onClick={() => remove.mutate(removing.user_id)}>
+              <BusyLabel busy={remove.isPending} idle={`Remove ${removing.display_name}`} working="Removing…" />
+            </button>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }
@@ -163,7 +204,8 @@ function Accounts() {
 }
 
 function Rules() {
-  const rules = useRules().data ?? [];
+  const { hidden, deferDelete } = useToasts();
+  const rules = (useRules().data ?? []).filter((r) => !hidden.has(r.id));
   const categories = useCategories(true).data ?? [];
   const refresh = useInvalidate("rules", "transactions", "stats", "attention");
   const [pattern, setPattern] = useState("");
@@ -178,7 +220,8 @@ function Rules() {
     },
     onError: (e: Error) => setMessage(e.message),
   });
-  const remove = useMutation({ mutationFn: (id: string) => del(`/rules/${id}`), onSuccess: refresh });
+  const remove = (id: string, text: string) =>
+    deferDelete({ id, text: `Deleted rule "${text}"`, commit: (keepalive) => del(`/rules/${id}`, keepalive), after: refresh });
   const apply = useMutation({
     mutationFn: () => post<{ updated: number }>("/rules/apply"),
     onSuccess: (r) => {
@@ -196,28 +239,36 @@ function Rules() {
             <span>
               "{r.pattern}" → {categoryLabel(categories.find((c) => c.id === r.category_id))} <small className="muted">priority {r.priority}</small>
             </span>
-            <button type="button" className="ghost small" onClick={() => remove.mutate(r.id)}>
+            <button type="button" className="ghost small" aria-label={`Delete rule "${r.pattern}"`} onClick={() => remove(r.id, r.pattern)}>
               Delete
             </button>
           </li>
         ))}
       </ul>
       <form
-        className="row wrap"
+        className="row wrap fields"
+        aria-busy={add.isPending}
         onSubmit={(e) => {
           e.preventDefault();
+          if (add.isPending) return;
           setMessage("");
           add.mutate();
         }}
       >
-        <input placeholder="Text to match, e.g. swiggy" value={pattern} onChange={(e) => setPattern(e.target.value)} required minLength={2} />
-        <select aria-label="Rule type" value={kind} onChange={(e) => { setKind(e.target.value as Kind); setCategoryId(null); }}>
-          <option value="expense">Expense</option>
-          <option value="income">Income</option>
-        </select>
+        <label className="field">
+          Text to match
+          <input placeholder="e.g. swiggy" value={pattern} onChange={(e) => setPattern(e.target.value)} required minLength={2} />
+        </label>
+        <label className="field">
+          Type
+          <select value={kind} onChange={(e) => { setKind(e.target.value as Kind); setCategoryId(null); }}>
+            <option value="expense">Expense</option>
+            <option value="income">Income</option>
+          </select>
+        </label>
         <CategoryPicker categories={categories.filter((c) => c.is_active)} kind={kind} value={categoryId} onChange={setCategoryId} />
-        <button type="submit" disabled={!categoryId}>
-          Add rule
+        <button type="submit" disabled={!categoryId || add.isPending}>
+          <BusyLabel busy={add.isPending} idle="Add rule" working="Adding…" />
         </button>
         <button type="button" className="ghost" onClick={() => apply.mutate()}>
           Apply to uncategorized
@@ -229,7 +280,8 @@ function Rules() {
 }
 
 function Categories({ isOwner }: { isOwner: boolean }) {
-  const categories = useCategories(true).data ?? [];
+  const { hidden, deferDelete, offerUndo } = useToasts();
+  const categories = (useCategories(true).data ?? []).filter((c) => !hidden.has(c.id));
   const refresh = useInvalidate("categories");
   const [kind, setKind] = useState<Kind>("expense");
   const [parent, setParent] = useState("");
@@ -248,11 +300,26 @@ function Categories({ isOwner }: { isOwner: boolean }) {
     onSuccess: refresh,
     onError: (e: Error) => setError(e.message),
   });
+  // A category that entries use can't be deleted: say so now, not 6 seconds later.
   const remove = useMutation({
-    mutationFn: (id: string) => del(`/categories/${id}`),
-    onSuccess: refresh,
+    mutationFn: (c: Category) => api<{ total: number }>(`/transactions?category_id=${c.id}&limit=1`).then(({ total }) => ({ c, total })),
+    onSuccess: ({ c, total }) => {
+      if (total > 0) return setError(`${c.sub_name} is used by ${total} ${total === 1 ? "entry" : "entries"}, so it can't be deleted. Deactivate it instead.`);
+      deferDelete({ id: c.id, text: `Deleted ${c.sub_name}`, commit: (keepalive) => del(`/categories/${c.id}`, keepalive), after: refresh });
+    },
     onError: (e: Error) => setError(e.message),
   });
+  function toggleActive(c: Category) {
+    setError("");
+    update.mutate(
+      { id: c.id, is_active: !c.is_active },
+      {
+        onSuccess: () => {
+          if (c.is_active) offerUndo({ text: `Deactivated ${c.sub_name}`, revert: () => patch(`/categories/${c.id}`, { is_active: true }).then(refresh) });
+        },
+      },
+    );
+  }
   const shown = categories.filter((c) => c.kind === kind);
   const parents = [...new Set(shown.map((c) => c.parent_name))];
 
@@ -271,21 +338,31 @@ function Categories({ isOwner }: { isOwner: boolean }) {
       {error && <p className="error">{error}</p>}
       {isOwner && (
         <form
-          className="row wrap"
+          className="row wrap fields"
+          aria-busy={add.isPending}
           onSubmit={(e) => {
             e.preventDefault();
+            if (add.isPending) return;
             setError("");
             add.mutate();
           }}
         >
-          <input list="parents" placeholder="Group (e.g. Everyday)" value={parent} onChange={(e) => setParent(e.target.value)} required />
+          <label className="field">
+            Group
+            <input list="parents" placeholder="e.g. Everyday" value={parent} onChange={(e) => setParent(e.target.value)} required />
+          </label>
           <datalist id="parents">
             {parents.map((p) => (
               <option key={p} value={p} />
             ))}
           </datalist>
-          <input placeholder="Category (e.g. Snacks)" value={sub} onChange={(e) => setSub(e.target.value)} required />
-          <button type="submit">Add category</button>
+          <label className="field">
+            Category
+            <input placeholder="e.g. Snacks" value={sub} onChange={(e) => setSub(e.target.value)} required />
+          </label>
+          <button type="submit" disabled={add.isPending}>
+            <BusyLabel busy={add.isPending} idle="Add category" working="Adding…" />
+          </button>
         </form>
       )}
       {parents.map((p) => (
@@ -310,20 +387,24 @@ function Categories({ isOwner }: { isOwner: boolean }) {
                   )}
                   {isOwner && (
                     <>
-                      <button
-                        type="button"
-                        className="ghost small"
-                        onClick={() => {
-                          const name = window.prompt("Rename category", c.sub_name);
-                          if (name && name !== c.sub_name) update.mutate({ id: c.id, sub_name: name });
-                        }}
-                      >
-                        Rename
-                      </button>
-                      <button type="button" className="ghost small" onClick={() => update.mutate({ id: c.id, is_active: !c.is_active })}>
+                      <InlineRename
+                        value={c.sub_name}
+                        label={`New name for ${c.sub_name}`}
+                        onSave={(name) => patch(`/categories/${c.id}`, { sub_name: name }).then(refresh)}
+                      />
+                      <button type="button" className="ghost small" aria-label={`${c.is_active ? "Deactivate" : "Activate"} ${c.sub_name}`} onClick={() => toggleActive(c)}>
                         {c.is_active ? "Deactivate" : "Activate"}
                       </button>
-                      <button type="button" className="ghost small danger" onClick={() => window.confirm(`Delete ${c.sub_name}?`) && remove.mutate(c.id)}>
+                      <button
+                        type="button"
+                        className="ghost small danger"
+                        aria-label={`Delete ${c.sub_name}`}
+                        disabled={remove.isPending && remove.variables?.id === c.id}
+                        onClick={() => {
+                          setError("");
+                          remove.mutate(c);
+                        }}
+                      >
                         Delete
                       </button>
                     </>
