@@ -1,0 +1,173 @@
+/*
+ * Design tokens: the only place with raw colours, sizes, shadows and timings.
+ * styles.css uses var(--…) only, so a re-theme is an edit to this file.
+ *
+ * Colours are written once as light-dark(light, dark). They follow the OS, or
+ * <html data-theme="light|dark"> when set. Contrast ratios are WCAG 2.1 against
+ * the surface they sit on (text >= 4.5:1, borders and focus >= 3:1).
+ */
+:root {
+  color-scheme: light dark;
+
+  /* ---- colour: neutrals ---- */
+  --color-bg: light-dark(#f5f5f7, #000000);
+  --color-surface: light-dark(#ffffff, #1c1c1e);
+  --color-surface-raised: light-dark(#ffffff, #2c2c2e);
+  --color-fill: light-dark(#e8e8ed, #2c2c2e);
+  --color-fill-hover: light-dark(#dcdce1, #3a3a3c);
+  --color-separator: light-dark(#d2d2d7, #38383a);
+  --color-control-border: light-dark(#86868b, #8e8e93); /* 3.6 / 5.2 */
+  --color-text: light-dark(#1d1d1f, #f5f5f7); /* 16.8 / 15.6 */
+  --color-text-secondary: light-dark(#6e6e73, #a1a1a6); /* 5.1 / 6.6; use --color-text on --color-fill */
+  --color-text-tertiary: light-dark(#8e8e93, #6e6e73); /* placeholders and disabled only */
+
+  /* ---- colour: accent (interactive only) ---- */
+  --color-accent: light-dark(#0066cc, #2997ff); /* 5.6 / 5.6 */
+  --color-accent-fill: light-dark(#0066cc, #0071e3); /* white text 5.6 / 4.7 */
+  --color-accent-fill-hover: light-dark(#0058b0, #006adb);
+  --color-accent-fill-active: light-dark(#004f9e, #0062c4);
+  --color-accent-tint: light-dark(#e5effa, #12263d);
+  --color-on-accent: #ffffff;
+  --color-focus: var(--color-accent);
+
+  /* ---- colour: meaning ---- */
+  --color-positive: light-dark(#1f7a35, #30d158); /* 5.4 / 8.4 */
+  --color-negative: light-dark(#d70015, #ff6961); /* 5.4 / 6.0 */
+  --color-warning: light-dark(#b25000, #ff9f0a); /* 4.8 / 8.3 */
+  --color-on-negative: #ffffff;
+  --color-income: var(--color-positive);
+  --color-expense: var(--color-negative);
+  --color-transfer: var(--color-text-secondary); /* own money moving: neutral */
+
+  /* ---- materials ---- */
+  --color-scrim: light-dark(rgb(0 0 0 / 0.32), rgb(0 0 0 / 0.6));
+  --material-bar: light-dark(rgb(255 255 255 / 0.72), rgb(28 28 30 / 0.72));
+  --material-blur: blur(20px) saturate(180%);
+
+  /* ---- type ---- */
+  --font-sans: -apple-system, BlinkMacSystemFont, system-ui, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --text-display: 600 2.5rem/1.1 var(--font-sans);
+  --text-display-tracking: -0.025em;
+  --text-large-title: 700 2rem/1.15 var(--font-sans);
+  --text-large-title-tracking: -0.021em;
+  --text-title: 600 1.375rem/1.25 var(--font-sans);
+  --text-title-tracking: -0.015em;
+  --text-headline: 600 1.0625rem/1.3 var(--font-sans);
+  --text-headline-tracking: -0.01em;
+  --text-body: 400 1rem/1.5 var(--font-sans);
+  --text-callout: 400 0.9375rem/1.45 var(--font-sans);
+  --text-footnote: 400 0.8125rem/1.4 var(--font-sans);
+  --text-footnote-tracking: 0.003em;
+  --text-caption: 500 0.75rem/1.35 var(--font-sans);
+  --text-caption-tracking: 0.01em;
+  --text-kpi: 600 1.625rem/1.15 var(--font-sans);
+  --text-kpi-tracking: -0.018em;
+
+  /* ---- spacing (4px base, rem so it scales with text) ---- */
+  --space-0: 0.125rem;
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.25rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+  --space-10: 2.5rem;
+  --space-12: 3rem;
+
+  /* ---- layout ---- */
+  --content-max: 72rem;
+  --gutter: var(--space-6);
+  --card-padding: var(--space-5);
+  --stack-gap: var(--space-6);
+  --field-sm: 9.5rem;
+  --field-md: 11rem;
+  --field-lg: 12rem;
+  --bar-label: 14rem;
+
+  /* ---- radii ---- */
+  --radius-sm: 0.375rem;
+  --radius-md: 0.625rem;
+  --radius-lg: 0.875rem;
+  --radius-xl: 1.25rem;
+  --radius-pill: 999px;
+
+  /* ---- elevation (light: shadow; dark: lighter surface) ---- */
+  --shadow-card: 0 1px 2px light-dark(rgb(0 0 0 / 0.05), transparent);
+  --shadow-popover: 0 4px 16px light-dark(rgb(0 0 0 / 0.12), rgb(0 0 0 / 0.5)),
+    0 0 0 0.5px light-dark(rgb(0 0 0 / 0.08), rgb(255 255 255 / 0.1));
+  --shadow-modal: 0 24px 48px light-dark(rgb(0 0 0 / 0.18), rgb(0 0 0 / 0.6)),
+    0 0 0 0.5px light-dark(rgb(0 0 0 / 0.06), rgb(255 255 255 / 0.1));
+  --shadow-thumb: 0 1px 3px rgb(0 0 0 / 0.12), 0 0 0 0.5px rgb(0 0 0 / 0.04);
+  --shadow-bar: 0 0.5px 0 var(--color-separator);
+
+  /* ---- controls ---- */
+  --control-h: 2.25rem;
+  --control-h-sm: 1.75rem;
+  --focus-ring: 2px solid var(--color-focus);
+  --focus-glow: 0 0 0 3px color-mix(in srgb, var(--color-accent) 25%, transparent);
+  --bar-h: 0.5rem;
+
+  /* ---- motion ---- */
+  --motion-instant: 100ms; /* press feedback */
+  --motion-fast: 160ms; /* hover, colour */
+  --motion-base: 240ms; /* fades, small moves */
+  --motion-slow: 360ms; /* modal, sheet */
+  --motion-ease: cubic-bezier(0.25, 0.1, 0.25, 1);
+  --motion-ease-out: cubic-bezier(0, 0, 0.2, 1);
+  /* Critically damped spring (damping 1.0, response 0.3s); pair with --motion-spring-duration. */
+  --motion-spring: linear(0, 0.142, 0.38, 0.588, 0.74, 0.841, 0.905, 0.945, 0.968, 0.982, 0.99, 0.994, 0.997, 0.998, 1);
+  --motion-spring-duration: 440ms;
+  /* Damping 0.8, response 0.4s: only after a gesture that carried momentum. */
+  --motion-spring-bouncy: linear(0, 0.047, 0.156, 0.292, 0.433, 0.564, 0.678, 0.773, 0.847, 0.904, 0.946, 0.975, 0.994, 1.006, 1.012, 1.015, 1.015, 1.014, 1.012, 1.01, 1.008, 1.006, 1.004, 1.003, 1);
+  --motion-spring-bouncy-duration: 510ms;
+  --press-scale: 0.97;
+  --press-dim: 0.55;
+  --disabled-opacity: 0.4;
+}
+
+:root[data-theme="light"] { color-scheme: light; }
+:root[data-theme="dark"] { color-scheme: dark; }
+
+/* Touch screens: 44px controls. */
+@media (pointer: coarse) {
+  :root {
+    --control-h: 2.75rem;
+    --control-h-sm: 2.25rem;
+  }
+}
+
+/* Breakpoints can't be variables: compact is 640px, used in styles.css. */
+@media (max-width: 640px) {
+  :root {
+    --gutter: var(--space-4);
+    --card-padding: var(--space-4);
+    --stack-gap: var(--space-4);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --press-scale: 1; /* keep colour and opacity feedback, drop movement */
+    --motion-spring: var(--motion-ease);
+    --motion-spring-bouncy: var(--motion-ease);
+    --motion-spring-duration: 200ms;
+    --motion-spring-bouncy-duration: 200ms;
+    --motion-slow: 200ms;
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  :root {
+    --material-bar: var(--color-surface);
+    --material-blur: none;
+  }
+}
+
+@media (prefers-contrast: more) {
+  :root {
+    --color-separator: var(--color-control-border);
+    --color-text-secondary: light-dark(#3a3a3c, #d1d1d6);
+    --shadow-card: 0 0 0 1px var(--color-control-border);
+  }
+}
