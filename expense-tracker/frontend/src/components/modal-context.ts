@@ -1,11 +1,7 @@
 import { createContext, useContext } from "react";
 
 export interface ModalControls {
-  /** A form inside reports whether it has unsaved changes. */
-  setDirty: (dirty: boolean) => void;
-  /** Close through the guard: asks "Discard your changes?" when there are any. */
-  requestClose: () => void;
-  /** Close without asking, after a save or a delete. */
+  /** Close with the exit transition; a form inside keeps its own draft. */
   close: () => void;
 }
 

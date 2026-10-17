@@ -94,3 +94,15 @@ export function InlineRename({ value, label, onSave }: { value: string; label: s
     </form>
   );
 }
+
+/** Shown at the top of a popup form that reopened with what was typed last time. */
+export function DraftNote({ onClear }: { onClear: () => void }) {
+  return (
+    <p className="draft-note" role="status">
+      <span>Restored what you typed last time.</span>
+      <button type="button" className="ghost small" onClick={onClear}>
+        Clear
+      </button>
+    </p>
+  );
+}

@@ -460,21 +460,20 @@ html:has(.modal[open]) { overflow: hidden; }
 .modal header h2 { margin: 0; font-size: var(--text-title-size); letter-spacing: var(--text-title-tracking); }
 .modal header button { min-width: var(--control-h-sm); min-height: var(--control-h-sm); padding: 0; border-radius: var(--radius-pill); }
 .sheet-grabber { display: none; }
-/* "Discard your changes?" sits at the bottom of the popup, over the form's own buttons. */
-.discard-bar {
-  position: sticky;
-  bottom: 0;
+/* "Restored what you typed last time. Clear" at the top of a popup form. */
+.draft-note {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: var(--space-3);
-  margin: var(--space-4) calc(-1 * var(--space-6)) calc(-1 * var(--space-6));
-  padding: var(--space-3) var(--space-6);
-  background: var(--color-surface-raised);
-  box-shadow: 0 -0.5px 0 var(--color-separator);
+  gap: var(--space-2);
+  margin: 0;
+  padding: var(--space-1) var(--space-1) var(--space-1) var(--space-3);
+  background: var(--color-fill);
+  border-radius: var(--radius-md);
+  color: var(--color-text-secondary);
+  font-size: var(--text-footnote-size);
 }
-.discard-bar p { margin: 0; font-weight: 600; }
 
 /* ---- form feedback ---- */
 .field-error { margin: 0; color: var(--color-negative); font-size: var(--text-footnote-size); }
@@ -636,7 +635,6 @@ tfoot th { color: var(--color-text); font-weight: 600; border-top: 1px solid var
   }
   .modal[data-closing] { opacity: 1; transform: translateY(var(--sheet-enter-y)); }
   .modal-body { padding: var(--space-2) var(--space-4) calc(var(--space-4) + env(safe-area-inset-bottom)); }
-  .discard-bar { margin: var(--space-4) calc(-1 * var(--space-4)) calc(-1 * var(--space-4) - env(safe-area-inset-bottom)); padding: var(--space-3) var(--space-4) calc(var(--space-3) + env(safe-area-inset-bottom)); }
   .sheet-grabber {
     display: block;
     width: var(--space-10);

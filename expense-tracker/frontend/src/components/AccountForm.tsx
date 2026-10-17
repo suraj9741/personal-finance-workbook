@@ -2,9 +2,10 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 import { api, del, patch, post, type Account, type PayType } from "../api";
 import { ACCOUNT_GROUPS, GROUP_ICON, GROUP_LABEL, groupOf, type AccountGroup } from "../format";
+import { forgetDraft, useDraft, useKeepDraft } from "../draft";
 import { focusFirstInvalid, invalidProps, splitServerError, type FieldErrors } from "../forms";
 import { useMe } from "../hooks";
-import { BusyLabel, FieldError } from "./FormBits";
+import { BusyLabel, DraftNote, FieldError } from "./FormBits";
 import { useModal } from "./modal-context";
 import { useToasts } from "./toast-context";
 
@@ -40,9 +41,11 @@ export function AccountForm({ existing, group: initialGroup = "bank", onDone, on
   const me = useMe().data;
   const isOwner = me?.role === "owner";
   const client = useQueryClient();
-  const [group, setGroup] = useState<AccountGroup>(existing ? groupOf(existing.pay_type) : initialGroup);
-  const [isCash, setIsCash] = useState(existing?.pay_type === "cash");
-  const [form, setForm] = useState({
+  const draftKey = existing ? `account:${existing.id}` : "account:new";
+  const { base, restored } = useDraft(draftKey, {
+    group: existing ? groupOf(existing.pay_type) : initialGroup,
+    isCash: existing?.pay_type === "cash",
+    form: {
     name: text(existing?.name),
     institution: text(existing?.institution),
     description: text(existing?.description),
@@ -54,9 +57,14 @@ export function AccountForm({ existing, group: initialGroup = "bank", onDone, on
     opening_invested: existing?.opening_invested ?? "0",
     current_value: text(existing?.current_value),
     valued_on: text(existing?.valued_on),
-    visibility: existing?.visibility ?? (isOwner ? "shared" : "private"),
-  });
-  const [initial] = useState(() => JSON.stringify({ form, group, isCash }));
+    visibility: (existing?.visibility ?? (isOwner ? "shared" : "private")) as "shared" | "private",
+    },
+  }, !!existing);
+  const start = restored ?? (JSON.parse(base) as NonNullable<typeof restored>);
+  const [group, setGroup] = useState<AccountGroup>(start.group);
+  const [isCash, setIsCash] = useState(start.isCash);
+  const [form, setForm] = useState(start.form);
+  const [showRestored, setShowRestored] = useState(restored !== null);
   const [errors, setErrors] = useState<FieldErrors>({});
   const [attempt, setAttempt] = useState(0);
   const [error, setError] = useState("");
@@ -71,9 +79,17 @@ export function AccountForm({ existing, group: initialGroup = "bank", onDone, on
   };
   const payType: PayType = group === "bank" && isCash ? "cash" : group;
 
-  useEffect(() => {
-    modal?.setDirty(JSON.stringify({ form, group, isCash }) !== initial);
-  }, [form, group, isCash, initial, modal]);
+  useKeepDraft(draftKey, base, { group, isCash, form });
+
+  function clearDraft() {
+    const blank = JSON.parse(base) as typeof start;
+    setGroup(blank.group);
+    setIsCash(blank.isCash);
+    setForm(blank.form);
+    setErrors({});
+    setShowRestored(false);
+    formRef.current?.querySelector<HTMLElement>("[data-autofocus]")?.focus();
+  }
 
   useEffect(() => {
     if (attempt) focusFirstInvalid(formRef.current);
@@ -129,6 +145,7 @@ export function AccountForm({ existing, group: initialGroup = "bank", onDone, on
       return post("/accounts", { ...body, pay_type: payType, visibility: form.visibility });
     },
     onSuccess: () => {
+      forgetDraft(draftKey);
       refresh();
       done();
     },
@@ -137,6 +154,7 @@ export function AccountForm({ existing, group: initialGroup = "bank", onDone, on
   const setActive = useMutation({
     mutationFn: (active: boolean) => patch(`/accounts/${existing!.id}`, { is_active: active }),
     onSuccess: (_data, active) => {
+      forgetDraft(draftKey);
       refresh();
       // Deactivating is reversible, so it happens at once and Undo switches it back.
       if (!active)
@@ -155,6 +173,7 @@ export function AccountForm({ existing, group: initialGroup = "bank", onDone, on
       const a = existing!;
       if (total > 0) return setError(`${a.name} has ${total} ${total === 1 ? "entry" : "entries"}, so it can't be deleted. Deactivate it instead.`);
       toasts.deferDelete({ id: a.id, text: `Deleted ${a.name}`, commit: (keepalive) => del(`/accounts/${a.id}`, keepalive), after: refresh });
+      forgetDraft(draftKey);
       onDeleted?.();
       done();
     },
@@ -177,6 +196,7 @@ export function AccountForm({ existing, group: initialGroup = "bank", onDone, on
 
   return (
     <form ref={formRef} className="tx-form" onSubmit={submit} noValidate aria-busy={busy}>
+      {showRestored && <DraftNote onClear={clearDraft} />}
       {existing ? (
         <p className="muted small">
           <span aria-hidden="true">{GROUP_ICON[group]}</span> {existing.pay_type === "cash" ? "Cash" : GROUP_LABEL[group]}. The type
@@ -287,7 +307,7 @@ export function AccountForm({ existing, group: initialGroup = "bank", onDone, on
         <button type="submit" className="primary" disabled={busy}>
           <BusyLabel busy={save.isPending} idle={existing ? "Save changes" : "Add account"} working={existing ? "Saving…" : "Adding…"} />
         </button>
-        <button type="button" disabled={busy} onClick={modal?.requestClose ?? onDone}>
+        <button type="button" disabled={busy} onClick={done}>
           Cancel
         </button>
         {existing &&

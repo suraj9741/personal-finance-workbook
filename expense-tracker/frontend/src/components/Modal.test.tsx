@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { useState } from "react";
 import { afterEach, expect, it, vi } from "vitest";
 import { Modal } from "./Modal";
@@ -7,6 +7,7 @@ import { TransactionForm } from "./TransactionForm";
 
 afterEach(() => {
   cleanup();
+  sessionStorage.clear();
   vi.restoreAllMocks();
 });
 
@@ -54,20 +55,36 @@ it("puts the cursor in Amount and returns it to the opener on close", () => {
   expect(document.activeElement).toBe(opener);
 });
 
-it("asks before throwing away typed changes", () => {
-  setup();
+it("closes without asking and brings back what was typed", () => {
+  const opener = setup();
   fireEvent.change(screen.getByRole("textbox", { name: "Amount (₹)" }), { target: { value: "585" } });
-  fireEvent(screen.getByRole("dialog"), new Event("cancel", { cancelable: true }));
-  expect(screen.getByText("Discard your changes?")).toBeTruthy();
-  expect(document.activeElement).toBe(screen.getByRole("button", { name: "Keep editing" }));
-
-  fireEvent.click(screen.getByRole("button", { name: "Keep editing" }));
-  expect(screen.queryByText("Discard your changes?")).toBeNull();
-  expect(screen.getByRole("dialog")).toBeTruthy();
-
   fireEvent.click(screen.getByRole("button", { name: "Close" }));
-  fireEvent.click(screen.getByRole("button", { name: "Discard" }));
   expect(screen.queryByRole("dialog")).toBeNull();
+
+  // Reopening restores the draft, and says so.
+  fireEvent.click(opener);
+  expect((screen.getByRole("textbox", { name: "Amount (₹)" }) as HTMLInputElement).value).toBe("585");
+  expect(screen.getByRole("status").textContent).toMatch(/Restored what you typed last time/);
+
+  // Clear empties the form and forgets the draft.
+  fireEvent.click(screen.getByRole("button", { name: "Clear" }));
+  const amount = screen.getByRole("textbox", { name: "Amount (₹)" }) as HTMLInputElement;
+  expect(amount.value).toBe("");
+  expect(document.activeElement).toBe(amount);
+  fireEvent(screen.getByRole("dialog"), new Event("cancel", { cancelable: true }));
+  fireEvent.click(opener);
+  expect(screen.queryByText(/Restored what you typed/)).toBeNull();
+});
+
+it("forgets the draft once the entry is saved", async () => {
+  const opener = setup();
+  await screen.findByText("HDFC");
+  fireEvent.change(screen.getByRole("textbox", { name: "Amount (₹)" }), { target: { value: "585" } });
+  fireEvent.click(screen.getByRole("button", { name: "Add transaction" }));
+  await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  fireEvent.click(opener);
+  expect((screen.getByRole("textbox", { name: "Amount (₹)" }) as HTMLInputElement).value).toBe("");
+  expect(screen.queryByText(/Restored what you typed/)).toBeNull();
 });
 
 it("shows problems under the field and moves the cursor there", async () => {

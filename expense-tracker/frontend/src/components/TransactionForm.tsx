@@ -2,11 +2,12 @@ import { useMutation } from "@tanstack/react-query";
 import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 import { del, patch, post, type Transaction, type TransactionInput, type TxType } from "../api";
 import { TX_TYPE_LABEL, categoryKind, groupOf, money, today } from "../format";
+import { forgetDraft, useDraft, useKeepDraft } from "../draft";
 import { focusFirstInvalid, invalidProps, splitServerError, type FieldErrors } from "../forms";
 import { useAccounts, useCategories, useRefreshMoney } from "../hooks";
 import { AccountPicker } from "./AccountPicker";
 import { CategoryPicker } from "./CategoryPicker";
-import { BusyLabel, FieldError } from "./FormBits";
+import { BusyLabel, DraftNote, FieldError } from "./FormBits";
 import { useModal } from "./modal-context";
 import { useToasts } from "./toast-context";
 
@@ -49,7 +50,9 @@ export function TransactionForm({ existing, accountId, onDone }: Props) {
   );
   const categories = useCategories().data ?? [];
   const refresh = useRefreshMoney();
-  const [form, setForm] = useState<TransactionInput>(() => ({
+  // What you typed last time comes back: per entry when editing, per account page when adding.
+  const draftKey = existing ? `tx:${existing.id}` : `tx:new${accountId ? `:${accountId}` : ""}`;
+  const { base, restored } = useDraft<TransactionInput>(draftKey, {
     date: existing?.date ?? today(),
     amount: existing?.amount ?? "",
     type: existing?.type ?? "expense",
@@ -60,8 +63,9 @@ export function TransactionForm({ existing, accountId, onDone }: Props) {
     cost_basis: existing?.cost_basis ?? "",
     counterparty: existing?.counterparty ?? "",
     notes: existing?.notes ?? "",
-  }));
-  const [initial] = useState(() => JSON.stringify(form));
+  }, !!existing);
+  const [form, setForm] = useState<TransactionInput>(() => restored ?? (JSON.parse(base) as TransactionInput));
+  const [showRestored, setShowRestored] = useState(restored !== null);
   const [errors, setErrors] = useState<FieldErrors>({});
   // Bumped on each failed submit, so the cursor jumps to the problem then and not while typing.
   const [attempt, setAttempt] = useState(0);
@@ -77,9 +81,14 @@ export function TransactionForm({ existing, accountId, onDone }: Props) {
     setErrors((e) => (Object.keys(changes).some((k) => e[k]) ? Object.fromEntries(Object.entries(e).filter(([k]) => !(k in changes))) : e));
   };
 
-  useEffect(() => {
-    modal?.setDirty(JSON.stringify(form) !== initial);
-  }, [form, initial, modal]);
+  useKeepDraft(draftKey, base, form);
+
+  function clearDraft() {
+    setForm(JSON.parse(base) as TransactionInput);
+    setErrors({});
+    setShowRestored(false);
+    formRef.current?.querySelector<HTMLElement>("[data-autofocus]")?.focus();
+  }
 
   useEffect(() => {
     if (attempt) focusFirstInvalid(formRef.current);
@@ -101,6 +110,7 @@ export function TransactionForm({ existing, accountId, onDone }: Props) {
       return existing ? patch(`/transactions/${existing.id}`, body) : post("/transactions", body);
     },
     onSuccess: () => {
+      forgetDraft(draftKey);
       refresh();
       done();
     },
@@ -132,6 +142,7 @@ export function TransactionForm({ existing, accountId, onDone }: Props) {
       commit: (keepalive) => del(`/transactions/${t.id}`, keepalive),
       after: refresh,
     });
+    forgetDraft(draftKey);
     done();
   }
 
@@ -140,6 +151,7 @@ export function TransactionForm({ existing, accountId, onDone }: Props) {
 
   return (
     <form ref={formRef} className="tx-form" onSubmit={submit} noValidate aria-busy={busy}>
+      {showRestored && <DraftNote onClear={clearDraft} />}
       <div className="segmented wrap" role="radiogroup" aria-label="Transaction type">
         {TYPES.map((k) => (
           <button
@@ -243,7 +255,7 @@ export function TransactionForm({ existing, accountId, onDone }: Props) {
         <button type="submit" className="primary" disabled={busy}>
           <BusyLabel busy={busy} idle={existing ? "Save changes" : "Add transaction"} working={existing ? "Saving…" : "Adding…"} />
         </button>
-        <button type="button" disabled={busy} onClick={modal?.requestClose ?? onDone}>
+        <button type="button" disabled={busy} onClick={done}>
           Cancel
         </button>
         {existing && (
