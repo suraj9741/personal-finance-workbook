@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Account } from "./api";
-import { accountLabel, budgetDiff, categoryKind, groupOf, money, percent, shiftMonth, txSign } from "./format";
+import { accountLabel, budgetDiff, categoryKind, dayHeading, dayLabel, dayTotals, groupOf, money, percent, shiftMonth, txSign } from "./format";
 
 describe("format", () => {
   it("makes a positive budget diff mean good news", () => {
@@ -42,5 +42,23 @@ describe("format", () => {
     expect(categoryKind("refund")).toBe("expense");
     expect(categoryKind("buy")).toBeNull();
     expect(categoryKind("transfer")).toBe("transfer");
+  });
+  it("labels days readably, with the year only when it differs", () => {
+    expect(dayLabel("2026-10-17", "2026-10-20")).toBe("17 Oct");
+    expect(dayLabel("2025-12-31", "2026-01-02")).toBe("31 Dec 2025");
+    expect(dayHeading("2026-10-20", "2026-10-20")).toBe("Today");
+    expect(dayHeading("2025-12-31", "2026-01-01")).toBe("Yesterday");
+    expect(dayHeading("2026-10-16", "2026-10-20")).toBe("Fri, 16 Oct");
+    expect(dayHeading("2025-12-30", "2026-01-02")).toBe("Tue, 30 Dec 2025");
+  });
+  it("totals a day without transfers, buys or sells", () => {
+    const rows = [
+      { type: "expense" as const, amount: "500" },
+      { type: "refund" as const, amount: "100" },
+      { type: "income" as const, amount: "1000" },
+      { type: "transfer" as const, amount: "9999" },
+      { type: "buy" as const, amount: "5000" },
+    ];
+    expect(dayTotals(rows)).toEqual({ spent: 400, earned: 1000, net: 600 });
   });
 });

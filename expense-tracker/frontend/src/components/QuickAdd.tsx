@@ -1,12 +1,16 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { useRef, useState, type FormEvent } from "react";
+import { useEffect, useId, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import { Link } from "react-router-dom";
 import { api, post, type Suggestion, type Transaction, type TransactionInput } from "../api";
-import { categoryLabel, money, today } from "../format";
+import { categoryLabel, money, shiftDay, today } from "../format";
 import { useAccounts, useCategories, useRefreshMoney } from "../hooks";
+import { stillToRepeat } from "../repeat";
 import { AccountPicker } from "./AccountPicker";
 
 const LAST_ACCOUNT = "et:lastAccount";
+const CONFIRM_MS = 4000;
+
+type Message = { text: string; error?: boolean; retry?: boolean };
 
 function readLastAccount(): string {
   try {
@@ -16,6 +20,11 @@ function readLastAccount(): string {
   }
 }
 
+/** My own entries on one day (the button only repeats what I added). */
+const myDay = (day: string) => api<{ items: Transaction[] }>(`/transactions?scope=me&limit=500&date_from=${day}&date_to=${day}`).then((page) => page.items);
+
+const entries = (n: number) => `${n} entr${n === 1 ? "y" : "ies"}`;
+
 /** The main way money gets in: amount, description, account, Enter. */
 export function QuickAdd() {
   const accountsQuery = useAccounts();
@@ -23,15 +32,28 @@ export function QuickAdd() {
   const categories = useCategories().data ?? [];
   const refresh = useRefreshMoney();
   const amountRef = useRef<HTMLInputElement>(null);
+  // isPending only updates on the next render; this catches a second Enter before that.
+  const saving = useRef(false);
+  const repeating = useRef(false);
+  const listId = useId();
   const [amount, setAmount] = useState("");
   const [description, setDescription] = useState("");
   const [accountId, setAccountId] = useState(readLastAccount);
   const [date, setDate] = useState(today);
   const [picked, setPicked] = useState<Suggestion | null>(null);
-  const [message, setMessage] = useState<{ text: string; error?: boolean } | null>(null);
+  const [open, setOpen] = useState(false);
+  const [active, setActive] = useState(-1);
+  const [message, setMessage] = useState<Message | null>(null);
 
   // Fall back to the first account when the remembered one is gone or not loaded yet.
   const account = accounts.some((a) => a.id === accountId) ? accountId : (accounts[0]?.id ?? "");
+
+  // A confirmation fades on its own; errors stay until the next edit.
+  useEffect(() => {
+    if (!message || message.error) return;
+    const id = window.setTimeout(() => setMessage(null), CONFIRM_MS);
+    return () => window.clearTimeout(id);
+  }, [message]);
 
   const query = description.trim();
   const suggestions = useQuery({
@@ -41,23 +63,17 @@ export function QuickAdd() {
     staleTime: 30_000,
   });
 
-  const yesterday = useQuery({
-    queryKey: ["transactions", "yesterday"],
-    queryFn: () => {
-      const d = new Date(Date.now() - 86400000);
-      const iso = new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
-      return api<{ items: Transaction[] }>(`/transactions?scope=me&limit=50&month=${iso.slice(0, 7)}`).then((page) =>
-        page.items.filter((t) => t.date === iso && (t.type === "expense" || t.type === "income")),
-      );
-    },
-    staleTime: 60_000,
-  });
+  const now = today();
+  const yesterday = useQuery({ queryKey: ["transactions", "day", shiftDay(now, -1)], queryFn: () => myDay(shiftDay(now, -1)), staleTime: 60_000 });
+  const todays = useQuery({ queryKey: ["transactions", "day", now], queryFn: () => myDay(now), staleTime: 60_000 });
+  // Only what today doesn't have yet, so a double click, reload or retry never adds a copy.
+  const toRepeat = yesterday.data && todays.data ? stillToRepeat(yesterday.data, todays.data) : [];
 
   const save = useMutation({
     mutationFn: (body: TransactionInput) => post<Transaction>("/transactions", body),
     onSuccess: (tx) => {
       const category = categories.find((c) => c.id === tx.category_id);
-      setMessage({ text: `Saved ${money(tx.amount, true)} · ${categoryLabel(category)}` });
+      setMessage({ text: `✓ Saved ${money(tx.amount, true)} · ${categoryLabel(category)}` });
       setAmount("");
       setDescription("");
       setPicked(null);
@@ -70,11 +86,60 @@ export function QuickAdd() {
       amountRef.current?.focus();
     },
     onError: (e: Error) => setMessage({ text: e.message, error: true }),
+    onSettled: () => {
+      saving.current = false;
+    },
   });
+
+  const repeat = useMutation({
+    // One at a time, so a failure part-way says exactly which entries didn't go in.
+    mutationFn: async (rows: Transaction[]) => {
+      const failed: Transaction[] = [];
+      for (const t of rows) {
+        try {
+          await post("/transactions", {
+            date: now,
+            amount: t.amount,
+            type: t.type,
+            account_id: t.account_id,
+            category_id: t.category_id,
+            description: t.description,
+            counterparty: t.counterparty,
+          });
+        } catch {
+          failed.push(t);
+        }
+      }
+      return { tried: rows.length, failed };
+    },
+    onSuccess: ({ tried, failed }) => {
+      if (failed.length === 0) setMessage({ text: `✓ Repeated ${entries(tried)} from yesterday` });
+      else {
+        const names = failed.map((t) => `${t.description || "(no description)"} ${money(t.amount)}`).join(", ");
+        setMessage({ text: `Repeated ${tried - failed.length} of ${tried}. Couldn't add: ${names}`, error: true, retry: true });
+      }
+    },
+    onSettled: () => {
+      repeating.current = false;
+      refresh();
+    },
+  });
+
+  function runRepeat() {
+    if (repeating.current || toRepeat.length === 0) return;
+    repeating.current = true;
+    repeat.mutate(toRepeat);
+  }
+
+  function edited() {
+    if (message) setMessage(null);
+  }
 
   function submit(event: FormEvent) {
     event.preventDefault();
-    if (!amount || !account) return;
+    // Enter pressed twice while the first save is in flight must not add it twice.
+    if (saving.current || !amount || !account) return;
+    saving.current = true;
     const body: TransactionInput = {
       date,
       amount,
@@ -91,27 +156,33 @@ export function QuickAdd() {
     setPicked(s);
     setDescription(s.description);
     setAccountId(s.account_id);
+    setOpen(false);
+    setActive(-1);
     if (!amount) setAmount(s.amount);
   }
 
-  async function repeatYesterday() {
-    const rows = yesterday.data ?? [];
-    for (const t of rows) {
-      await post("/transactions", {
-        date: today(),
-        amount: t.amount,
-        type: t.type,
-        account_id: t.account_id,
-        category_id: t.category_id,
-        description: t.description,
-        counterparty: t.counterparty,
-      });
-    }
-    setMessage({ text: `Repeated ${rows.length} entr${rows.length === 1 ? "y" : "ies"} from yesterday` });
-    refresh();
-  }
+  const options = picked ? [] : (suggestions.data ?? []);
+  const showSuggestions = open && options.length > 0;
 
-  const showSuggestions = !picked && (suggestions.data?.length ?? 0) > 0;
+  function onDescriptionKey(event: KeyboardEvent<HTMLInputElement>) {
+    const n = options.length;
+    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      if (n === 0) return;
+      event.preventDefault();
+      setOpen(true);
+      const step = event.key === "ArrowDown" ? 1 : -1;
+      setActive((i) => (i === -1 ? (step === 1 ? 0 : n - 1) : (i + step + n) % n));
+    } else if (event.key === "Enter" && showSuggestions && active >= 0) {
+      event.preventDefault();
+      choose(options[active]);
+    } else if (event.key === "Escape" && showSuggestions) {
+      event.preventDefault();
+      setOpen(false);
+      setActive(-1);
+    } else if (event.key === "Tab") {
+      setOpen(false);
+    }
+  }
 
   if (accountsQuery.isSuccess && accounts.length === 0) {
     return (
@@ -124,8 +195,10 @@ export function QuickAdd() {
     );
   }
 
+  const busyRepeating = repeat.isPending || todays.isFetching;
+
   return (
-    <form className="quick-add" onSubmit={submit} aria-label="Quick add">
+    <form className="quick-add" onSubmit={submit} onChange={edited} aria-label="Quick add">
       <input
         ref={amountRef}
         className="qa-amount"
@@ -140,43 +213,69 @@ export function QuickAdd() {
         <input
           placeholder="What was it? (e.g. Swiggy)"
           aria-label="Description"
+          role="combobox"
+          aria-autocomplete="list"
+          aria-expanded={showSuggestions}
+          aria-controls={listId}
+          aria-activedescendant={showSuggestions && active >= 0 ? `${listId}-${active}` : undefined}
           value={description}
           onChange={(e) => {
             setDescription(e.target.value);
             setPicked(null);
+            setOpen(true);
+            setActive(-1);
           }}
+          onKeyDown={onDescriptionKey}
+          onBlur={() => setOpen(false)}
           autoComplete="off"
         />
-        {showSuggestions && (
-          <ul className="suggestions" role="listbox">
-            {suggestions.data!.map((s) => (
-              <li key={s.description}>
-                <button type="button" onClick={() => choose(s)}>
-                  <span>{s.description}</span>
-                  <small>
-                    {categoryLabel(categories.find((c) => c.id === s.category_id))} · {money(s.amount)}
-                  </small>
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
+        <ul className="suggestions" id={listId} role="listbox" aria-label="Suggestions" hidden={!showSuggestions}>
+          {options.map((s, i) => (
+            <li
+              key={s.description}
+              id={`${listId}-${i}`}
+              role="option"
+              aria-selected={i === active}
+              // Keep focus in the input so the click doesn't close the list first.
+              onMouseDown={(e) => e.preventDefault()}
+              onMouseEnter={() => setActive(i)}
+              onClick={() => choose(s)}
+            >
+              <span>{s.description}</span>
+              <small>
+                {categoryLabel(categories.find((c) => c.id === s.category_id))} · {money(s.amount)}
+              </small>
+            </li>
+          ))}
+        </ul>
       </span>
       <AccountPicker accounts={accounts} value={account} onChange={setAccountId} variant="select" />
       <input type="date" aria-label="Date" value={date} onChange={(e) => setDate(e.target.value)} />
       <button type="submit" className="primary" disabled={save.isPending}>
-        Add
+        {/* Both labels share one grid cell, so the button keeps the wider one's width. */}
+        <span className="label-swap">
+          <span className={save.isPending ? "off" : undefined}>Add</span>
+          <span className={save.isPending ? undefined : "off"} aria-hidden={!save.isPending}>
+            Adding…
+          </span>
+        </span>
       </button>
-      {(yesterday.data?.length ?? 0) > 0 && (
-        <button type="button" className="ghost" onClick={repeatYesterday} title="Copy yesterday's entries to today">
-          Repeat yesterday's ({yesterday.data!.length})
+      {(toRepeat.length > 0 || repeat.isPending) && (
+        <button type="button" className="ghost" disabled={busyRepeating} onClick={runRepeat} title="Copy yesterday's entries that aren't in today yet">
+          {repeat.isPending ? "Repeating…" : `Repeat yesterday's (${toRepeat.length})`}
         </button>
       )}
-      {message && (
-        <p className={message.error ? "qa-msg error" : "qa-msg"} role="status">
-          {message.text}
-        </p>
-      )}
+      <p className={message?.error ? "qa-msg error" : "qa-msg"} role="status">
+        {message?.text}
+        {message?.retry && toRepeat.length > 0 && (
+          <>
+            {" · "}
+            <button type="button" className="ghost small" disabled={busyRepeating} onClick={runRepeat}>
+              Retry
+            </button>
+          </>
+        )}
+      </p>
       {/debt|credit card bill|card bill/i.test(description) && (
         <p className="qa-msg hint">
           Paying a card bill? Use the full form: a Transfer from the bank to the card, so card spends aren't counted twice.

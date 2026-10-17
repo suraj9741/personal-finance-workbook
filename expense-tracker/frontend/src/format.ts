@@ -99,3 +99,43 @@ export function categoryKind(type: TxType): "expense" | "income" | "transfer" | 
   if (type === "buy" || type === "sell") return null;
   return type;
 }
+
+function parseDay(iso: string): Date {
+  const [y, m, d] = iso.split("-").map(Number);
+  return new Date(y, m - 1, d);
+}
+
+/** "17 Oct", or "17 Oct 2025" outside the current year. */
+export function dayLabel(iso: string, now: string = today()): string {
+  const sameYear = iso.slice(0, 4) === now.slice(0, 4);
+  return parseDay(iso).toLocaleDateString("en-IN", { day: "numeric", month: "short", ...(sameYear ? {} : { year: "numeric" }) });
+}
+
+/** "Today", "Yesterday", or "Fri, 17 Oct" (with the year outside the current one). */
+export function dayHeading(iso: string, now: string = today()): string {
+  const diff = Math.round((parseDay(now).getTime() - parseDay(iso).getTime()) / 86400000);
+  if (diff === 0) return "Today";
+  if (diff === 1) return "Yesterday";
+  const weekday = parseDay(iso).toLocaleDateString("en-IN", { weekday: "short" });
+  return `${weekday}, ${dayLabel(iso, now)}`;
+}
+
+/** A day's money: spent is expenses less refunds, earned is income. Transfers, buys and sells don't count. */
+export function dayTotals(rows: { type: TxType; amount: string }[]): { spent: number; earned: number; net: number } {
+  let spent = 0;
+  let earned = 0;
+  for (const r of rows) {
+    const n = Number(r.amount);
+    if (r.type === "expense") spent += n;
+    else if (r.type === "refund") spent -= n;
+    else if (r.type === "income") earned += n;
+  }
+  return { spent, earned, net: earned - spent };
+}
+
+/** The ISO date `delta` days from `iso`. */
+export function shiftDay(iso: string, delta: number): string {
+  const d = parseDay(iso);
+  d.setDate(d.getDate() + delta);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
