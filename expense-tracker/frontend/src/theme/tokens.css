@@ -3,7 +3,7 @@
  * styles.css uses var(--…) only, so a re-theme is an edit here.
  *
  * Each colour is light-dark(light, dark) and follows color-scheme: the OS setting today,
- * or data-theme="light" | "dark" on <html> if a theme switch is added later.
+ * or data-theme="light" | "dark" on <html> when the appearance switch (theme/theme.ts) forces one.
  * Text colours meet WCAG AA (4.5:1) on the surfaces they sit on.
  */
 :root {

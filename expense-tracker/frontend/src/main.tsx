@@ -5,6 +5,10 @@ import { BrowserRouter } from "react-router-dom";
 import { App } from "./App";
 import "./theme/tokens.css";
 import "./styles.css";
+import { applyTheme, readTheme } from "./theme/theme";
+
+// index.html set data-theme before paint; this also points the browser bar colour at it.
+applyTheme(readTheme());
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: true } },

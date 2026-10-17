@@ -2,6 +2,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { NavLink, Navigate, Outlet, Route, Routes, useNavigate } from "react-router-dom";
 import { post } from "./api";
 import { QuickAdd } from "./components/QuickAdd";
+import { ThemeSwitch } from "./components/ThemeSwitch";
 import { useMe } from "./hooks";
 import { AccountDetails } from "./pages/AccountDetails";
 import { Accounts } from "./pages/Accounts";
@@ -40,7 +41,8 @@ function Shell() {
           {me.is_site_admin && <NavLink to="/admin">Admin</NavLink>}
         </nav>
         <span className="who">
-          {me.display_name}
+          <ThemeSwitch />
+          <span className="who-name">{me.display_name}</span>
           <button type="button" className="ghost small" onClick={logout}>
             Log out
           </button>
