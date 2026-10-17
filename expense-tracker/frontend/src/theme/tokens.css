@@ -15,6 +15,11 @@
   --color-surface-raised: light-dark(#ffffff, #2c2c2e);
   --color-fill: light-dark(#e8e8ed, #2c2c2e);
   --color-fill-hover: light-dark(#dcdce1, #3a3a3c);
+  /* Fills on a raised surface (popups): one step lighter in dark so buttons and tracks still show. */
+  --color-fill-elevated: light-dark(#e8e8ed, #3a3a3c);
+  --color-fill-elevated-hover: light-dark(#dcdce1, #48484a);
+  /* The selected segment: white in light, a lighter grey in dark (as on iOS). */
+  --color-segment-thumb: light-dark(#ffffff, #636366);
   --color-separator: light-dark(#d2d2d7, #38383a);
   --color-control-border: light-dark(#86868b, #8e8e93);
 
@@ -129,7 +134,8 @@
     0 0 0 0.5px light-dark(rgb(0 0 0 / 0.08), rgb(255 255 255 / 0.1));
   --shadow-modal: 0 24px 48px light-dark(rgb(0 0 0 / 0.18), rgb(0 0 0 / 0.6)),
     0 0 0 0.5px light-dark(rgb(0 0 0 / 0.06), rgb(255 255 255 / 0.1));
-  --shadow-thumb: 0 1px 3px rgb(0 0 0 / 0.12), 0 0 0 0.5px rgb(0 0 0 / 0.04);
+  /* In dark a hairline light edge keeps the selected segment at 3:1 against its track. */
+  --shadow-thumb: 0 1px 3px rgb(0 0 0 / 0.12), 0 0 0 0.5px light-dark(rgb(0 0 0 / 0.04), rgb(255 255 255 / 0.28));
   --shadow-bar-edge: 0 0.5px 0 var(--color-separator);
 
   /* ---- controls ---- */

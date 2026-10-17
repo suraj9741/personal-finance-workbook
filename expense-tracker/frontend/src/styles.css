@@ -289,7 +289,7 @@ details.card[open] > summary { margin-bottom: var(--space-3); }
   .segmented button:hover:not(:disabled, .active) { background: var(--color-fill-hover); }
 }
 .segmented button.active {
-  background: var(--color-surface-raised);
+  background: var(--color-segment-thumb);
   box-shadow: var(--shadow-thumb);
   font-weight: 600;
 }
@@ -432,6 +432,8 @@ td.transfer { color: var(--color-transfer); }
   border: 0;
   color: var(--color-text);
   background: var(--color-surface-raised);
+  --color-fill: var(--color-fill-elevated);
+  --color-fill-hover: var(--color-fill-elevated-hover);
   border-radius: var(--radius-xl);
   box-shadow: var(--shadow-modal);
   width: min(var(--modal-width), calc(100% - 2 * var(--space-4)));
