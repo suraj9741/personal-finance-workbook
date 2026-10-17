@@ -148,7 +148,11 @@ browser ──► frontend (nginx, :8080) ──/api──► backend (FastAPI, 
   `/api/v1`. Config comes only from environment variables (`app/config.py`).
 - **frontend/**: React, TypeScript, Vite, TanStack Query, plain CSS. In Docker it is built
   once and served by nginx, which also proxies `/api` to the backend, so the browser sees a
-  single origin.
+  single origin. The look comes from one file of design tokens, `src/theme/tokens.css`
+  (colours for light and dark, type, spacing, radii, shadows, motion); `src/styles.css`
+  only refers to those tokens, so changing the design means editing `tokens.css`. The map
+  of screens, pages and components is in
+  [docs/diagrams/frontend-components.svg](docs/diagrams/frontend-components.svg).
 - **migrate** runs before the backend starts. The backend never changes the schema itself.
 
 ### CORS, and why this app doesn't need it
