@@ -3,6 +3,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import type { Account, AccountFigures } from "../api";
 import { AccountForm } from "../components/AccountForm";
 import { Modal } from "../components/Modal";
+import { useToasts } from "../components/toast-context";
 import { ACCOUNT_GROUPS, GROUP_ICON, GROUP_PLURAL, currentMonth, groupOf, money, type AccountGroup } from "../format";
 import { useMe, useOverview } from "../hooks";
 
@@ -15,8 +16,9 @@ export function Accounts() {
   const [search, setSearch] = useState("");
   const [showInactive, setShowInactive] = useState(false);
   const [editing, setEditing] = useState<Account | AccountGroup | null>(null);
+  const { hidden } = useToasts();
 
-  const rows = overview.data?.accounts ?? [];
+  const rows = (overview.data?.accounts ?? []).filter((r) => !hidden.has(r.account.id));
   const needle = search.trim().toLowerCase();
   const visible = rows.filter(
     (r) =>
@@ -37,7 +39,7 @@ export function Accounts() {
     <section className="accounts">
       <div className="toolbar">
         <h1>Accounts</h1>
-        <button type="button" className="primary" onClick={() => setEditing(only ?? "bank")}>
+        <button type="button" className="primary" data-return-focus onClick={() => setEditing(only ?? "bank")}>
           Add account
         </button>
       </div>
@@ -100,7 +102,7 @@ export function Accounts() {
                       </span>
                       <KeyFigure row={r} />
                       {canManage(r.account) && (
-                        <button type="button" className="ghost small" onClick={() => setEditing(r.account)}>
+                        <button type="button" className="ghost small" aria-label={`Edit ${r.account.name}`} onClick={() => setEditing(r.account)}>
                           Edit
                         </button>
                       )}

@@ -197,3 +197,50 @@ it("shows an account's figures and history on its page", async () => {
   expect(screen.getByText("+₹1,000.00")).toBeTruthy();
   expect(screen.getByRole("button", { name: "Edit account" })).toBeTruthy();
 });
+
+it("keeps unsaved budgets when you switch month and back", async () => {
+  sessionStorage.clear();
+  const categories = [{ id: "c1", kind: "expense", parent_name: "Everyday", sub_name: "Food", stats_group: "spend", is_active: true, sort_order: 0 }];
+  vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+    const url = String(input);
+    const month = new URL(url, "http://x").searchParams.get("month") ?? "";
+    const body = url.includes("/auth/me") ? ME
+      : url.includes("/budgets") ? { month, carries_forward: true, items: [], next_changes: [] }
+      : url.includes("/categories") ? categories
+      : url.includes("/accounts") ? [HDFC]
+      : url.includes("/transactions") ? { items: [], total: 0 }
+      : url.includes("/stats/month") ? { month, categories: [] }
+      : null;
+    return new Response(JSON.stringify(body), { status: 200 });
+  });
+  renderAt("/budgets");
+  const input = await screen.findByLabelText("Everyday Food budget");
+  fireEvent.change(input, { target: { value: "5000" } });
+  expect(screen.getByRole("region", { name: "Unsaved budgets" }).textContent).toMatch(/1 unsaved change for/);
+
+  fireEvent.click(screen.getByRole("button", { name: "Next month" }));
+  expect(screen.queryByRole("region", { name: "Unsaved budgets" })).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "Previous month" }));
+  expect(((await screen.findByLabelText("Everyday Food budget")) as HTMLInputElement).value).toBe("5000");
+
+  fireEvent.click(screen.getByRole("button", { name: "Discard" }));
+  expect(((await screen.findByLabelText("Everyday Food budget")) as HTMLInputElement).value).toBe("");
+  sessionStorage.clear();
+});
+
+it("says at once when an account with entries can't be deleted", async () => {
+  const deletes: string[] = [];
+  mockApi((url) => (url.includes("/transactions?account_id=a1") ? { items: [], total: 3 } : undefined));
+  const fetchMock = vi.mocked(globalThis.fetch);
+  const original = fetchMock.getMockImplementation()!;
+  fetchMock.mockImplementation(async (input, init) => {
+    if (init?.method === "DELETE") deletes.push(String(input));
+    return original(input, init);
+  });
+  renderAt("/accounts");
+  fireEvent.click(await screen.findByRole("button", { name: "Edit HDFC" }));
+  fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+  expect((await screen.findByRole("alert")).textContent).toBe("HDFC has 3 entries, so it can't be deleted. Deactivate it instead.");
+  expect(deletes).toEqual([]);
+  expect(screen.getByRole("dialog")).toBeTruthy();
+});

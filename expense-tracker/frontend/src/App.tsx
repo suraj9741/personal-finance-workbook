@@ -3,6 +3,8 @@ import { NavLink, Navigate, Outlet, Route, Routes, useNavigate } from "react-rou
 import { post } from "./api";
 import { QuickAdd } from "./components/QuickAdd";
 import { ThemeSwitch } from "./components/ThemeSwitch";
+import { ToastProvider } from "./components/Toast";
+import { useToasts } from "./components/toast-context";
 import { useMe } from "./hooks";
 import { AccountDetails } from "./pages/AccountDetails";
 import { Accounts } from "./pages/Accounts";
@@ -17,10 +19,13 @@ function Shell() {
   const { data: me, isLoading } = useMe();
   const client = useQueryClient();
   const navigate = useNavigate();
+  const toasts = useToasts();
   if (isLoading) return <p className="loading">Loading…</p>;
   if (!me) return <Navigate to="/login" replace />;
 
   async function logout() {
+    // Send any delete still waiting for its Undo to run out, while the session still exists.
+    await toasts.flush();
     await post("/auth/logout").catch(() => undefined);
     client.clear();
     navigate("/login", { replace: true });
@@ -58,20 +63,22 @@ function Shell() {
 
 export function App() {
   return (
-    <Routes>
-      <Route path="/login" element={<Login />} />
-      <Route path="/invite/:token" element={<AcceptInvite />} />
-      <Route path="/reset/:token" element={<ResetPassword />} />
-      <Route element={<Shell />}>
-        <Route index element={<Dashboard />} />
-        <Route path="transactions" element={<Transactions />} />
-        <Route path="accounts" element={<Accounts />} />
-        <Route path="accounts/:id" element={<AccountDetails />} />
-        <Route path="budgets" element={<Budgets />} />
-        <Route path="settings" element={<Settings />} />
-        <Route path="admin" element={<Admin />} />
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Route>
-    </Routes>
+    <ToastProvider>
+      <Routes>
+        <Route path="/login" element={<Login />} />
+        <Route path="/invite/:token" element={<AcceptInvite />} />
+        <Route path="/reset/:token" element={<ResetPassword />} />
+        <Route element={<Shell />}>
+          <Route index element={<Dashboard />} />
+          <Route path="transactions" element={<Transactions />} />
+          <Route path="accounts" element={<Accounts />} />
+          <Route path="accounts/:id" element={<AccountDetails />} />
+          <Route path="budgets" element={<Budgets />} />
+          <Route path="settings" element={<Settings />} />
+          <Route path="admin" element={<Admin />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Route>
+      </Routes>
+    </ToastProvider>
   );
 }

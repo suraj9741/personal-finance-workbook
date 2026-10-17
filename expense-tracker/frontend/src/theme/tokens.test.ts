@@ -17,4 +17,11 @@ describe("design tokens", () => {
     const used = new Set([...styles.matchAll(/var\((--[\w-]+)/g)].map((m) => m[1]));
     expect([...used].filter((name) => !defined.has(name))).toEqual([]);
   });
+
+  it("keeps the selected segment and popup buttons visible in dark mode", () => {
+    const dark = (name: string) => tokens.match(new RegExp(`${name}:\\s*light-dark\\([^,]+,\\s*([^)]+)\\)`))?.[1].trim();
+    expect(dark("--color-segment-thumb")).not.toBe(dark("--color-fill"));
+    expect(dark("--color-segment-thumb")).not.toBe(dark("--color-surface-raised"));
+    expect(dark("--color-fill-elevated")).not.toBe(dark("--color-surface-raised"));
+  });
 });

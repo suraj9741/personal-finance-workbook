@@ -1,6 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { api, del, patch, post, put, type AdminHousehold, type AdminUser, type InviteLink, type Kind } from "../api";
+import { BusyLabel, InlineRename } from "../components/FormBits";
+import { useToasts } from "../components/toast-context";
 import { useMe } from "../hooks";
 import { InviteBox } from "./Settings";
 
@@ -48,25 +50,34 @@ function Invites() {
   return (
     <div className="card">
       <h2>Invite someone</h2>
-      <div className="row wrap">
-        <select aria-label="Invite into" value={target} onChange={(e) => setTarget(e.target.value)}>
-          <option value="new">Their own new household (private tracker)</option>
-          {households.map((h) => (
-            <option key={h.id} value={h.id}>
-              Join "{h.name}"
-            </option>
-          ))}
-        </select>
-        {target === "new" ? (
-          <input placeholder="Household name (optional)" value={name} onChange={(e) => setName(e.target.value)} />
-        ) : (
-          <select aria-label="Role" value={role} onChange={(e) => setRole(e.target.value)}>
-            <option value="member">Member</option>
-            <option value="owner">Owner</option>
+      <div className="row wrap fields">
+        <label className="field">
+          Invite into
+          <select value={target} onChange={(e) => setTarget(e.target.value)}>
+            <option value="new">Their own new household (private tracker)</option>
+            {households.map((h) => (
+              <option key={h.id} value={h.id}>
+                Join "{h.name}"
+              </option>
+            ))}
           </select>
+        </label>
+        {target === "new" ? (
+          <label className="field">
+            Household name (optional)
+            <input placeholder="e.g. Sam's" value={name} onChange={(e) => setName(e.target.value)} />
+          </label>
+        ) : (
+          <label className="field">
+            Role
+            <select value={role} onChange={(e) => setRole(e.target.value)}>
+              <option value="member">Member</option>
+              <option value="owner">Owner</option>
+            </select>
+          </label>
         )}
-        <button type="button" className="primary" onClick={() => create.mutate()}>
-          Create invite link
+        <button type="button" className="primary" disabled={create.isPending} onClick={() => create.mutate()}>
+          <BusyLabel busy={create.isPending} idle="Create invite link" working="Creating…" />
         </button>
       </div>
       {invite && <InviteBox invite={invite} />}
@@ -146,10 +157,6 @@ function Users({ meId }: { meId: string }) {
 function Households() {
   const households = useQuery({ queryKey: ["admin-households"], queryFn: () => api<AdminHousehold[]>("/admin/households") }).data ?? [];
   const refresh = useRefresh("admin-households", "admin-users", "me");
-  const rename = useMutation({
-    mutationFn: ({ id, name }: { id: string; name: string }) => patch(`/admin/households/${id}`, { name }),
-    onSuccess: refresh,
-  });
   return (
     <div className="card">
       <h2>Households</h2>
@@ -160,16 +167,7 @@ function Households() {
               <strong>{h.name}</strong>{" "}
               <small className="muted">{h.members.map((m) => `${m.display_name} (${m.role})`).join(", ") || "no members"}</small>
             </span>
-            <button
-              type="button"
-              className="ghost small"
-              onClick={() => {
-                const name = window.prompt("Rename household", h.name);
-                if (name && name !== h.name) rename.mutate({ id: h.id, name });
-              }}
-            >
-              Rename
-            </button>
+            <InlineRename value={h.name} label={`New name for ${h.name}`} onSave={(name) => patch(`/admin/households/${h.id}`, { name }).then(refresh)} />
           </li>
         ))}
       </ul>
@@ -178,7 +176,8 @@ function Households() {
 }
 
 function Template() {
-  const rows = useQuery({ queryKey: ["admin-template"], queryFn: () => api<Template[]>("/admin/category-template") }).data ?? [];
+  const { hidden, deferDelete } = useToasts();
+  const rows = (useQuery({ queryKey: ["admin-template"], queryFn: () => api<Template[]>("/admin/category-template") }).data ?? []).filter((r) => !hidden.has(r.id));
   const refresh = useRefresh("admin-template");
   const [kind, setKind] = useState<Kind>("expense");
   const [parent, setParent] = useState("");
@@ -192,7 +191,8 @@ function Template() {
     },
     onError: (e: Error) => setError(e.message),
   });
-  const remove = useMutation({ mutationFn: (id: string) => del(`/admin/category-template/${id}`), onSuccess: refresh });
+  const remove = (r: Template) =>
+    deferDelete({ id: r.id, text: `Removed ${r.sub_name} from the template`, commit: (keepalive) => del(`/admin/category-template/${r.id}`, keepalive), after: refresh });
   const shown = rows.filter((r) => r.kind === kind);
   const parents = [...new Set(shown.map((r) => r.parent_name))];
   return (
@@ -201,16 +201,25 @@ function Template() {
         Category template for new households <small className="muted">({rows.length})</small>
       </summary>
       <p className="muted small">New households get a copy of this list. Existing households are not changed.</p>
-      <div className="row wrap">
-        <select aria-label="Template type" value={kind} onChange={(e) => setKind(e.target.value as Kind)}>
-          <option value="expense">Expense</option>
-          <option value="income">Income</option>
-          <option value="transfer">Transfer</option>
-        </select>
-        <input placeholder="Group" value={parent} onChange={(e) => setParent(e.target.value)} />
-        <input placeholder="Category" value={sub} onChange={(e) => setSub(e.target.value)} />
-        <button type="button" disabled={!parent || !sub} onClick={() => add.mutate()}>
-          Add
+      <div className="row wrap fields">
+        <label className="field">
+          Type
+          <select value={kind} onChange={(e) => setKind(e.target.value as Kind)}>
+            <option value="expense">Expense</option>
+            <option value="income">Income</option>
+            <option value="transfer">Transfer</option>
+          </select>
+        </label>
+        <label className="field">
+          Group
+          <input placeholder="e.g. Everyday" value={parent} onChange={(e) => setParent(e.target.value)} />
+        </label>
+        <label className="field">
+          Category
+          <input placeholder="e.g. Snacks" value={sub} onChange={(e) => setSub(e.target.value)} />
+        </label>
+        <button type="button" disabled={!parent || !sub || add.isPending} onClick={() => add.mutate()}>
+          <BusyLabel busy={add.isPending} idle="Add" working="Adding…" />
         </button>
       </div>
       {error && <p className="error">{error}</p>}
@@ -223,7 +232,7 @@ function Template() {
               .map((r) => (
                 <span key={r.id} className="chip">
                   {r.sub_name}
-                  <button type="button" aria-label={`Remove ${r.sub_name}`} onClick={() => remove.mutate(r.id)}>
+                  <button type="button" aria-label={`Remove ${r.sub_name}`} onClick={() => remove(r)}>
                     ✕
                   </button>
                 </span>

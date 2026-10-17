@@ -5,6 +5,7 @@ import { api, patch, post, type Transaction } from "../api";
 import { CategoryPicker } from "../components/CategoryPicker";
 import { Modal } from "../components/Modal";
 import { MonthPicker } from "../components/MonthPicker";
+import { useToasts } from "../components/toast-context";
 import { TransactionForm } from "../components/TransactionForm";
 import { TX_TYPE_LABEL, accountLabel, categoryKind, currentMonth, dayHeading, dayLabel, dayTotals, money, monthLabel, txSign } from "../format";
 import { useAccounts, useCategories, useMembers, useRefreshMoney } from "../hooks";
@@ -30,6 +31,7 @@ export function Transactions() {
   const members = useMembers().data ?? [];
   const refresh = useRefreshMoney();
   const client = useQueryClient();
+  const { hidden } = useToasts();
   const [editing, setEditing] = useState<Transaction | "new" | null>(null);
   const [limit, setLimit] = useState(PAGE);
   const [notice, setNotice] = useState("");
@@ -113,8 +115,10 @@ export function Transactions() {
   });
 
   const accountName = (id: string | null) => accountLabel(accounts.find((a) => a.id === id), accounts);
-  const items = list.data?.items ?? [];
-  const total = list.data?.total ?? 0;
+  // Rows deleted a moment ago stay hidden while their Undo is on offer.
+  const loaded = list.data?.items ?? [];
+  const items = loaded.filter((t) => !hidden.has(t.id));
+  const total = (list.data?.total ?? 0) - (loaded.length - items.length);
   const days = byDay(items);
   const filtered = FILTERS.some((f) => params.get(f));
   const showAddedBy = members.length > 1;
@@ -130,7 +134,7 @@ export function Transactions() {
     <section>
       <div className="toolbar">
         <MonthPicker month={month} onChange={(m) => setFilter("month", m)} />
-        <button type="button" className="primary" onClick={() => setEditing("new")}>
+        <button type="button" className="primary" data-return-focus onClick={() => setEditing("new")}>
           Full form
         </button>
       </div>
