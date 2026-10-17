@@ -96,6 +96,14 @@
 
   --text-kpi-size: 1.5rem;
 
+  /* ---- dashboard ---- */
+  /* The three big numbers; one step smaller under 1024px. */
+  --text-hero-size: var(--text-display-size);
+  /* Old numbers dim to this while the next month or scope loads. */
+  --stale-opacity: 0.6;
+  --figures-gap: var(--space-2) var(--space-8);
+  --trend-max-height: 16rem;
+
   /* ---- spacing (4px base, rem so it scales with text size) ---- */
   --space-0: 0.125rem;
   --space-1: 0.25rem;
@@ -169,6 +177,13 @@
   :root {
     --control-h: 2.75rem;
     --control-h-sm: 2.25rem;
+  }
+}
+
+/* Dashboard below wide: the hero numbers drop to large-title size. */
+@media (max-width: 1024px) {
+  :root {
+    --text-hero-size: var(--text-large-title-size);
   }
 }
 
