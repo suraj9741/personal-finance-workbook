@@ -5,6 +5,9 @@ import { useOverview } from "../hooks";
 import { Kpi } from "./Kpi";
 import { Icon } from "./Icon";
 
+/** Money you hold: green above zero, red below, plain at zero. */
+const balanceTone = (value: string) => (Number(value) > 0 ? "good" : Number(value) < 0 ? "bad" : undefined);
+
 const sum = (rows: AccountFigures[], pick: (r: AccountFigures) => string | null) =>
   rows.reduce((total, r) => total + Number(pick(r) ?? 0), 0);
 
@@ -70,7 +73,12 @@ export function FinancialOverview({ month }: { month: string }) {
     <section className="overview" aria-label="Financial overview">
       <h2 className="section-title">Financial overview</h2>
       <div className="kpis">
-        <Kpi label="Total bank balance" value={money(t.bank_balance)} note="Active bank and cash accounts" />
+        <Kpi
+          label="Total bank balance"
+          value={money(t.bank_balance)}
+          note="Active bank and cash accounts"
+          tone={balanceTone(t.bank_balance)}
+        />
         <Kpi
           label="Credit card outstanding"
           value={money(t.card_outstanding)}
