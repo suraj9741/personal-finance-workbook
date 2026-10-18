@@ -250,7 +250,7 @@ export function QuickAdd() {
           ))}
         </ul>
       </span>
-      <AccountPicker accounts={accounts} value={account} onChange={setAccountId} variant="select" />
+      <AccountPicker accounts={accounts} value={account} onChange={setAccountId} variant="compact" />
       <input type="date" aria-label="Date" value={date} onChange={(e) => setDate(e.target.value)} />
       <button type="submit" className="primary" disabled={save.isPending}>
         {/* Both labels share one grid cell, so the button keeps the wider one's width. */}

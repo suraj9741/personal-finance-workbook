@@ -101,18 +101,34 @@ input, select, textarea, button {
   min-height: var(--control-h);
 }
 
+/* Filled fields: a soft grey box with no border; the blue edge and ring appear only while focused. */
 input, select, textarea {
-  background: var(--color-surface);
-  border: 1px solid var(--color-control-border);
+  background-color: var(--color-fill);
+  border: 1px solid transparent;
   padding: 0 var(--space-3);
-  transition: border-color var(--motion-fast) var(--motion-ease), box-shadow var(--motion-fast) var(--motion-ease);
+  transition:
+    background-color var(--motion-fast) var(--motion-ease),
+    border-color var(--motion-fast) var(--motion-ease),
+    box-shadow var(--motion-fast) var(--motion-ease);
 }
 textarea { padding: var(--space-2) var(--space-3); }
 input::placeholder, textarea::placeholder { color: var(--color-text-tertiary); }
+@media (hover: hover) {
+  :is(input, select, textarea):not(:focus, :disabled):hover { background-color: var(--color-fill-hover); }
+}
 input:focus, select:focus, textarea:focus {
   outline: none;
   border-color: var(--color-accent);
   box-shadow: 0 0 0 3px var(--color-focus-ring);
+}
+/* The browser's own select frame ignores the fill in Safari, so draw the chevron ourselves. */
+select {
+  appearance: none;
+  padding-right: calc(var(--space-3) + var(--select-chevron-size) + var(--space-2));
+  background-image: var(--select-chevron);
+  background-repeat: no-repeat;
+  background-position: right var(--space-3) center;
+  background-size: var(--select-chevron-size);
 }
 [aria-invalid="true"] { border-color: var(--color-negative); }
 
@@ -310,6 +326,82 @@ details.card[open] > summary { margin-bottom: var(--space-3); }
 .suggestions [role="option"][aria-selected="true"] { background: var(--color-fill-hover); }
 .suggestions small { color: var(--color-text-secondary); }
 
+/* ---- search picker: a field-like button, and a list with a search box (SearchPicker.tsx) ---- */
+.search-picker { display: inline-flex; min-width: 0; }
+.search-picker-button {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  min-width: var(--field-sm);
+  padding: 0 var(--space-3);
+  border: 1px solid transparent;
+  font-weight: 400;
+  text-align: left;
+}
+.search-picker-button:active:not(:disabled) { transform: none; }
+.search-picker-button[aria-expanded="true"] { border-color: var(--color-accent); box-shadow: 0 0 0 3px var(--color-focus-ring); }
+.search-picker-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.search-picker-button small, .search-picker-pop small { color: var(--color-text-secondary); font-size: var(--text-footnote-size); }
+.search-picker-chevron { color: var(--color-text-tertiary); }
+.search-picker-pop {
+  position: fixed;
+  z-index: 20;
+  left: var(--pop-x);
+  top: var(--pop-y);
+  width: var(--pop-w);
+  max-height: var(--pop-max-h);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-1);
+  background: var(--color-surface-raised);
+  --color-fill: var(--color-fill-elevated);
+  --color-fill-hover: var(--color-fill-elevated-hover);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-popover);
+  color: var(--color-text);
+  font-size: var(--text-callout-size);
+}
+.search-picker-pop.up { transform: translateY(-100%); }
+.search-picker-pop input { width: 100%; min-height: var(--control-h-sm); flex: none; }
+.search-picker-pop ul { margin: 0; padding: 0; list-style: none; overflow-y: auto; overscroll-behavior: contain; }
+.search-picker-group {
+  padding: var(--space-2) var(--space-2) var(--space-1);
+  color: var(--color-text-secondary);
+  font-size: var(--text-caption-size);
+  font-weight: var(--text-caption-weight);
+  letter-spacing: var(--text-caption-tracking);
+}
+.search-picker-pop [role="option"] {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-2);
+  min-height: var(--control-h);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+.search-picker-name { flex: 1; min-width: 0; }
+.search-picker-name mark { background: none; color: inherit; font-weight: 700; }
+.search-picker-icon {
+  display: grid;
+  place-items: center;
+  width: var(--picker-icon-box);
+  height: var(--picker-icon-box);
+  flex: none;
+  border-radius: var(--radius-sm);
+  background: var(--color-fill);
+  color: var(--color-text-secondary);
+}
+.search-picker-check { color: var(--color-accent); visibility: hidden; }
+.search-picker-pop [aria-selected="true"] .search-picker-check { visibility: visible; }
+/* The keyboard-active row and the hovered one are the same thing: hover moves it. */
+.search-picker-pop [data-active] { background: var(--color-accent-fill); color: var(--color-on-accent); }
+.search-picker-pop [data-active] :is(small, .search-picker-check, .search-picker-icon) { color: var(--color-on-accent); }
+.search-picker-pop [data-active] .search-picker-icon { background: var(--color-picker-icon-active); }
+.search-picker-empty { padding: var(--space-2); color: var(--color-text-secondary); }
+
 /* ---- toolbars, pickers, filters ---- */
 .toolbar { display: flex; justify-content: space-between; align-items: center; gap: var(--space-3); flex-wrap: wrap; margin-bottom: var(--space-4); }
 .month-picker { display: flex; align-items: center; gap: var(--space-2); }
@@ -385,8 +477,6 @@ details.card[open] > summary { margin-bottom: var(--space-3); }
 @media (prefers-reduced-motion: reduce) {
   .segmented[data-ready] .segmented-thumb { transition: none; scale: none; }
 }
-.picker { display: inline-flex; gap: var(--space-1); flex-wrap: wrap; }
-.picker select { max-width: var(--field-md); }
 .filters { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-bottom: var(--space-3); }
 .filters input[type="search"] { flex: 1; min-width: var(--field-lg); }
 .check { display: flex; align-items: center; gap: var(--space-2); }
@@ -894,6 +984,8 @@ html:has(.modal[open]) { overflow: hidden; }
 .plain-fieldset { border: 0; padding: 0; margin: 0; display: grid; gap: var(--space-1); min-width: 0; }
 .plain-fieldset legend { font-size: var(--text-callout-size); color: var(--color-text-secondary); padding: 0; margin-bottom: var(--space-1); }
 .account-picker { display: inline-flex; gap: var(--space-2); flex-wrap: wrap; align-items: center; }
+.account-picker.compact { flex: 0 1 var(--field-lg); min-width: var(--field-md); }
+.account-picker.compact .search-picker { flex: 1; }
 .account-picker.buttons { display: grid; gap: var(--space-2); }
 .account-picker.buttons .segmented { margin-bottom: 0; }
 .form-pair { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-3); }
@@ -1343,7 +1435,9 @@ tfoot th { color: var(--color-text); font-weight: 600; border-top: 1px solid var
   .bars li { grid-template-columns: 1fr auto; }
   .bars .meter { grid-column: 1 / -1; grid-row: 2; }
   .qa-amount { width: 100%; }
-  .quick-add > select, .quick-add > input[type="date"] { flex: 1; }
+  .quick-add > .account-picker, .quick-add > input[type="date"] { flex: 1; }
+  /* On a phone the list spans the screen, under or over its button. */
+  .search-picker-pop { left: var(--space-4); width: calc(100% - 2 * var(--space-4)); }
   .form-pair { grid-template-columns: 1fr; }
   /* Popups become bottom sheets: full width, rising from the bottom edge. */
   .modal {

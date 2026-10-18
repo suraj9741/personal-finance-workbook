@@ -7,6 +7,7 @@ const PATHS = {
   chart: "M3 17l6-6 4 4 8-8M15 7h6v6",
   "chevron-left": "M15 5l-7 7 7 7",
   "chevron-right": "M9 5l7 7-7 7",
+  "chevron-down": "M6 9l6 6 6-6",
   close: "M6 6l12 12M18 6L6 18",
   check: "M5 12.5l4.5 4.5L19 7",
   "arrow-right": "M4 12h16M14 6l6 6-6 6",

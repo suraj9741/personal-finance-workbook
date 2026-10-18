@@ -171,7 +171,8 @@ export function TransactionForm({ existing, accountId, onDone }: Props) {
         <legend>{form.type === "transfer" ? "From account" : "Account"}</legend>
         <AccountPicker
           accounts={accounts}
-          value={form.account_id}
+          // Accounts can arrive after the form opens; show the one saving will use (see onSubmit).
+          value={form.account_id || accounts[0]?.id || ""}
           label={form.type === "transfer" ? "From" : undefined}
           groups={form.type === "buy" || form.type === "sell" ? ["share_broker"] : undefined}
           onChange={(id) => set({ account_id: id })}
