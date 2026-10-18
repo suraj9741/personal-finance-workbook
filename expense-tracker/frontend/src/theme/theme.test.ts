@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, it } from "vitest";
-import { THEME_KEY, applyTheme, readTheme, saveTheme } from "./theme";
+import { THEME_KEY, applyTheme, onThemeChange, readTheme, saveTheme } from "./theme";
 
 beforeEach(() => {
   document.head.innerHTML = `
@@ -36,4 +36,17 @@ it("sets data-theme and the browser bar colour, and System puts both back", () =
   applyTheme("system");
   expect(document.documentElement.dataset.theme).toBeUndefined();
   expect(metaColours()).toEqual(["#f5f5f7", "#000000"]);
+});
+
+it("tells the other switches on the page, and follows other tabs", () => {
+  const seen: string[] = [];
+  const stop = onThemeChange((pref) => seen.push(pref));
+  saveTheme("dark");
+  expect(seen).toEqual(["dark"]);
+  localStorage.setItem(THEME_KEY, "light");
+  window.dispatchEvent(new StorageEvent("storage", { key: THEME_KEY }));
+  expect(seen).toEqual(["dark", "light"]);
+  stop();
+  saveTheme("system");
+  expect(seen).toEqual(["dark", "light"]);
 });

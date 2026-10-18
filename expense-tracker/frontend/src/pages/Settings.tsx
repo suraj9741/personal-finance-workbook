@@ -1,13 +1,18 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
-import { api, del, patch, post, type Category, type InviteLink, type Kind, type Member, type StatsGroup } from "../api";
+import { api, ApiError, del, patch, post, type Category, type InviteLink, type Kind, type Member, type Rule, type StatsGroup } from "../api";
 import { CategoryPicker } from "../components/CategoryPicker";
-import { BusyLabel, InlineRename } from "../components/FormBits";
+import { CopyLink } from "../components/CopyLink";
+import { BusyLabel, FieldError, InlineRename } from "../components/FormBits";
 import { Modal } from "../components/Modal";
+import { SegmentedRadio } from "../components/SegmentedRadio";
+import { SettingsNav, SettingsSection } from "../components/SettingsNav";
+import { ThemeSwitch } from "../components/ThemeSwitch";
 import { useToasts } from "../components/toast-context";
 import { categoryLabel } from "../format";
-import { useCategories, useMe, useMembers, useRules } from "../hooks";
+import { invalidProps, splitServerError, type FieldErrors } from "../forms";
+import { useCategories, useMe, useMembers, useRefreshMoney, useRules } from "../hooks";
 
 const GROUP_LABEL: Record<StatsGroup, string> = {
   spend: "Spending",
@@ -17,137 +22,709 @@ const GROUP_LABEL: Record<StatsGroup, string> = {
   repaid: "Paid back to me",
   transfer: "Transfer",
 };
+/** The "Counts as" choices for each kind; the first is the default. */
+const GROUPS_FOR: Record<Kind, StatsGroup[]> = { expense: ["spend", "saving", "lent"], income: ["earned", "repaid"], transfer: ["transfer"] };
+const KINDS = [
+  { value: "expense", label: "Expense" },
+  { value: "income", label: "Income" },
+  { value: "transfer", label: "Transfer" },
+] satisfies { value: Kind; label: string }[];
+const RULE_KINDS = KINDS.filter((k): k is { value: "expense" | "income"; label: string } => k.value !== "transfer");
+const KIND_LABEL: Record<Kind, string> = { expense: "Expense", income: "Income", transfer: "Transfer" };
+const ROLE_LABEL = { owner: "Owner", member: "Member" } as const;
+
+// Most-changed first; the menu reaches the rest in one tap.
+const SECTIONS = [
+  { id: "categories", label: "Categories" },
+  { id: "rules", label: "Rules" },
+  { id: "household", label: "Household" },
+  { id: "you", label: "You" },
+];
+
+const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 
 export function Settings() {
   const me = useMe().data;
   const isOwner = me?.role === "owner";
   return (
-    <section className="settings">
-      <h1>Settings · {me?.household_name}</h1>
-      <Profile />
-      <Members isOwner={isOwner} />
-      <Accounts />
-      <Rules />
-      <Categories isOwner={isOwner} />
-    </section>
+    <div className="settings-page">
+      <header className="settings-head">
+        <h1>Settings</h1>
+        {me?.household_name && (
+          <p className="muted">
+            {me.household_name} · you're {isOwner ? "an owner" : "a member"}
+          </p>
+        )}
+      </header>
+      <div className="settings-layout">
+        <SettingsNav sections={SECTIONS} />
+        <div className="settings-content">
+          <Categories isOwner={isOwner} />
+          <Rules isOwner={isOwner} meId={me?.id} />
+          <Household isOwner={isOwner} meId={me?.id} />
+          <You />
+        </div>
+      </div>
+    </div>
   );
 }
 
 function useInvalidate(...keys: string[]) {
   const client = useQueryClient();
-  return () => keys.forEach((key) => client.invalidateQueries({ queryKey: [key] }));
+  return () => Promise.all(keys.map((key) => client.invalidateQueries({ queryKey: [key] })));
 }
 
-function Profile() {
-  const [current, setCurrent] = useState("");
-  const [next, setNext] = useState("");
-  const [message, setMessage] = useState("");
-  const change = useMutation({
-    mutationFn: () => post("/auth/password", { current_password: current, new_password: next }),
-    onSuccess: () => {
-      setMessage("Password changed");
-      setCurrent("");
-      setNext("");
-    },
-    onError: (e: Error) => setMessage(e.message),
+// ---- categories ----------------------------------------------------------------------
+
+type RowNote = { text: string; blocked?: boolean };
+
+function Categories({ isOwner }: { isOwner: boolean }) {
+  const { hidden, deferDelete, offerUndo, notify } = useToasts();
+  const categories = (useCategories(true).data ?? []).filter((c) => !hidden.has(c.id));
+  const refresh = useInvalidate("categories");
+  const [kind, setKind] = useState<Kind>("expense");
+  const [query, setQuery] = useState("");
+  const [showInactive, setShowInactive] = useState(false);
+  const [openGroups, setOpenGroups] = useState<ReadonlySet<string>>(new Set());
+  const [notes, setNotes] = useState<Record<string, RowNote | undefined>>({});
+  const setNote = (id: string, note?: RowNote) => setNotes((n) => ({ ...n, [id]: note }));
+
+  const update = useMutation({
+    mutationFn: ({ id, ...changes }: Partial<Category> & { id: string }) => patch(`/categories/${id}`, changes),
+    onMutate: ({ id }) => setNote(id),
+    onSuccess: refresh,
+    onError: (e: Error, { id }) => setNote(id, { text: e.message }),
   });
+  // A category that entries use can't be deleted: say so on its row now, not 6 seconds later.
+  const remove = useMutation({
+    mutationFn: (c: Category) => api<{ total: number }>(`/transactions?category_id=${c.id}&limit=1`).then(({ total }) => ({ c, total })),
+    onMutate: (c) => setNote(c.id),
+    onSuccess: ({ c, total }) => {
+      if (total > 0) return setNote(c.id, { text: `Used by ${plural(total, "entry", "entries")}, so it can't be deleted.`, blocked: true });
+      deferDelete({ id: c.id, text: `Deleted ${c.sub_name}`, commit: (keepalive) => del(`/categories/${c.id}`, keepalive), after: refresh });
+    },
+    onError: (e: Error, c) => setNote(c.id, { text: e.message }),
+  });
+
+  function setActive(c: Category, active: boolean) {
+    update.mutate(
+      { id: c.id, is_active: active },
+      {
+        onSuccess: () => {
+          if (active) notify(`Activated ${c.sub_name}`);
+          else offerUndo({ text: `Deactivated ${c.sub_name}`, revert: () => patch(`/categories/${c.id}`, { is_active: true }).then(refresh) });
+        },
+      },
+    );
+  }
+
+  const ofKind = categories.filter((c) => c.kind === kind);
+  const inactiveCount = ofKind.filter((c) => !c.is_active).length;
+  const q = query.trim().toLowerCase();
+  const matches = (c: Category) => !q || c.sub_name.toLowerCase().includes(q) || c.parent_name.toLowerCase().includes(q);
+  const listed = (c: Category) => (showInactive || c.is_active) && matches(c);
+  const shown = ofKind.filter(listed);
+  const parents = [...new Set(shown.map((c) => c.parent_name))];
+  const elsewhere = q && shown.length === 0 ? KINDS.filter((k) => k.value !== kind).map((k) => ({ ...k, count: categories.filter((c) => c.kind === k.value && listed(c)).length })).filter((k) => k.count > 0) : [];
+
+  function toggleGroup(parent: string, open: boolean) {
+    setOpenGroups((prev) => {
+      if (prev.has(parent) === open) return prev;
+      const next = new Set(prev);
+      if (open) next.add(parent);
+      else next.delete(parent);
+      return next;
+    });
+  }
+
   return (
-    <details className="card">
-      <summary>My password</summary>
-      <form
-        className="row wrap fields"
-        aria-busy={change.isPending}
-        onSubmit={(e) => {
-          e.preventDefault();
-          if (!change.isPending) change.mutate();
-        }}
-      >
-        <label className="field">
-          Current password
-          <input type="password" autoComplete="current-password" value={current} onChange={(e) => setCurrent(e.target.value)} required />
-        </label>
-        <label className="field">
-          New password (10+ characters)
-          <input type="password" autoComplete="new-password" minLength={10} value={next} onChange={(e) => setNext(e.target.value)} required />
-        </label>
-        <button type="submit" disabled={change.isPending}>
-          <BusyLabel busy={change.isPending} idle="Change password" working="Changing…" />
-        </button>
-      </form>
-      {message && <p className="notice">{message}</p>}
-    </details>
+    <SettingsSection id="categories" title="Categories" intro="Counts as decides where the money shows on the dashboard: Spending, Saving / investing or Lent.">
+      <div className="card">
+        <div className="cat-toolbar">
+          <SegmentedRadio label="Category type" options={KINDS} value={kind} onChange={setKind} />
+          <input type="search" aria-label="Find a category" placeholder="Find a category" value={query} onChange={(e) => setQuery(e.target.value)} />
+          {(inactiveCount > 0 || showInactive) && (
+            <label className="check">
+              <input type="checkbox" checked={showInactive} onChange={(e) => setShowInactive(e.target.checked)} />
+              Show inactive ({inactiveCount})
+            </label>
+          )}
+          {isOwner ? (
+            <AddCategory
+              kind={kind}
+              parents={[...new Set(ofKind.map((c) => c.parent_name))]}
+              onAdded={(parent) => {
+                toggleGroup(parent, true);
+                return refresh();
+              }}
+            />
+          ) : (
+            <p className="muted small">Only owners can change categories.</p>
+          )}
+        </div>
+        <p className="sr-only" role="status">
+          {q ? (shown.length ? `${plural(shown.length, "category matches", "categories match")}` : "No categories match") : ""}
+        </p>
+        {q && shown.length === 0 && (
+          <div className="cat-empty">
+            <p>No categories match "{query.trim()}".</p>
+            {elsewhere.map((k) => (
+              <button key={k.value} type="button" className="ghost small" onClick={() => setKind(k.value)}>
+                Show {k.count} in {k.label}
+              </button>
+            ))}
+          </div>
+        )}
+        {parents.map((p) => {
+          const rows = shown.filter((c) => c.parent_name === p);
+          const open = !!q || openGroups.has(p);
+          return (
+            <details key={`${kind}:${p}`} className="cat-group" open={open} onToggle={(e) => !q && toggleGroup(p, e.currentTarget.open)}>
+              <summary>
+                <h3>{p}</h3>
+                <span className="muted small">
+                  {rows.length}
+                  <span className="sr-only"> {rows.length === 1 ? "category" : "categories"}</span>
+                </span>
+              </summary>
+              {open && (
+                <>
+                  <div className="cat-row cat-head" aria-hidden="true">
+                    <span>Category</span>
+                    <span>Counts as</span>
+                  </div>
+                  <ul className="settings-list">
+                    {rows.map((c) => (
+                      <CategoryRow
+                        key={c.id}
+                        c={c}
+                        isOwner={isOwner}
+                        note={notes[c.id]}
+                        group={update.isPending && update.variables.id === c.id && update.variables.stats_group ? update.variables.stats_group : c.stats_group}
+                        deleting={remove.isPending && remove.variables.id === c.id}
+                        onGroup={(stats_group) => update.mutate({ id: c.id, stats_group })}
+                        onRename={(name) => patch(`/categories/${c.id}`, { sub_name: name }).then(refresh)}
+                        onActive={(active) => setActive(c, active)}
+                        onDelete={() => remove.mutate(c)}
+                      />
+                    ))}
+                  </ul>
+                </>
+              )}
+            </details>
+          );
+        })}
+        {!q && parents.length === 0 && <p className="muted">No {KIND_LABEL[kind].toLowerCase()} categories yet.</p>}
+      </div>
+    </SettingsSection>
   );
 }
 
-function Members({ isOwner }: { isOwner: boolean }) {
-  const members = useMembers().data ?? [];
-  const me = useMe().data;
-  const refresh = useInvalidate("members");
-  const [invite, setInvite] = useState<InviteLink | null>(null);
-  const [error, setError] = useState("");
-  const [removing, setRemoving] = useState<Member | null>(null);
-  const create = useMutation({
-    mutationFn: (role: string) => post<InviteLink>("/invites", { role }),
-    onSuccess: setInvite,
-    onError: (e: Error) => setError(e.message),
-  });
-  const setRole = useMutation({
-    mutationFn: ({ id, role }: { id: string; role: string }) => patch(`/household/members/${id}`, { role }),
-    onSuccess: refresh,
-    onError: (e: Error) => setError(e.message),
-  });
-  const remove = useMutation({
-    mutationFn: (id: string) => del(`/household/members/${id}`),
-    onSuccess: () => {
-      refresh();
-      setRemoving(null);
-    },
-  });
+function CategoryRow({ c, isOwner, note, group, deleting, onGroup, onRename, onActive, onDelete }: {
+  c: Category;
+  isOwner: boolean;
+  note?: RowNote;
+  group: StatsGroup;
+  deleting: boolean;
+  onGroup: (group: StatsGroup) => void;
+  onRename: (name: string) => Promise<unknown>;
+  onActive: (active: boolean) => void;
+  onDelete: () => void;
+}) {
   return (
-    <div className="card">
-      <h2>Members</h2>
-      <ul className="plain">
-        {members.map((m) => (
-          <li key={m.user_id} className="row">
-            <span>
-              {m.display_name} <small className="muted">{m.email}</small> {!m.is_active && <small className="muted">(deactivated)</small>}
-            </span>
-            {isOwner && m.user_id !== me?.id && m.is_active ? (
-              <>
-                <select value={m.role} aria-label={`${m.display_name} role`} onChange={(e) => setRole.mutate({ id: m.user_id, role: e.target.value })}>
-                  <option value="owner">Owner</option>
-                  <option value="member">Member</option>
-                </select>
-                <button
-                  type="button"
-                  className="ghost small danger"
-                  onClick={() => {
-                    remove.reset();
-                    setRemoving(m);
-                  }}
-                >
-                  Remove
-                </button>
-              </>
-            ) : (
-              <small className="muted">{m.role}</small>
+    <li className="cat-row">
+      <div className="cat-name">
+        {isOwner ? <InlineRename value={c.sub_name} label={`New name for ${c.sub_name}`} onSave={onRename} /> : <span>{c.sub_name}</span>}
+        {!c.is_active && <span className="tag">Inactive</span>}
+        {note && (
+          <p className={note.blocked ? "cat-note" : "cat-note error"} role="alert">
+            <span>{note.text}</span>
+            {note.blocked && c.is_active && (
+              <button type="button" className="ghost small" onClick={() => onActive(false)}>
+                Deactivate instead
+              </button>
             )}
-          </li>
-        ))}
-      </ul>
+          </p>
+        )}
+      </div>
+      <div className="cat-counts">
+        {isOwner && c.kind !== "transfer" ? (
+          <>
+            <span className="cat-caption" aria-hidden="true">
+              Counts as
+            </span>
+            <select aria-label={`${c.sub_name} counts as`} value={group} onChange={(e) => onGroup(e.target.value as StatsGroup)}>
+              {GROUPS_FOR[c.kind].map((g) => (
+                <option key={g} value={g}>
+                  {GROUP_LABEL[g]}
+                </option>
+              ))}
+            </select>
+          </>
+        ) : (
+          <span className="muted small">{GROUP_LABEL[c.stats_group]}</span>
+        )}
+      </div>
       {isOwner && (
-        <div className="row wrap">
-          <button type="button" onClick={() => create.mutate("member")}>
-            Invite a family member
+        <div className="cat-actions">
+          <button type="button" className="ghost small" aria-label={`${c.is_active ? "Deactivate" : "Activate"} ${c.sub_name}`} onClick={() => onActive(!c.is_active)}>
+            {c.is_active ? "Deactivate" : "Activate"}
+          </button>
+          <button type="button" className="ghost small danger" aria-label={`Delete ${c.sub_name}`} disabled={deleting} onClick={onDelete}>
+            Delete
           </button>
         </div>
       )}
-      {invite && <InviteBox invite={invite} />}
-      {error && <p className="error">{error}</p>}
+    </li>
+  );
+}
+
+function AddCategory({ kind, parents, onAdded }: { kind: Kind; parents: string[]; onAdded: (parent: string) => Promise<unknown> }) {
+  const { notify } = useToasts();
+  const [parent, setParent] = useState("");
+  const [sub, setSub] = useState("");
+  const [chosen, setChosen] = useState<{ kind: Kind; group: StatsGroup } | null>(null);
+  const [errors, setErrors] = useState<FieldErrors>({});
+  const [error, setError] = useState("");
+  const formId = useId();
+  // "Counts as" follows the type switch until it's picked for this type.
+  const group = chosen?.kind === kind ? chosen.group : GROUPS_FOR[kind][0];
+  const add = useMutation({
+    mutationFn: () => post<Category>("/categories", { kind, parent_name: parent, sub_name: sub, stats_group: group }),
+    onSuccess: (c) => {
+      setSub("");
+      notify(`Added ${c.sub_name} to ${c.parent_name}`);
+      return onAdded(c.parent_name);
+    },
+    onError: (e: Error) => {
+      if (e instanceof ApiError && e.status === 409) return setErrors({ sub_name: e.message });
+      const split = splitServerError(e, ["parent_name", "sub_name"]);
+      setErrors(split.errors);
+      setError(split.general);
+    },
+  });
+
+  function submit(event: FormEvent) {
+    event.preventDefault();
+    if (add.isPending) return;
+    const found: FieldErrors = {};
+    if (!parent.trim()) found.parent_name = "Enter a group.";
+    if (!sub.trim()) found.sub_name = "Enter a name.";
+    setErrors(found);
+    setError("");
+    if (Object.keys(found).length === 0) add.mutate();
+  }
+
+  const field = (name: string) => invalidProps(errors, name, formId);
+  return (
+    <form className="settings-form" aria-label="Add category" aria-busy={add.isPending} noValidate onSubmit={submit}>
+      <label className="field">
+        Group
+        <input list={`${formId}-parents`} placeholder="e.g. Everyday" maxLength={60} value={parent} onChange={(e) => setParent(e.target.value)} {...field("parent_name")} />
+        <FieldError errors={errors} name="parent_name" formId={formId} />
+      </label>
+      <datalist id={`${formId}-parents`}>
+        {parents.map((p) => (
+          <option key={p} value={p} />
+        ))}
+      </datalist>
+      <label className="field">
+        Category
+        <input placeholder="e.g. Snacks" maxLength={60} value={sub} onChange={(e) => setSub(e.target.value)} {...field("sub_name")} />
+        <FieldError errors={errors} name="sub_name" formId={formId} />
+      </label>
+      {kind !== "transfer" && (
+        <label className="field">
+          Counts as
+          <select value={group} onChange={(e) => setChosen({ kind, group: e.target.value as StatsGroup })}>
+            {GROUPS_FOR[kind].map((g) => (
+              <option key={g} value={g}>
+                {GROUP_LABEL[g]}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
+      <button type="submit" disabled={add.isPending}>
+        <BusyLabel busy={add.isPending} idle="Add category" working="Adding…" />
+      </button>
+      {error && (
+        <p className="error form-line" role="alert">
+          {error}
+        </p>
+      )}
+    </form>
+  );
+}
+
+// ---- rules ---------------------------------------------------------------------------
+
+function Rules({ isOwner, meId }: { isOwner: boolean; meId?: string }) {
+  const { hidden, deferDelete } = useToasts();
+  const rules = (useRules().data ?? []).filter((r) => !hidden.has(r.id));
+  const categories = useCategories(true).data ?? [];
+  const refreshMoney = useRefreshMoney();
+  const [applied, setApplied] = useState<number | null>(null);
+  const remove = (r: Rule) =>
+    deferDelete({ id: r.id, text: `Deleted rule "${r.pattern}"`, commit: (keepalive) => del(`/rules/${r.id}`, keepalive), after: refreshMoney });
+  const apply = useMutation({
+    mutationFn: () => post<{ updated: number }>("/rules/apply"),
+    onMutate: () => setApplied(null),
+    onSuccess: (r) => {
+      setApplied(r.updated);
+      return refreshMoney();
+    },
+  });
+
+  return (
+    <SettingsSection id="rules" title="Rules" intro="When an entry's description contains the text, it gets the category. Rules are checked in order, top first.">
+      <div className="card">
+        {rules.length > 0 ? (
+          <ul className="settings-list">
+            {rules.map((r) => (
+              <RuleRow key={r.id} rule={r} categories={categories} canEdit={isOwner || r.created_by === meId} onDelete={() => remove(r)} onSaved={refreshMoney} />
+            ))}
+          </ul>
+        ) : (
+          <p className="muted">No rules yet. Add one below, or use "Save as rule" on an entry.</p>
+        )}
+        <AddRule categories={categories} onAdded={refreshMoney} />
+        <div className="settings-footer">
+          <p className="muted small">Run your rules on entries that don't have a category yet.</p>
+          <button type="button" disabled={apply.isPending} onClick={() => apply.mutate()}>
+            <BusyLabel busy={apply.isPending} idle="Apply to uncategorized" working="Applying…" />
+          </button>
+        </div>
+        <p className="settings-status" role="status">
+          {applied !== null && (
+            <>
+              {applied > 0 ? `Categorized ${plural(applied, "entry", "entries")}.` : "No uncategorized entries matched a rule."}{" "}
+              <Link to="/transactions?uncategorized=true">See what's still uncategorized</Link>
+            </>
+          )}
+        </p>
+        {apply.error && (
+          <p className="error" role="alert">
+            Couldn't apply rules: {apply.error.message}
+          </p>
+        )}
+      </div>
+    </SettingsSection>
+  );
+}
+
+function RuleRow({ rule, categories, canEdit, onDelete, onSaved }: { rule: Rule; categories: Category[]; canEdit: boolean; onDelete: () => void; onSaved: () => Promise<unknown> }) {
+  const [editing, setEditing] = useState(false);
+  const editRef = useRef<HTMLButtonElement>(null);
+  const wasEditing = useRef(false);
+  const category = categories.find((c) => c.id === rule.category_id);
+
+  useEffect(() => {
+    if (!editing && wasEditing.current) editRef.current?.focus();
+    wasEditing.current = editing;
+  }, [editing]);
+
+  if (editing) {
+    return (
+      <li className="rule-row editing">
+        <RuleForm
+          rule={rule}
+          categories={categories}
+          onDone={() => setEditing(false)}
+          onSaved={onSaved}
+        />
+      </li>
+    );
+  }
+  return (
+    <li className="rule-row">
+      <span className="rule-text">
+        <strong>"{rule.pattern}"</strong> <span aria-hidden="true">→</span>
+        <span className="sr-only">goes to</span> {categoryLabel(category)}
+        {category && !category.is_active && <span className="tag">Inactive</span>}
+      </span>
+      <span className="rule-order muted small">Order {rule.priority}</span>
+      {canEdit && (
+        <span className="rule-actions">
+          <button ref={editRef} type="button" className="ghost small" aria-label={`Edit rule "${rule.pattern}"`} onClick={() => setEditing(true)}>
+            Edit
+          </button>
+          <button type="button" className="ghost small danger" aria-label={`Delete rule "${rule.pattern}"`} onClick={onDelete}>
+            Delete
+          </button>
+        </span>
+      )}
+    </li>
+  );
+}
+
+/** Edit a rule in place: its text, category and order. */
+function RuleForm({ rule, categories, onDone, onSaved }: { rule: Rule; categories: Category[]; onDone: () => void; onSaved: () => Promise<unknown> }) {
+  const [pattern, setPattern] = useState(rule.pattern);
+  const [categoryId, setCategoryId] = useState<string | null>(rule.category_id);
+  const [priority, setPriority] = useState(String(rule.priority));
+  const [errors, setErrors] = useState<FieldErrors>({});
+  const [error, setError] = useState("");
+  const formId = useId();
+  const kind = categories.find((c) => c.id === rule.category_id)?.kind ?? "expense";
+  const save = useMutation({
+    mutationFn: () => patch(`/rules/${rule.id}`, { pattern: pattern.trim(), category_id: categoryId, priority: Number(priority) }),
+    onSuccess: async () => {
+      await onSaved();
+      onDone();
+    },
+    onError: (e: Error) => {
+      if (e instanceof ApiError && e.status === 409) return setErrors({ pattern: e.message });
+      const split = splitServerError(e, ["pattern", "priority"]);
+      setErrors(split.errors);
+      setError(split.general);
+    },
+  });
+
+  function submit(event: FormEvent) {
+    event.preventDefault();
+    if (save.isPending) return;
+    const found: FieldErrors = {};
+    if (pattern.trim().length < 2) found.pattern = "Use at least 2 characters.";
+    if (!/^\d+$/.test(priority) || Number(priority) > 10000) found.priority = "Use a whole number from 0 to 10000.";
+    setErrors(found);
+    setError("");
+    if (Object.keys(found).length === 0) save.mutate();
+  }
+
+  const field = (name: string) => invalidProps(errors, name, formId);
+  return (
+    <form
+      className="settings-form"
+      aria-label={`Edit rule "${rule.pattern}"`}
+      aria-busy={save.isPending}
+      noValidate
+      onSubmit={submit}
+      onKeyDown={(e) => {
+        if (e.key === "Escape") {
+          e.preventDefault();
+          onDone();
+        }
+      }}
+    >
+      <label className="field">
+        Text to match
+        <input autoFocus maxLength={100} value={pattern} onChange={(e) => setPattern(e.target.value)} {...field("pattern")} />
+        <FieldError errors={errors} name="pattern" formId={formId} />
+      </label>
+      <fieldset className="plain-fieldset">
+        <legend>Category</legend>
+        <CategoryPicker categories={categories.filter((c) => c.is_active || c.id === rule.category_id)} kind={kind} value={categoryId} onChange={setCategoryId} />
+      </fieldset>
+      <label className="field order-field">
+        Order (lower is checked first)
+        <input type="number" inputMode="numeric" min={0} max={10000} value={priority} onChange={(e) => setPriority(e.target.value)} {...field("priority")} />
+        <FieldError errors={errors} name="priority" formId={formId} />
+      </label>
+      <span className="form-actions">
+        <button type="submit" className="primary" disabled={!categoryId || save.isPending}>
+          <BusyLabel busy={save.isPending} idle="Save" working="Saving…" />
+        </button>
+        <button type="button" className="ghost" disabled={save.isPending} onClick={onDone}>
+          Cancel
+        </button>
+      </span>
+      {error && (
+        <p className="error form-line" role="alert">
+          {error}
+        </p>
+      )}
+    </form>
+  );
+}
+
+function AddRule({ categories, onAdded }: { categories: Category[]; onAdded: () => Promise<unknown> }) {
+  const { notify } = useToasts();
+  const [pattern, setPattern] = useState("");
+  const [kind, setKind] = useState<"expense" | "income">("expense");
+  const [categoryId, setCategoryId] = useState<string | null>(null);
+  const [errors, setErrors] = useState<FieldErrors>({});
+  const [error, setError] = useState("");
+  const formId = useId();
+  const add = useMutation({
+    mutationFn: () => post<Rule>("/rules", { pattern: pattern.trim(), category_id: categoryId }),
+    onSuccess: (r) => {
+      setPattern("");
+      notify(`Added rule "${r.pattern}"`);
+      return onAdded();
+    },
+    onError: (e: Error) => {
+      if (e instanceof ApiError && e.status === 409) return setErrors({ pattern: e.message });
+      const split = splitServerError(e, ["pattern"]);
+      setErrors(split.errors);
+      setError(split.general);
+    },
+  });
+
+  function submit(event: FormEvent) {
+    event.preventDefault();
+    if (add.isPending) return;
+    const found: FieldErrors = pattern.trim().length < 2 ? { pattern: "Use at least 2 characters." } : {};
+    setErrors(found);
+    setError("");
+    if (!found.pattern) add.mutate();
+  }
+
+  return (
+    <form className="settings-form" aria-label="Add rule" aria-busy={add.isPending} noValidate onSubmit={submit}>
+      <label className="field">
+        Text to match
+        <input placeholder="e.g. swiggy" maxLength={100} value={pattern} onChange={(e) => setPattern(e.target.value)} {...invalidProps(errors, "pattern", formId)} />
+        <FieldError errors={errors} name="pattern" formId={formId} />
+      </label>
+      <fieldset className="plain-fieldset">
+        <legend>Type</legend>
+        <SegmentedRadio
+          label="Type"
+          options={RULE_KINDS}
+          value={kind}
+          onChange={(k) => {
+            setKind(k);
+            setCategoryId(null);
+          }}
+        />
+      </fieldset>
+      <fieldset className="plain-fieldset">
+        <legend>Category</legend>
+        <CategoryPicker categories={categories.filter((c) => c.is_active)} kind={kind} value={categoryId} onChange={setCategoryId} />
+      </fieldset>
+      <button type="submit" disabled={!categoryId || add.isPending}>
+        <BusyLabel busy={add.isPending} idle="Add rule" working="Adding…" />
+      </button>
+      {error && (
+        <p className="error form-line" role="alert">
+          {error}
+        </p>
+      )}
+    </form>
+  );
+}
+
+// ---- household -----------------------------------------------------------------------
+
+function Household({ isOwner, meId }: { isOwner: boolean; meId?: string }) {
+  const members = useMembers().data ?? [];
+  const { offerUndo, notify } = useToasts();
+  const refresh = useInvalidate("members");
+  const [invite, setInvite] = useState<InviteLink | null>(null);
+  const [errors, setErrors] = useState<Record<string, string | undefined>>({});
+  const [removing, setRemoving] = useState<Member | null>(null);
+  const create = useMutation({
+    mutationFn: () => post<InviteLink>("/invites", { role: "member" }),
+    onSuccess: setInvite,
+  });
+  const setRole = useMutation({
+    mutationFn: ({ m, role }: { m: Member; role: Member["role"] }) => patch(`/household/members/${m.user_id}`, { role }),
+    onMutate: ({ m }) => setErrors((e) => ({ ...e, [m.user_id]: undefined })),
+    onSuccess: (_, { m, role }) => {
+      offerUndo({
+        text: `${m.display_name} is now ${role === "owner" ? "an owner" : "a member"}`,
+        revert: () => patch(`/household/members/${m.user_id}`, { role: m.role }).then(refresh),
+      });
+      return refresh();
+    },
+    onError: (e: Error, { m }) => setErrors((all) => ({ ...all, [m.user_id]: e.message })),
+  });
+  const remove = useMutation({
+    mutationFn: (m: Member) => del(`/household/members/${m.user_id}`),
+    onSuccess: (_, m) => {
+      setRemoving(null);
+      notify(`Removed ${m.display_name}`);
+      return refresh();
+    },
+  });
+  const current = members.filter((m) => m.is_active);
+  const former = members.filter((m) => !m.is_active);
+
+  return (
+    <SettingsSection id="household" title="Household">
+      <div className="card">
+        <ul className="settings-list">
+          {current.map((m) => {
+            const role = setRole.isPending && setRole.variables.m.user_id === m.user_id ? setRole.variables.role : m.role;
+            const isMe = m.user_id === meId;
+            return (
+              <li key={m.user_id} className="member-row">
+                <span className="member-name">
+                  <span>
+                    {m.display_name}
+                    {isMe && <span className="tag">You</span>}
+                  </span>
+                  <span className="muted small">{m.email}</span>
+                </span>
+                {isOwner && !isMe ? (
+                  <>
+                    <select className="member-role" value={role} aria-label={`${m.display_name}'s role`} onChange={(e) => setRole.mutate({ m, role: e.target.value as Member["role"] })}>
+                      <option value="owner">Owner</option>
+                      <option value="member">Member</option>
+                    </select>
+                    <button
+                      type="button"
+                      className="ghost small danger member-remove"
+                      aria-label={`Remove ${m.display_name}`}
+                      onClick={() => {
+                        remove.reset();
+                        setRemoving(m);
+                      }}
+                    >
+                      Remove
+                    </button>
+                  </>
+                ) : (
+                  <span className="member-role muted small">{ROLE_LABEL[m.role]}</span>
+                )}
+                {errors[m.user_id] && (
+                  <p className="row-error error" role="alert">
+                    {errors[m.user_id]}
+                  </p>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+        {former.length > 0 && (
+          <details className="settings-disclosure muted">
+            <summary>Former members ({former.length})</summary>
+            <ul className="settings-list">
+              {former.map((m) => (
+                <li key={m.user_id} className="member-row">
+                  <span className="member-name">
+                    <span>{m.display_name}</span>
+                    <span className="small">{m.email}</span>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </details>
+        )}
+        <div className="settings-footer">
+          {isOwner ? (
+            <button type="button" disabled={create.isPending} onClick={() => create.mutate()}>
+              <BusyLabel busy={create.isPending} idle="Invite a family member" working="Creating link…" />
+            </button>
+          ) : (
+            <p className="muted small">Ask an owner to invite people.</p>
+          )}
+        </div>
+        {invite && (
+          <CopyLink key={invite.id} url={invite.url} label="Invite link" copiedText="Invite link copied" note="Send it yourself: no email goes out." expiresAt={invite.expires_at} />
+        )}
+        {create.error && (
+          <p className="error" role="alert">
+            Couldn't create a link: {create.error.message}
+          </p>
+        )}
+        <p className="muted small settings-foot-note">Owners can invite and remove people and edit categories.</p>
+      </div>
       {removing && (
-        // Removing someone logs them out and only a site admin can bring them back, so this one still asks first.
+        // Removing someone signs them out and only a site admin can bring them back, so this one still asks first.
         <Modal title={`Remove ${removing.display_name}?`} onClose={() => setRemoving(null)}>
-          <p>They'll be logged out and can't sign in. Their past entries stay. Only a site admin can undo this.</p>
+          <p>They'll be signed out and can't sign in again. Their past entries stay. Only a site admin can bring them back.</p>
           {remove.error && (
             <p className="error" role="alert">
               {remove.error.message}
@@ -157,263 +734,144 @@ function Members({ isOwner }: { isOwner: boolean }) {
             <button type="button" data-autofocus disabled={remove.isPending} onClick={() => setRemoving(null)}>
               Cancel
             </button>
-            <button type="button" className="danger filled" disabled={remove.isPending} onClick={() => remove.mutate(removing.user_id)}>
+            <button type="button" className="danger filled" disabled={remove.isPending} onClick={() => remove.mutate(removing)}>
               <BusyLabel busy={remove.isPending} idle={`Remove ${removing.display_name}`} working="Removing…" />
             </button>
           </div>
         </Modal>
       )}
-    </div>
+    </SettingsSection>
   );
 }
 
-export function InviteBox({ invite }: { invite: InviteLink }) {
-  const [copied, setCopied] = useState(false);
-  return (
-    <div className="invite-box">
-      <p>
-        Send this link yourself (no email is sent). It works once and expires {new Date(invite.expires_at).toLocaleDateString("en-IN")}.
-      </p>
-      <div className="row">
-        <input readOnly value={invite.url} aria-label="Invite link" onFocus={(e) => e.target.select()} />
-        <button
-          type="button"
-          onClick={() =>
-            navigator.clipboard?.writeText(invite.url).then(
-              () => setCopied(true),
-              () => setCopied(false),
-            )
-          }
-        >
-          {copied ? "Copied" : "Copy"}
-        </button>
-      </div>
-    </div>
-  );
-}
+// ---- you -----------------------------------------------------------------------------
 
-function Accounts() {
+function You() {
+  const me = useMe().data;
+  const helpId = useId();
+  const [open, setOpen] = useState(false);
+  const [changed, setChanged] = useState(false);
+  const summaryRef = useRef<HTMLElement>(null);
   return (
-    <div className="card">
-      <h2>Accounts</h2>
-      <p>
-        Bank accounts, credit cards, brokers and cash are managed on the <Link to="/accounts">Accounts</Link> page.
-      </p>
-    </div>
-  );
-}
-
-function Rules() {
-  const { hidden, deferDelete } = useToasts();
-  const rules = (useRules().data ?? []).filter((r) => !hidden.has(r.id));
-  const categories = useCategories(true).data ?? [];
-  const refresh = useInvalidate("rules", "transactions", "stats", "attention");
-  const [pattern, setPattern] = useState("");
-  const [kind, setKind] = useState<Kind>("expense");
-  const [categoryId, setCategoryId] = useState<string | null>(null);
-  const [message, setMessage] = useState("");
-  const add = useMutation({
-    mutationFn: () => post("/rules", { pattern, category_id: categoryId }),
-    onSuccess: () => {
-      setPattern("");
-      refresh();
-    },
-    onError: (e: Error) => setMessage(e.message),
-  });
-  const remove = (id: string, text: string) =>
-    deferDelete({ id, text: `Deleted rule "${text}"`, commit: (keepalive) => del(`/rules/${id}`, keepalive), after: refresh });
-  const apply = useMutation({
-    mutationFn: () => post<{ updated: number }>("/rules/apply"),
-    onSuccess: (r) => {
-      setMessage(`Categorized ${r.updated} entries`);
-      refresh();
-    },
-  });
-  return (
-    <div className="card">
-      <h2>Auto-categorization rules</h2>
-      <p className="muted small">If a description contains the text, the entry gets the category. Lower priority number wins.</p>
-      <ul className="plain">
-        {rules.map((r) => (
-          <li key={r.id} className="row">
-            <span>
-              "{r.pattern}" → {categoryLabel(categories.find((c) => c.id === r.category_id))} <small className="muted">priority {r.priority}</small>
-            </span>
-            <button type="button" className="ghost small" aria-label={`Delete rule "${r.pattern}"`} onClick={() => remove(r.id, r.pattern)}>
-              Delete
-            </button>
-          </li>
-        ))}
-      </ul>
-      <form
-        className="row wrap fields"
-        aria-busy={add.isPending}
-        onSubmit={(e) => {
-          e.preventDefault();
-          if (add.isPending) return;
-          setMessage("");
-          add.mutate();
-        }}
-      >
-        <label className="field">
-          Text to match
-          <input placeholder="e.g. swiggy" value={pattern} onChange={(e) => setPattern(e.target.value)} required minLength={2} />
-        </label>
-        <label className="field">
-          Type
-          <select value={kind} onChange={(e) => { setKind(e.target.value as Kind); setCategoryId(null); }}>
-            <option value="expense">Expense</option>
-            <option value="income">Income</option>
-          </select>
-        </label>
-        <CategoryPicker categories={categories.filter((c) => c.is_active)} kind={kind} value={categoryId} onChange={setCategoryId} />
-        <button type="submit" disabled={!categoryId || add.isPending}>
-          <BusyLabel busy={add.isPending} idle="Add rule" working="Adding…" />
-        </button>
-        <button type="button" className="ghost" onClick={() => apply.mutate()}>
-          Apply to uncategorized
-        </button>
-      </form>
-      {message && <p className="notice">{message}</p>}
-    </div>
-  );
-}
-
-function Categories({ isOwner }: { isOwner: boolean }) {
-  const { hidden, deferDelete, offerUndo } = useToasts();
-  const categories = (useCategories(true).data ?? []).filter((c) => !hidden.has(c.id));
-  const refresh = useInvalidate("categories");
-  const [kind, setKind] = useState<Kind>("expense");
-  const [parent, setParent] = useState("");
-  const [sub, setSub] = useState("");
-  const [error, setError] = useState("");
-  const add = useMutation({
-    mutationFn: () => post("/categories", { kind, parent_name: parent, sub_name: sub }),
-    onSuccess: () => {
-      setSub("");
-      refresh();
-    },
-    onError: (e: Error) => setError(e.message),
-  });
-  const update = useMutation({
-    mutationFn: ({ id, ...changes }: Partial<Category> & { id: string }) => patch(`/categories/${id}`, changes),
-    onSuccess: refresh,
-    onError: (e: Error) => setError(e.message),
-  });
-  // A category that entries use can't be deleted: say so now, not 6 seconds later.
-  const remove = useMutation({
-    mutationFn: (c: Category) => api<{ total: number }>(`/transactions?category_id=${c.id}&limit=1`).then(({ total }) => ({ c, total })),
-    onSuccess: ({ c, total }) => {
-      if (total > 0) return setError(`${c.sub_name} is used by ${total} ${total === 1 ? "entry" : "entries"}, so it can't be deleted. Deactivate it instead.`);
-      deferDelete({ id: c.id, text: `Deleted ${c.sub_name}`, commit: (keepalive) => del(`/categories/${c.id}`, keepalive), after: refresh });
-    },
-    onError: (e: Error) => setError(e.message),
-  });
-  function toggleActive(c: Category) {
-    setError("");
-    update.mutate(
-      { id: c.id, is_active: !c.is_active },
-      {
-        onSuccess: () => {
-          if (c.is_active) offerUndo({ text: `Deactivated ${c.sub_name}`, revert: () => patch(`/categories/${c.id}`, { is_active: true }).then(refresh) });
-        },
-      },
-    );
-  }
-  const shown = categories.filter((c) => c.kind === kind);
-  const parents = [...new Set(shown.map((c) => c.parent_name))];
-
-  return (
-    <details className="card" open={false}>
-      <summary>
-        Categories <small className="muted">({categories.filter((c) => c.is_active).length} active)</small>
-      </summary>
-      <div className="segmented" role="radiogroup" aria-label="Category type">
-        {(["expense", "income", "transfer"] as Kind[]).map((k) => (
-          <button key={k} type="button" role="radio" aria-checked={kind === k} className={kind === k ? "active" : ""} onClick={() => setKind(k)}>
-            {k}
-          </button>
-        ))}
-      </div>
-      {error && <p className="error">{error}</p>}
-      {isOwner && (
-        <form
-          className="row wrap fields"
-          aria-busy={add.isPending}
-          onSubmit={(e) => {
-            e.preventDefault();
-            if (add.isPending) return;
-            setError("");
-            add.mutate();
+    <SettingsSection id="you" title="You">
+      <div className="card">
+        <dl className="settings-list">
+          <div className="settings-row">
+            <dt>Name</dt>
+            <dd>{me?.display_name}</dd>
+          </div>
+          <div className="settings-row">
+            <dt>Email</dt>
+            <dd>{me?.email}</dd>
+          </div>
+          <div className="settings-row">
+            <dt>Role</dt>
+            <dd>{me?.role ? `${ROLE_LABEL[me.role]} of ${me.household_name}` : "—"}</dd>
+          </div>
+          <div className="settings-row">
+            <dt>Appearance</dt>
+            <dd>
+              <ThemeSwitch labelled describedBy={helpId} />
+              <p id={helpId} className="muted small settings-help">
+                System follows your phone or computer.
+              </p>
+            </dd>
+          </div>
+        </dl>
+        <details
+          className="settings-disclosure"
+          open={open}
+          onToggle={(e) => {
+            setOpen(e.currentTarget.open);
+            if (e.currentTarget.open) setChanged(false);
           }}
         >
-          <label className="field">
-            Group
-            <input list="parents" placeholder="e.g. Everyday" value={parent} onChange={(e) => setParent(e.target.value)} required />
-          </label>
-          <datalist id="parents">
-            {parents.map((p) => (
-              <option key={p} value={p} />
-            ))}
-          </datalist>
-          <label className="field">
-            Category
-            <input placeholder="e.g. Snacks" value={sub} onChange={(e) => setSub(e.target.value)} required />
-          </label>
-          <button type="submit" disabled={add.isPending}>
-            <BusyLabel busy={add.isPending} idle="Add category" working="Adding…" />
-          </button>
-        </form>
+          <summary ref={summaryRef}>Change password…</summary>
+          {open && (
+            <PasswordForm
+              onDone={() => {
+                setOpen(false);
+                setChanged(true);
+                summaryRef.current?.focus();
+              }}
+            />
+          )}
+        </details>
+        <p className="settings-status" role="status">
+          {changed ? "Password changed. Your other devices stay signed in." : ""}
+        </p>
+      </div>
+    </SettingsSection>
+  );
+}
+
+const PASSWORD_FIELDS = ["current_password", "new_password"];
+
+function PasswordForm({ onDone }: { onDone: () => void }) {
+  const [current, setCurrent] = useState("");
+  const [next, setNext] = useState("");
+  const [show, setShow] = useState(false);
+  const [errors, setErrors] = useState<FieldErrors>({});
+  const [error, setError] = useState("");
+  const formId = useId();
+  const ruleId = `${formId}-rule`;
+  const change = useMutation({
+    mutationFn: () => post("/auth/password", { current_password: current, new_password: next }),
+    onSuccess: onDone,
+    onError: (e: Error) => {
+      if (e instanceof ApiError && e.status === 400) return setErrors({ current_password: e.message });
+      const split = splitServerError(e, PASSWORD_FIELDS);
+      setErrors(split.errors);
+      setError(split.general);
+    },
+  });
+
+  function submit(event: FormEvent) {
+    event.preventDefault();
+    if (change.isPending) return;
+    const found: FieldErrors = {};
+    if (!current) found.current_password = "Enter your current password.";
+    if (next.length < 10) found.new_password = "Use at least 10 characters.";
+    setErrors(found);
+    setError("");
+    if (Object.keys(found).length === 0) change.mutate();
+  }
+
+  const field = (name: string) => invalidProps(errors, name, formId);
+  return (
+    <form className="settings-form password-form" aria-busy={change.isPending} noValidate onSubmit={submit}>
+      <label className="field">
+        Current password
+        <input type={show ? "text" : "password"} autoComplete="current-password" value={current} onChange={(e) => setCurrent(e.target.value)} {...field("current_password")} />
+        <FieldError errors={errors} name="current_password" formId={formId} />
+      </label>
+      <label className="field">
+        New password
+        <input
+          type={show ? "text" : "password"}
+          autoComplete="new-password"
+          value={next}
+          onChange={(e) => setNext(e.target.value)}
+          {...field("new_password")}
+          aria-describedby={errors.new_password ? `${ruleId} ${formId}-new_password-error` : ruleId}
+        />
+        <span id={ruleId} className="settings-help" aria-hidden="true">
+          At least 10 characters.
+        </span>
+        <FieldError errors={errors} name="new_password" formId={formId} />
+      </label>
+      <label className="check">
+        <input type="checkbox" checked={show} onChange={(e) => setShow(e.target.checked)} />
+        Show passwords
+      </label>
+      <button type="submit" className="primary" disabled={change.isPending}>
+        <BusyLabel busy={change.isPending} idle="Change password" working="Changing…" />
+      </button>
+      {error && (
+        <p className="error form-line" role="alert">
+          {error}
+        </p>
       )}
-      {parents.map((p) => (
-        <div key={p} className="cat-group">
-          <h3>{p}</h3>
-          <ul className="plain">
-            {shown
-              .filter((c) => c.parent_name === p)
-              .map((c) => (
-                <li key={c.id} className="row">
-                  <span className={c.is_active ? "" : "muted strike"}>{c.sub_name}</span>
-                  {isOwner && c.kind !== "transfer" ? (
-                    <select aria-label={`${c.sub_name} counts as`} value={c.stats_group} onChange={(e) => update.mutate({ id: c.id, stats_group: e.target.value as StatsGroup })}>
-                      {(c.kind === "expense" ? ["spend", "saving", "lent"] : ["earned", "repaid"]).map((g) => (
-                        <option key={g} value={g}>
-                          {GROUP_LABEL[g as StatsGroup]}
-                        </option>
-                      ))}
-                    </select>
-                  ) : (
-                    <small className="muted">{GROUP_LABEL[c.stats_group]}</small>
-                  )}
-                  {isOwner && (
-                    <>
-                      <InlineRename
-                        value={c.sub_name}
-                        label={`New name for ${c.sub_name}`}
-                        onSave={(name) => patch(`/categories/${c.id}`, { sub_name: name }).then(refresh)}
-                      />
-                      <button type="button" className="ghost small" aria-label={`${c.is_active ? "Deactivate" : "Activate"} ${c.sub_name}`} onClick={() => toggleActive(c)}>
-                        {c.is_active ? "Deactivate" : "Activate"}
-                      </button>
-                      <button
-                        type="button"
-                        className="ghost small danger"
-                        aria-label={`Delete ${c.sub_name}`}
-                        disabled={remove.isPending && remove.variables?.id === c.id}
-                        onClick={() => {
-                          setError("");
-                          remove.mutate(c);
-                        }}
-                      >
-                        Delete
-                      </button>
-                    </>
-                  )}
-                </li>
-              ))}
-          </ul>
-        </div>
-      ))}
-    </details>
+    </form>
   );
 }

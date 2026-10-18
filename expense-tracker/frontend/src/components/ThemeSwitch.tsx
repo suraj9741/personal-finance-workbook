@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState, type KeyboardEvent } from "react";
+import { useEffect, useState } from "react";
 import { THEME_PREFS, applyTheme, onThemeChange, readTheme, saveTheme, type ThemePref } from "../theme/theme";
+import { SegmentedRadio } from "./SegmentedRadio";
 
 const LABEL: Record<ThemePref, string> = { system: "System", light: "Light", dark: "Dark" };
 
@@ -26,10 +27,12 @@ function Icon({ pref }: { pref: ThemePref }) {
   );
 }
 
-/** Three-way appearance switch: a radio group, so arrows move and Tab enters once. */
-export function ThemeSwitch() {
+/**
+ * Three-way appearance switch: a radio group, so arrows move and Tab enters once.
+ * The top bar shows icons only; `labelled` (Settings) adds the words. Both stay in step (theme.ts).
+ */
+export function ThemeSwitch({ labelled = false, describedBy }: { labelled?: boolean; describedBy?: string }) {
   const [pref, setPref] = useState<ThemePref>(readTheme);
-  const refs = useRef<(HTMLButtonElement | null)[]>([]);
 
   useEffect(() => onThemeChange((next) => {
     setPref(next);
@@ -42,35 +45,18 @@ export function ThemeSwitch() {
     applyTheme(next);
   }
 
-  function onKeyDown(event: KeyboardEvent) {
-    const step = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[event.key];
-    if (!step) return;
-    event.preventDefault();
-    const index = (THEME_PREFS.indexOf(pref) + step + THEME_PREFS.length) % THEME_PREFS.length;
-    choose(THEME_PREFS[index]);
-    refs.current[index]?.focus();
-  }
-
   return (
-    <span className="segmented compact" role="radiogroup" aria-label="Appearance" onKeyDown={onKeyDown}>
-      {THEME_PREFS.map((p, i) => (
-        <button
-          key={p}
-          ref={(el) => {
-            refs.current[i] = el;
-          }}
-          type="button"
-          role="radio"
-          aria-checked={pref === p}
-          aria-label={LABEL[p]}
-          title={LABEL[p]}
-          tabIndex={pref === p ? 0 : -1}
-          className={pref === p ? "active" : undefined}
-          onClick={() => choose(p)}
-        >
-          <Icon pref={p} />
-        </button>
-      ))}
-    </span>
+    <SegmentedRadio
+      label="Appearance"
+      className={labelled ? "segmented labelled" : "segmented compact"}
+      describedBy={describedBy}
+      value={pref}
+      onChange={choose}
+      options={THEME_PREFS.map((p) =>
+        labelled
+          ? { value: p, label: <><Icon pref={p} /> {LABEL[p]}</> }
+          : { value: p, label: <Icon pref={p} />, name: LABEL[p] },
+      )}
+    />
   );
 }
