@@ -1,5 +1,5 @@
 import type { TrendPoint } from "../api";
-import { monthLabel, signedMoney } from "../format";
+import { monthLabel, minusMoney } from "../format";
 
 /**
  * Saved per month as bars (negative months below the line). Plain SVG, no chart library.
@@ -24,7 +24,7 @@ export function TrendChart({ points, label = "Money saved per month" }: { points
           const x = i * slot + (slot - bar) / 2;
           return (
             <g key={p.month}>
-              <title>{`${monthLabel(p.month)}: saved ${signedMoney(p.saved)}`}</title>
+              <title>{`${monthLabel(p.month)}: saved ${minusMoney(p.saved)}`}</title>
               <rect x={x} width={bar} y={v >= 0 ? mid - h : mid} height={Math.max(h, 1)} rx={3} className={v >= 0 ? "pos" : "neg"} />
               <text x={x + bar / 2} y={height + 18} textAnchor="middle" className="tick">
                 {monthLabel(p.month).slice(0, 3)}
@@ -34,7 +34,7 @@ export function TrendChart({ points, label = "Money saved per month" }: { points
         })}
       </svg>
       <figcaption className="sr-only">
-        {points.map((p) => `${monthLabel(p.month)}: saved ${signedMoney(p.saved)}`).join(". ")}
+        {points.map((p) => `${monthLabel(p.month)}: saved ${minusMoney(p.saved)}`).join(". ")}
       </figcaption>
     </figure>
   );

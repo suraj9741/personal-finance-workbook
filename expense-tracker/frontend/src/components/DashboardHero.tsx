@@ -1,7 +1,7 @@
 import { keepPreviousData, useQuery, type UseQueryResult } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { api, type MonthStats, type Overview } from "../api";
-import { budgetSplit, budgetTone, currentMonth, money, monthLabel, percent, signedMoney } from "../format";
+import { budgetSplit, budgetTone, currentMonth, money, monthLabel, percent, minusMoney } from "../format";
 
 function Skeleton() {
   return (
@@ -49,7 +49,7 @@ export function DashboardHero({ month, stats }: { month: string; stats: UseQuery
       <dl className="hero">
         <div className={`hero-item ${o && !noAccounts && netCash < 0 ? "bad" : ""}`}>
           <dt className="hero-label">Net cash</dt>
-          <dd className="hero-value">{overview.isPending ? <Skeleton /> : !o || noAccounts ? "—" : signedMoney(netCash)}</dd>
+          <dd className="hero-value">{overview.isPending ? <Skeleton /> : !o || noAccounts ? "—" : minusMoney(netCash)}</dd>
           {noAccounts ? (
             <dd className="hero-detail">
               <Link to="/accounts">Add accounts</Link>
@@ -70,7 +70,7 @@ export function DashboardHero({ month, stats }: { month: string; stats: UseQuery
 
         <div className="hero-item expense">
           <dt className="hero-label">Spent this month</dt>
-          <dd className="hero-value">{stats.isPending ? <Skeleton /> : signedMoney(s?.spend)}</dd>
+          <dd className="hero-value">{stats.isPending ? <Skeleton /> : minusMoney(s?.spend)}</dd>
           {s &&
             (me ? (
               <dd className="hero-detail">Budgets are household-wide</dd>
@@ -96,7 +96,7 @@ export function DashboardHero({ month, stats }: { month: string; stats: UseQuery
 
         <div className={`hero-item ${s ? (saved < 0 ? "bad" : "good") : ""}`}>
           <dt className="hero-label">Saved this month</dt>
-          <dd className="hero-value">{stats.isPending ? <Skeleton /> : signedMoney(s?.saved)}</dd>
+          <dd className="hero-value">{stats.isPending ? <Skeleton /> : minusMoney(s?.saved)}</dd>
           {s && saved < 0 && <dd className="hero-detail neg-text">Spent {money(-saved)} more than came in</dd>}
           {s && <dd className="hero-detail">{income > 0 ? `${percent(s.savings_rate)} of income ${money(income)}` : "No income recorded"}</dd>}
         </div>

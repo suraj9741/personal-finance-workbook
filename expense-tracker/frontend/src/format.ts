@@ -141,7 +141,7 @@ export function shiftDay(iso: string, delta: number): string {
 }
 
 /** money() with a real minus sign, so a negative reads −₹5,000 rather than -₹5,000. */
-export function signedMoney(value: string | number | null | undefined): string {
+export function minusMoney(value: string | number | null | undefined): string {
   if (value === null || value === undefined || value === "") return "—";
   const n = Number(value);
   return n < 0 ? `−${money(-n)}` : money(n);
