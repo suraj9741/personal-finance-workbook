@@ -9,6 +9,7 @@ import { TrendChart } from "../components/TrendChart";
 import { budgetSplit, budgetTone, currentMonth, money } from "../format";
 import { SegmentedRadio } from "../components/SegmentedRadio";
 import { Meter } from "../components/Meter";
+import { Icon } from "../components/Icon";
 
 type Scope = MonthStats["scope"];
 const SCOPES: Scope[] = ["household", "me"];
@@ -97,7 +98,16 @@ export function Dashboard() {
         ) : (
           <ul className="attention">
             {items.map((item) => (
-              <li key={item.text}>{item.to ? <Link to={item.to}>{item.text}</Link> : item.text}</li>
+              <li key={item.text}>
+                {item.to ? (
+                  <Link className="attention-link" to={item.to}>
+                    {item.text}
+                    <Icon name="chevron-right" />
+                  </Link>
+                ) : (
+                  item.text
+                )}
+              </li>
             ))}
           </ul>
         )}

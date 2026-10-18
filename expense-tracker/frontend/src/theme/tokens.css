@@ -162,6 +162,8 @@
   --thumb-y: 0px;
   --thumb-w: 0px;
   --thumb-h: 0px;
+  /* The faint underline on links inside sentences. */
+  --link-underline: color-mix(in srgb, var(--color-accent) 40%, transparent);
   /* A bar with no budget behind it: present, but quiet. */
   --color-meter-muted: var(--color-text-tertiary);
 
