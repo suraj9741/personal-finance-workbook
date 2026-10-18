@@ -45,8 +45,52 @@ h3 {
   margin: var(--space-3) 0 var(--space-2);
 }
 
-a { color: var(--color-accent); text-underline-offset: 0.15em; }
-a:hover { text-decoration-thickness: 2px; }
+/* A link inside a sentence: blue with a faint underline that firms up on hover. Blue alone is
+   under 3:1 against body text, so the underline stays as the non-colour cue. Names in lists and
+   tables don't use this: their whole row is the link (.link-row, .account-row, .attention-link). */
+a {
+  color: var(--color-accent);
+  text-decoration-line: underline;
+  text-decoration-thickness: 1px;
+  text-decoration-color: var(--link-underline);
+  text-underline-offset: 0.2em;
+  transition: text-decoration-color var(--motion-fast) var(--motion-ease);
+}
+a:hover { text-decoration-color: currentColor; }
+/* Navigation chrome (the account page breadcrumb): blue, underlined only on hover. */
+.breadcrumb a { text-decoration-color: transparent; }
+.breadcrumb a:hover { text-decoration-color: currentColor; }
+
+/* A table row that opens something: the name reads as text, the whole row is the target,
+   and a › at the end says so. */
+.link-row { position: relative; }
+@media (hover: hover) {
+  .link-row:hover { background: var(--color-fill); }
+}
+.link-row:has(.row-link:active) { opacity: var(--press-dim); }
+.link-row:has(.row-link:focus-visible) { outline: 2px solid var(--color-focus); outline-offset: -2px; }
+.row-link { color: var(--color-text); font-weight: 600; text-decoration: none; }
+.row-link:focus-visible { outline: none; }
+.row-link::after { content: ""; position: absolute; inset: 0; }
+.row-chevron { width: 1em; padding-left: 0; color: var(--color-text-tertiary); text-align: right; }
+
+/* Needs attention: each item that opens something is a row with a ›. */
+.attention-link {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin: 0 calc(-1 * var(--space-2));
+  padding: var(--space-2);
+  border-radius: var(--radius-sm);
+  color: var(--color-text);
+  text-decoration: none;
+}
+.attention-link .icon { color: var(--color-text-tertiary); }
+@media (hover: hover) {
+  .attention-link:hover { background: var(--color-fill); }
+}
+.attention-link:active { opacity: var(--press-dim); }
 
 /* ---- controls ---- */
 input, select, textarea, button {
@@ -369,8 +413,10 @@ details.card[open] > summary { margin-bottom: var(--space-3); }
 }
 .kpi.good .kpi-value { color: var(--color-positive); }
 .kpi.bad .kpi-value { color: var(--color-negative); }
-.attention { margin: 0; padding-left: var(--space-5); }
-.attention li { margin-bottom: var(--space-2); }
+.attention { margin: 0; padding: 0; list-style: none; }
+.attention li { border-bottom: 1px solid var(--color-separator); }
+.attention li:last-child { border-bottom: 0; }
+.attention li:not(:has(a)) { padding: var(--space-2) 0; }
 /* Rows share the list's columns (subgrid), so every track starts and ends at the same place. */
 .bars { display: grid; grid-template-columns: minmax(8rem, 14rem) 1fr auto; list-style: none; margin: 0; padding: 0; }
 .bars li { display: grid; grid-column: 1 / -1; grid-template-columns: subgrid; gap: var(--space-3); align-items: center; padding: var(--space-1) 0; }
@@ -485,6 +531,7 @@ details.card[open] > summary { margin-bottom: var(--space-3); }
   .dashboard .toolbar .segmented button { flex: 1; }
   /* Account tables become stacked rows: the account name, then one "label  value" line per column. */
   .overview .table-wrap { overflow-x: visible; }
+  .overview .row-chevron { display: none; }
   .overview table, .overview tbody, .overview tfoot, .overview tr { display: block; }
   .overview thead {
     position: absolute;

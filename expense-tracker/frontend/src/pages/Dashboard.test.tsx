@@ -31,12 +31,12 @@ const OVERVIEW = {
   }],
 };
 
-function renderWith({ household = month("household"), me = month("me"), overview = OVERVIEW }: { household?: object; me?: object; overview?: object } = {}) {
+function renderWith({ household = month("household"), me = month("me"), overview = OVERVIEW, uncategorized = 0 }: { household?: object; me?: object; overview?: object; uncategorized?: number } = {}) {
   vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
     const url = String(input);
     const body = url.includes("/stats/month") ? (url.includes("scope=me") ? me : household)
       : url.includes("/stats/overview") ? overview
-      : url.includes("/stats/attention") ? { month: "2026-10", uncategorized: 0, over_budget: [], old_loans: [], no_income: false, credit_card_category_used: 0 }
+      : url.includes("/stats/attention") ? { month: "2026-10", uncategorized, over_budget: [], old_loans: [], no_income: false, credit_card_category_used: 0 }
       : [];
     return new Response(JSON.stringify(body), { status: 200 });
   });
@@ -135,4 +135,21 @@ it("marks negative numbers with a minus sign and words, not just red", async () 
   expect(await screen.findByText("−₹7,000")).toBeTruthy();
   expect(screen.getByText("Cards owe more than the bank holds")).toBeTruthy();
   expect(screen.getByText("Net cash").parentElement?.className).toContain("bad");
+});
+
+it("lets a whole account row open the account, with its tags outside the link", async () => {
+  const cash = { ...OVERVIEW.accounts[0], account: { ...OVERVIEW.accounts[0].account, id: "a2", name: "Wallet", pay_type: "cash" } };
+  renderWith({ overview: { ...OVERVIEW, accounts: [...OVERVIEW.accounts, cash] } });
+  const link = await screen.findByRole("link", { name: "Wallet" });
+  expect(link.getAttribute("href")).toBe("/accounts/a2");
+  expect(link.className).toBe("row-link");
+  expect(link.closest("tr")!.className).toBe("link-row");
+  // The tag sits beside the name, so it isn't underlined or read as part of the link.
+  expect(link.parentElement!.querySelector(".tag")!.textContent).toBe("cash");
+});
+
+it("shows each Needs attention item that opens something as a row", async () => {
+  renderWith({ uncategorized: 3 });
+  const link = await screen.findByRole("link", { name: "3 entries have no category" });
+  expect(link.className).toBe("attention-link");
 });
