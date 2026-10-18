@@ -120,6 +120,23 @@
   --field-lg: 12rem;
   --bar-height: 0.5rem;
 
+  /* ---- meters, budgets, accounts (step 5) ---- */
+  /* Meter.tsx sets --meter-value (0–1) inline on each fill; this is the default. */
+  --meter-value: 0;
+  --meter-height: 0.375rem;
+  --meter-height-lg: 0.625rem;
+  /* Neutral under 90%, orange from 90%, red when over; income is green. Fills are 3:1 on the track. */
+  --color-meter-track: var(--color-fill);
+  --color-meter-fill: var(--color-text-secondary);
+  --color-meter-warn: var(--color-warning);
+  --color-meter-over: var(--color-negative);
+  --color-meter-income: var(--color-positive);
+  --budget-col-input: 7rem;
+  --budget-col-num: 6.5rem;
+  --budget-card-min: 25rem;
+  --account-row-min-h: 3.5rem;
+  --acct-hero-max: 30rem;
+
   /* ---- radii ---- */
   --radius-sm: 0.375rem;
   --radius-md: 0.625rem;
