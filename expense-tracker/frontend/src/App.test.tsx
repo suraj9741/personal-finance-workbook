@@ -50,6 +50,8 @@ it("shows the dashboard and quick-add bar when logged in", async () => {
   });
   renderAt("/");
   expect(await screen.findByText("₹60,000")).toBeTruthy();
+  expect(screen.getByRole("heading", { level: 1, name: "Dashboard" })).toBeTruthy();
+  expect(screen.getByText("Spent this month").nextSibling?.textContent).toBe("₹40,000");
   expect(screen.getByRole("form", { name: "Quick add" })).toBeTruthy();
   expect(await screen.findByText("2 entries have no category")).toBeTruthy();
   expect(screen.getByRole("link", { name: "Admin" })).toBeTruthy();
@@ -70,7 +72,7 @@ it("asks a new household to add its first account", async () => {
   expect(screen.queryByRole("form", { name: "Quick add" })).toBeNull();
 });
 
-it("shows budget, spent and diff for expense and income", async () => {
+it("shows budget, spent and what's left for expense and income", async () => {
   const cat = (id: string, kind: string, parent_name: string, sub_name: string) => ({ id, kind, parent_name, sub_name, stats_group: kind === "income" ? "earned" : "spend", is_active: true, sort_order: 0 });
   const categories = [cat("c1", "expense", "Everyday", "Food"), cat("c2", "expense", "Debt", "Tax"), cat("c3", "income", "Wages", "Paycheck")];
   const line = (category_id: string, kind: string, actual: string) => ({ category_id, kind, parent_name: "", sub_name: "", stats_group: "spend", budget: null, actual, diff: "0", over_budget: false });
@@ -89,11 +91,14 @@ it("shows budget, spent and diff for expense and income", async () => {
     return new Response(JSON.stringify(body), { status: 200 });
   });
   renderAt("/budgets");
-  expect((await screen.findByLabelText("Everyday Food diff")).textContent).toBe("₹1,800");
-  expect(screen.getByLabelText("Debt Tax diff").textContent).toBe("₹0");
-  expect(screen.getByLabelText("Wages Paycheck diff").textContent).toBe("₹2,000");
-  expect(screen.getByText("since September 2026, until November 2026, then ₹1,000")).toBeTruthy();
-  expect(within(screen.getByLabelText("Expense totals")).getByText("₹1,800")).toBeTruthy();
+  const left = (name: string) => screen.getByLabelText(`${name} budget`).closest(".budget-line")!.querySelector(".budget-status")!.textContent;
+  await screen.findByLabelText("Everyday Food budget");
+  expect(left("Everyday Food")).toBe("₹1,800 left");
+  expect(left("Debt Tax")).toBe("—No budget");
+  expect(left("Wages Paycheck")).toBe("₹2,000 above");
+  expect(screen.getByText("Set in Sept 2026 · ₹1,000 from Dec 2026")).toBeTruthy();
+  expect(screen.getByText("₹1,800 left of ₹3,000")).toBeTruthy();
+  expect(screen.getByText("Earned ₹52,000 of ₹50,000 planned")).toBeTruthy();
 });
 
 const ACCOUNTS = [
@@ -140,13 +145,15 @@ it("lists accounts grouped by type with counts and figures", async () => {
   mockApi();
   renderAt("/accounts");
   const banks = (await screen.findByText("Bank accounts", { selector: "h2" })).closest(".card") as HTMLElement;
-  expect(within(banks).getByText("(3 active)")).toBeTruthy();
-  expect(within(banks).getByText("₹42,000")).toBeTruthy();
+  expect(within(banks).getByText("3 accounts")).toBeTruthy();
+  // The group total and HDFC, the one bank with money in it.
+  expect(within(banks).getAllByText("₹42,000")).toHaveLength(2);
   expect(within(banks).queryByText("Old SBI")).toBeNull();
   const cards = screen.getByText("Credit cards", { selector: "h2" }).closest(".card") as HTMLElement;
-  expect(within(cards).getByText("· ₹75,000 available credit")).toBeTruthy();
+  expect(within(cards).getByText("owed · ₹75,000 available")).toBeTruthy();
+  expect(within(cards).getByText("₹25,000 owed")).toBeTruthy();
   const brokers = screen.getByText("Share market brokers", { selector: "h2" }).closest(".card") as HTMLElement;
-  expect(within(brokers).getByText("· no value entered")).toBeTruthy();
+  expect(within(brokers).getByText("invested · no value entered")).toBeTruthy();
 });
 
 it("picks the account type first, then only accounts of that type", async () => {
@@ -173,7 +180,12 @@ it("shows the financial overview above the monthly dashboard", async () => {
   renderAt("/");
   const overview = await screen.findByRole("region", { name: "Financial overview" });
   expect(within(overview).getByText("Total bank balance").nextSibling?.textContent).toBe("₹42,000");
-  expect(within(overview).getByText("Available credit", { selector: ".kpi-label" }).parentElement?.textContent).toContain("Not cash");
+  // Available credit is a note on the card tile now; Net cash and the month totals live in the hero.
+  expect(within(overview).getByText("Credit card outstanding").parentElement?.textContent).toContain("₹75,000 of limits still available, not cash");
+  expect(within(overview).queryByText("Net cash position")).toBeNull();
+  expect(within(overview).queryByText("Expenses this month")).toBeNull();
+  expect(within(overview).getByRole("columnheader", { name: "All expenses (month)" })).toBeTruthy();
+  expect(screen.getByText("Net cash").nextSibling?.textContent).toBe("₹17,000");
   expect(within(overview).getByText("Portfolio value").nextSibling?.textContent).toBe("Not valued");
   expect(within(overview).getByText("0 of 1 brokers have a value entered")).toBeTruthy();
   expect(within(overview).getByRole("link", { name: "HDFC CC" }).getAttribute("href")).toBe("/accounts/a4");
@@ -191,9 +203,9 @@ it("shows an account's figures and history on its page", async () => {
   renderAt("/accounts/a4");
   expect(await screen.findByRole("heading", { name: /HDFC CC/ })).toBeTruthy();
   expect(screen.getByText("Outstanding").nextSibling?.textContent).toBe("₹25,000");
-  expect(screen.getByText("Next due date").nextSibling?.textContent).toBe("2026-11-05");
-  expect(screen.getByText("Payments").nextSibling?.textContent).toBe("₹1,000");
-  expect(await screen.findByText("from HDFC")).toBeTruthy();
+  expect(screen.getByText("Next due").nextSibling?.textContent).toMatch(/^5 Nov/);
+  expect(screen.getByText("Payments").nextSibling?.textContent).toBe("+₹1,000");
+  expect((await screen.findByRole("link", { name: "HDFC" })).getAttribute("href")).toBe("/accounts/a1");
   expect(screen.getByText("+₹1,000.00")).toBeTruthy();
   expect(screen.getByRole("button", { name: "Edit account" })).toBeTruthy();
 });
@@ -216,10 +228,10 @@ it("keeps unsaved budgets when you switch month and back", async () => {
   renderAt("/budgets");
   const input = await screen.findByLabelText("Everyday Food budget");
   fireEvent.change(input, { target: { value: "5000" } });
-  expect(screen.getByRole("region", { name: "Unsaved budgets" }).textContent).toMatch(/1 unsaved change for/);
+  expect(screen.getByRole("region", { name: "Unsaved budgets" }).textContent).toMatch(/1 change for/);
 
   fireEvent.click(screen.getByRole("button", { name: "Next month" }));
-  expect(screen.queryByRole("region", { name: "Unsaved budgets" })).toBeNull();
+  expect(screen.queryByRole("button", { name: "Save budgets" })).toBeNull();
   fireEvent.click(screen.getByRole("button", { name: "Previous month" }));
   expect(((await screen.findByLabelText("Everyday Food budget")) as HTMLInputElement).value).toBe("5000");
 

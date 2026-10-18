@@ -96,6 +96,14 @@
 
   --text-kpi-size: 1.5rem;
 
+  /* ---- dashboard ---- */
+  /* The three big numbers; one step smaller under 1024px. */
+  --text-hero-size: var(--text-display-size);
+  /* Old numbers dim to this while the next month or scope loads. */
+  --stale-opacity: 0.6;
+  --figures-gap: var(--space-2) var(--space-8);
+  --trend-max-height: 16rem;
+
   /* ---- spacing (4px base, rem so it scales with text size) ---- */
   --space-0: 0.125rem;
   --space-1: 0.25rem;
@@ -119,6 +127,23 @@
   --field-md: 11rem;
   --field-lg: 12rem;
   --bar-height: 0.5rem;
+
+  /* ---- meters, budgets, accounts (step 5) ---- */
+  /* Meter.tsx sets --meter-value (0–1) inline on each fill; this is the default. */
+  --meter-value: 0;
+  --meter-height: 0.375rem;
+  --meter-height-lg: 0.625rem;
+  /* Neutral under 90%, orange from 90%, red when over; income is green. Fills are 3:1 on the track. */
+  --color-meter-track: var(--color-fill);
+  --color-meter-fill: var(--color-text-secondary);
+  --color-meter-warn: var(--color-warning);
+  --color-meter-over: var(--color-negative);
+  --color-meter-income: var(--color-positive);
+  --budget-col-input: 7rem;
+  --budget-col-num: 6.5rem;
+  --budget-card-min: 25rem;
+  --account-row-min-h: 3.5rem;
+  --acct-hero-max: 30rem;
 
   /* settings & admin: section menu width, content cap, small number fields, and how far below
      the sticky top bar a #section lands (the bar wraps to two rows on a phone) */
@@ -177,6 +202,13 @@
   :root {
     --control-h: 2.75rem;
     --control-h-sm: 2.25rem;
+  }
+}
+
+/* Dashboard below wide: the hero numbers drop to large-title size. */
+@media (max-width: 1024px) {
+  :root {
+    --text-hero-size: var(--text-large-title-size);
   }
 }
 

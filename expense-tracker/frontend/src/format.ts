@@ -39,6 +39,27 @@ export function monthLabel(month: string): string {
   return new Date(y, m - 1, 1).toLocaleDateString("en-IN", { month: "long", year: "numeric" });
 }
 
+/** "+₹1,800" or "−₹1,800" with a real minus sign (money() prints a hyphen); zero has no sign. */
+export function signedMoney(value: string | number, exact = false): string {
+  const n = Number(value);
+  return `${n > 0 ? "+" : n < 0 ? "−" : ""}${money(Math.abs(n), exact)}`;
+}
+
+/** "+10%" or "−2%" for a change as a share of what it's measured on (0.1 → "+10%"). */
+export function signedPercent(ratio: number): string {
+  const p = Math.round(ratio * 100);
+  return `${p > 0 ? "+" : p < 0 ? "−" : ""}${Math.abs(p)}%`;
+}
+
+/** "Sept 2026", the short form of monthLabel. */
+export function monthShort(month: string): string {
+  const [y, m] = month.split("-").map(Number);
+  return new Date(y, m - 1, 1).toLocaleDateString("en-IN", { month: "short", year: "numeric" });
+}
+
+/** Account types as short as they go, for filters on a phone. */
+export const GROUP_SHORT: Record<AccountGroup, string> = { bank: "Banks", credit_card: "Cards", share_broker: "Brokers" };
+
 export function categoryLabel(c: Category | undefined): string {
   return c ? `${c.parent_name} › ${c.sub_name}` : "Uncategorized";
 }
@@ -138,4 +159,33 @@ export function shiftDay(iso: string, delta: number): string {
   const d = parseDay(iso);
   d.setDate(d.getDate() + delta);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+/** money() with a real minus sign, so a negative reads −₹5,000 rather than -₹5,000. */
+export function minusMoney(value: string | number | null | undefined): string {
+  if (value === null || value === undefined || value === "") return "—";
+  const n = Number(value);
+  return n < 0 ? `−${money(-n)}` : money(n);
+}
+
+/**
+ * Budgets split the way /stats/month counts money: spending budgets (compared with "spent")
+ * and planned savings (PPF, shares…), which "spent" leaves out. budget_total mixes the two.
+ */
+export function budgetSplit(lines: { kind: string; stats_group: string; budget: string | null }[]): { spend: number; saving: number } {
+  let spend = 0;
+  let saving = 0;
+  for (const line of lines) {
+    if (line.kind !== "expense" || !line.budget) continue;
+    if (line.stats_group === "spend") spend += Number(line.budget);
+    else if (line.stats_group === "saving") saving += Number(line.budget);
+  }
+  return { spend, saving };
+}
+
+/** A budget bar's state: under budget (""), close to it from 90% ("warn"), or past it ("over"). */
+export function budgetTone(actual: number, budget: number): "" | "warn" | "over" {
+  if (budget <= 0) return "";
+  if (actual > budget) return "over";
+  return actual >= budget * 0.9 ? "warn" : "";
 }

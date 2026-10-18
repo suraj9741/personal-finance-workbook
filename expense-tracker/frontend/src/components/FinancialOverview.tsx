@@ -60,13 +60,11 @@ export function FinancialOverview({ month }: { month: string }) {
       <h2 className="section-title">Financial overview</h2>
       <div className="kpis">
         <Kpi label="Total bank balance" value={money(t.bank_balance)} note="Active bank and cash accounts" />
-        <Kpi label="Credit card outstanding" value={money(t.card_outstanding)} note="Owed on active cards" />
         <Kpi
-          label="Available credit"
-          value={money(t.available_credit)}
-          note={t.available_credit === null ? "No card has a credit limit set" : "Not cash: limit minus outstanding"}
+          label="Credit card outstanding"
+          value={money(t.card_outstanding)}
+          note={t.available_credit === null ? "Owed on active cards" : `${money(t.available_credit)} of limits still available, not cash`}
         />
-        <Kpi label="Net cash position" value={money(t.net_cash)} tone={Number(t.net_cash) < 0 ? "bad" : "good"} note="Bank balance minus card outstanding" />
         <Kpi label="Invested (at cost)" value={money(t.invested)} note={`Broker cash not invested: ${money(t.broker_cash)}`} />
         <Kpi
           label="Portfolio value"
@@ -79,14 +77,12 @@ export function FinancialOverview({ month }: { month: string }) {
                 : "From values you entered"
           }
         />
-        <Kpi label="Income this month" value={money(t.month_income)} note="Income entries on all accounts" />
-        <Kpi label="Expenses this month" value={money(t.month_expenses)} note="Less refunds. Transfers excluded." />
       </div>
 
       <div className="card">
-        <h2>
+        <h3>
           <span aria-hidden="true">{GROUP_ICON.bank}</span> Bank accounts
-        </h2>
+        </h3>
         {banks.length === 0 ? (
           <p className="muted">No bank accounts.</p>
         ) : (
@@ -97,18 +93,18 @@ export function FinancialOverview({ month }: { month: string }) {
                   <th>Bank account</th>
                   <th className="num">Opening balance</th>
                   <th className="num">Current balance</th>
-                  <th className="num">Income (month)</th>
-                  <th className="num">Expenses (month)</th>
+                  <th className="num">All income (month)</th>
+                  <th className="num">All expenses (month)</th>
                 </tr>
               </thead>
               <tbody>
                 {banks.map((r) => (
                   <tr key={r.account.id}>
                     <td><AccountLink row={r} /></td>
-                    <td className="num">{money(r.account.opening_balance)}</td>
-                    <td className={`num ${Number(r.balance) < 0 ? "expense" : ""}`}>{money(r.balance)}</td>
-                    <td className="num">{money(r.month_income)}</td>
-                    <td className="num">{money(r.month_expenses)}</td>
+                    <td data-label="Opening balance" className="num">{money(r.account.opening_balance)}</td>
+                    <td data-label="Current balance" className={`num ${Number(r.balance) < 0 ? "expense" : ""}`}>{money(r.balance)}</td>
+                    <td data-label="All income (month)" className="num">{money(r.month_income)}</td>
+                    <td data-label="All expenses (month)" className="num">{money(r.month_expenses)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -116,20 +112,23 @@ export function FinancialOverview({ month }: { month: string }) {
                 <tr>
                   <th>Total</th>
                   <th />
-                  <th className="num">{money(t.bank_balance)}</th>
-                  <th className="num">{money(sum(banks, (r) => r.month_income))}</th>
-                  <th className="num">{money(sum(banks, (r) => r.month_expenses))}</th>
+                  <th data-label="Current balance" className="num">{money(t.bank_balance)}</th>
+                  <th data-label="All income (month)" className="num">{money(sum(banks, (r) => r.month_income))}</th>
+                  <th data-label="All expenses (month)" className="num">{money(sum(banks, (r) => r.month_expenses))}</th>
                 </tr>
               </tfoot>
             </table>
           </div>
         )}
+        {banks.length > 0 && (
+          <p className="muted small">All income and all expenses count every entry on the account, including savings and lending.</p>
+        )}
       </div>
 
       <div className="card">
-        <h2>
+        <h3>
           <span aria-hidden="true">{GROUP_ICON.credit_card}</span> Credit cards
-        </h2>
+        </h3>
         {cards.length === 0 ? (
           <p className="muted">No credit cards.</p>
         ) : (
@@ -151,12 +150,12 @@ export function FinancialOverview({ month }: { month: string }) {
                   {cards.map((r) => (
                     <tr key={r.account.id}>
                       <td><AccountLink row={r} /></td>
-                      <td className="num">{money(r.account.credit_limit)}</td>
-                      <td className="num">{money(r.outstanding)}</td>
-                      <td className="num">{money(r.available_credit)}</td>
-                      <td className="num">{money(r.month_expenses)}</td>
-                      <td className="num">{money(r.month_transfers_in)}</td>
-                      <td>
+                      <td data-label="Credit limit" className="num">{money(r.account.credit_limit)}</td>
+                      <td data-label="Outstanding" className="num">{money(r.outstanding)}</td>
+                      <td data-label="Available credit" className="num">{money(r.available_credit)}</td>
+                      <td data-label="Purchases (month)" className="num">{money(r.month_expenses)}</td>
+                      <td data-label="Payments (month)" className="num">{money(r.month_transfers_in)}</td>
+                      <td data-label="Due date">
                         {r.next_due_date ?? <span className="muted">Not set</span>}
                         {r.account.statement_day && <small className="muted"> · statement on day {r.account.statement_day}</small>}
                       </td>
@@ -167,10 +166,10 @@ export function FinancialOverview({ month }: { month: string }) {
                   <tr>
                     <th>Total</th>
                     <th />
-                    <th className="num">{money(t.card_outstanding)}</th>
-                    <th className="num">{money(t.available_credit)}</th>
-                    <th className="num">{money(sum(cards, (r) => r.month_expenses))}</th>
-                    <th className="num">{money(sum(cards, (r) => r.month_transfers_in))}</th>
+                    <th data-label="Outstanding" className="num">{money(t.card_outstanding)}</th>
+                    <th data-label="Available credit" className="num">{money(t.available_credit)}</th>
+                    <th data-label="Purchases (month)" className="num">{money(sum(cards, (r) => r.month_expenses))}</th>
+                    <th data-label="Payments (month)" className="num">{money(sum(cards, (r) => r.month_transfers_in))}</th>
                     <th />
                   </tr>
                 </tfoot>
@@ -185,9 +184,9 @@ export function FinancialOverview({ month }: { month: string }) {
       </div>
 
       <div className="card">
-        <h2>
+        <h3>
           <span aria-hidden="true">{GROUP_ICON.share_broker}</span> Share market brokers
-        </h2>
+        </h3>
         {brokers.length === 0 ? (
           <p className="muted">No broker accounts.</p>
         ) : (
@@ -210,16 +209,16 @@ export function FinancialOverview({ month }: { month: string }) {
                   {brokers.map((r) => (
                     <tr key={r.account.id}>
                       <td><AccountLink row={r} /></td>
-                      <td className="num">{money(r.deposited)}</td>
-                      <td className="num">{money(r.withdrawn)}</td>
-                      <td className="num">{money(r.balance)}</td>
-                      <td className="num">{money(r.invested)}</td>
-                      <td className="num">
+                      <td data-label="Deposited" className="num">{money(r.deposited)}</td>
+                      <td data-label="Withdrawn" className="num">{money(r.withdrawn)}</td>
+                      <td data-label="Cash in account" className="num">{money(r.balance)}</td>
+                      <td data-label="Invested (cost)" className="num">{money(r.invested)}</td>
+                      <td data-label="Current value" className="num">
                         {r.current_value === null ? <span className="muted">Not entered</span> : money(r.current_value)}
                         {r.account.valued_on && <small className="muted"> · {r.account.valued_on}</small>}
                       </td>
-                      <td className="num"><Signed value={r.unrealized_pl} /></td>
-                      <td className="num">
+                      <td data-label="Unrealized P/L" className="num"><Signed value={r.unrealized_pl} /></td>
+                      <td data-label="Realized P/L" className="num">
                         <Signed value={r.realized_pl} />
                         {!r.realized_complete && <small className="muted" title="Some sells have no cost entered"> (partial)</small>}
                       </td>
@@ -231,10 +230,10 @@ export function FinancialOverview({ month }: { month: string }) {
                     <th>Total</th>
                     <th />
                     <th />
-                    <th className="num">{money(t.broker_cash)}</th>
-                    <th className="num">{money(t.invested)}</th>
-                    <th className="num">{t.portfolio_value === null ? "—" : money(t.portfolio_value)}</th>
-                    <th className="num">
+                    <th data-label="Cash in account" className="num">{money(t.broker_cash)}</th>
+                    <th data-label="Invested (cost)" className="num">{money(t.invested)}</th>
+                    <th data-label="Current value" className="num">{t.portfolio_value === null ? "—" : money(t.portfolio_value)}</th>
+                    <th data-label="Unrealized P/L" className="num">
                       {t.portfolio_value === null ? "—" : <Signed value={Number(t.portfolio_value) - Number(t.invested)} />}
                     </th>
                     <th />
