@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import type { Account, AccountFigures, Overview } from "../api";
 import { AccountForm } from "../components/AccountForm";
+import { AccountMark } from "../components/AccountMark";
 import { Modal } from "../components/Modal";
 import { useToasts } from "../components/toast-context";
 import {
@@ -177,6 +178,7 @@ export function Accounts() {
                   {items.map((r) => (
                     <li key={r.account.id} className={r.account.is_active ? "account-row" : "account-row inactive"}>
                       <span className="account-main">
+                        <AccountMark account={r.account} />
                         <Link to={`/accounts/${r.account.id}`}>{r.account.name}</Link>
                         {(r.account.institution || r.account.pay_type === "cash" || r.account.visibility === "private" || !r.account.is_active) && (
                           <small className="account-sub">

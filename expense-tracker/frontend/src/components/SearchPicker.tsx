@@ -7,6 +7,8 @@ export interface PickerItem {
   /** Heading the item is listed under; searching matches it too ("gotu" finds every Gotu category). */
   group: string;
   icon?: IconName;
+  /** A picture to show instead of the icon, e.g. the account's bank logo. */
+  logo?: string;
   /** Small grey text at the end of the row, e.g. "card" or "private". */
   hint?: string;
 }
@@ -21,6 +23,8 @@ interface Props {
   none?: string;
   /** The button shows "Group › Item" (categories) instead of just the item. */
   showGroup?: boolean;
+  /** Shown in the block at the button's left when the choice has no icon of its own. */
+  icon?: IconName;
   id?: string;
   className?: string;
 }
@@ -30,6 +34,8 @@ const MIN_WIDTH_REM = 17;
 const GAP_PX = 6;
 // Below this much room under the button, the list opens upwards if there is more room above.
 const ROOM_PX = 280;
+// How long the closing list stays on screen to fade out (a little over --motion-fast).
+const LEAVE_MS = 220;
 
 interface Placement {
   x: number;
@@ -72,11 +78,12 @@ function Highlight({ text, query }: { text: string; query: string }) {
 }
 
 /**
- * A dropdown you can type into: the button shows the choice, the list opens with a search box
- * on top and items under group headings. Arrow keys, Enter and Esc work as in a native menu.
- * The list is position: fixed, so a table's scroll box or a dialog doesn't clip it.
+ * A dropdown you can type into: the button shows the choice (with its icon in a block at the left),
+ * and opening it turns the button's text into a search box over a list of items under group
+ * headings. Arrow keys, Enter and Esc work as in a native menu. The list slides open and fades
+ * away when it closes. It is position: fixed, so a table's scroll box or a dialog doesn't clip it.
  */
-export function SearchPicker({ items, value, onChange, label, none, showGroup = false, id, className }: Props) {
+export function SearchPicker({ items, value, onChange, label, none, showGroup = false, icon, id, className }: Props) {
   const uid = useId();
   const labelId = `${uid}-label`;
   const buttonId = id ?? `${uid}-button`;
@@ -85,11 +92,13 @@ export function SearchPicker({ items, value, onChange, label, none, showGroup = 
   const rootRef = useRef<HTMLSpanElement>(null);
   const listRef = useRef<HTMLUListElement>(null);
   const [placement, setPlacement] = useState<Placement | null>(null);
+  // While true the list is still on screen, fading out, but no longer usable.
+  const [leaving, setLeaving] = useState(false);
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(0);
   // Touch screens skip focusing the search box, so the keyboard doesn't cover the list.
   const [focusSearch, setFocusSearch] = useState(true);
-  const open = placement !== null;
+  const open = placement !== null && !leaving;
 
   const selected = items.find((i) => i.id === value);
   const q = query.trim().toLowerCase();
@@ -107,11 +116,12 @@ export function SearchPicker({ items, value, onChange, label, none, showGroup = 
     setQuery("");
     setActive(Math.max(0, (none !== undefined ? [null, ...items] : items).findIndex((c) => (c?.id ?? null) === (selected?.id ?? null))));
     setFocusSearch(window.matchMedia?.("(pointer: fine)").matches ?? true);
+    setLeaving(false);
     setPlacement(place(button));
   }
 
   function close(returnFocus: boolean) {
-    setPlacement(null);
+    setLeaving(true);
     if (returnFocus) buttonRef.current?.focus();
   }
 
@@ -125,12 +135,12 @@ export function SearchPicker({ items, value, onChange, label, none, showGroup = 
   useEffect(() => {
     if (!open) return;
     const outside = (e: PointerEvent) => {
-      if (!rootRef.current?.contains(e.target as Node)) setPlacement(null);
+      if (!rootRef.current?.contains(e.target as Node)) setLeaving(true);
     };
     const scrolled = (e: Event) => {
-      if (!listRef.current?.contains(e.target as Node)) setPlacement(null);
+      if (!listRef.current?.contains(e.target as Node)) setLeaving(true);
     };
-    const resized = () => setPlacement(null);
+    const resized = () => setLeaving(true);
     document.addEventListener("pointerdown", outside);
     window.addEventListener("scroll", scrolled, true);
     window.addEventListener("resize", resized);
@@ -140,6 +150,16 @@ export function SearchPicker({ items, value, onChange, label, none, showGroup = 
       window.removeEventListener("resize", resized);
     };
   }, [open]);
+
+  // Once the fade-out has played, take the list away.
+  useEffect(() => {
+    if (!leaving) return;
+    const timer = window.setTimeout(() => {
+      setPlacement(null);
+      setLeaving(false);
+    }, LEAVE_MS);
+    return () => window.clearTimeout(timer);
+  }, [leaving]);
 
   useEffect(() => {
     listRef.current?.querySelector("[data-active]")?.scrollIntoView?.({ block: "nearest" });
@@ -176,8 +196,12 @@ export function SearchPicker({ items, value, onChange, label, none, showGroup = 
       } as CSSProperties)
     : undefined;
 
+  const leadLogo = selected?.logo;
+  const leadIcon = selected?.icon ?? icon;
+  const hasLead = !!(leadLogo || leadIcon);
+
   return (
-    <span className={className ? `search-picker ${className}` : "search-picker"} ref={rootRef}>
+    <span className={["search-picker", hasLead ? "has-lead" : "", open ? "open" : "", className ?? ""].filter(Boolean).join(" ")} ref={rootRef}>
       <span id={labelId} hidden>
         {label}
       </span>
@@ -197,31 +221,50 @@ export function SearchPicker({ items, value, onChange, label, none, showGroup = 
           }
         }}
       >
-        {selected?.icon && <Icon name={selected.icon} />}
-        <span className="search-picker-text">{buttonText}</span>
+        {hasLead && (
+          <span className="search-picker-lead">
+            {leadLogo ? (
+              <span className="search-picker-logo">
+                <img src={leadLogo} alt="" />
+              </span>
+            ) : (
+              leadIcon && <Icon name={leadIcon} />
+            )}
+          </span>
+        )}
+        <span className={selected ? "search-picker-text" : "search-picker-text placeholder"}>{buttonText}</span>
         {selected?.hint && <small>{selected.hint}</small>}
         <Icon name="chevron-down" className="search-picker-chevron" />
       </button>
+      {open && (
+        // Typing happens in the field itself: this sits over the button's text while the list is open.
+        <input
+          type="text"
+          className="search-picker-input"
+          role="combobox"
+          aria-label={`Search ${label.toLowerCase()}`}
+          aria-expanded="true"
+          aria-controls={listId}
+          aria-autocomplete="list"
+          aria-activedescendant={choices.length ? `${listId}-${active}` : undefined}
+          placeholder={buttonText}
+          autoComplete="off"
+          autoFocus={focusSearch}
+          value={query}
+          onChange={(e) => {
+            setQuery(e.target.value);
+            setActive(0);
+          }}
+          onKeyDown={onSearchKey}
+        />
+      )}
       {placement && (
-        <span className={placement.up ? "search-picker-pop up" : "search-picker-pop"} style={style}>
-          <input
-            type="text"
-            role="combobox"
-            aria-label={`Search ${label.toLowerCase()}`}
-            aria-expanded="true"
-            aria-controls={listId}
-            aria-autocomplete="list"
-            aria-activedescendant={choices.length ? `${listId}-${active}` : undefined}
-            placeholder="Search"
-            autoComplete="off"
-            autoFocus={focusSearch}
-            value={query}
-            onChange={(e) => {
-              setQuery(e.target.value);
-              setActive(0);
-            }}
-            onKeyDown={onSearchKey}
-          />
+        <span
+          className={["search-picker-pop", placement.up ? "up" : "", leaving ? "leaving" : ""].filter(Boolean).join(" ")}
+          style={style}
+          aria-hidden={leaving || undefined}
+          inert={leaving || undefined}
+        >
           <ul ref={listRef} id={listId} role="listbox" aria-label={label}>
             {choices.map((item, index) => {
               return [
@@ -236,15 +279,21 @@ export function SearchPicker({ items, value, onChange, label, none, showGroup = 
                   role="option"
                   aria-selected={(item?.id ?? null) === (selected?.id ?? null)}
                   data-active={index === active ? "" : undefined}
-                  // Keep focus in the search box so the click doesn't close the list first.
+                  // Keep focus in the search box so the click doesn't blur it first.
                   onMouseDown={(e) => e.preventDefault()}
                   onMouseMove={() => index !== active && setActive(index)}
                   onClick={() => choose(index)}
                 >
-                  {item?.icon && (
-                    <span className="search-picker-icon">
-                      <Icon name={item.icon} />
+                  {item?.logo ? (
+                    <span className="search-picker-icon has-logo">
+                      <img src={item.logo} alt="" />
                     </span>
+                  ) : (
+                    item?.icon && (
+                      <span className="search-picker-icon">
+                        <Icon name={item.icon} />
+                      </span>
+                    )
                   )}
                   <span className="search-picker-name">{item ? <Highlight text={item.label} query={q} /> : none}</span>
                   {item?.hint && <small>{item.hint}</small>}

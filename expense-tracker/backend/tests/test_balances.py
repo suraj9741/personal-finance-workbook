@@ -324,11 +324,11 @@ def test_portfolio_value_only_when_every_broker_is_valued(admin: Api) -> None:
     totals = overview(admin)["totals"]
     assert totals["portfolio_value"] is None
     assert totals["brokers_valued"] == 1
-    for name in ("Dhan", "Angel Broker"):
+    for name in ("Dhan", "Angel Broker", "Coin"):
         admin.patch(f"{API}/accounts/{account_id(admin, name)}", json={"current_value": "500"})
-    assert money(overview(admin)["totals"]["portfolio_value"]) == Decimal("2000")
+    assert money(overview(admin)["totals"]["portfolio_value"]) == Decimal("2500")
     admin.patch(f"{API}/accounts/{dhan}", json={"is_active": False})
-    assert money(overview(admin)["totals"]["portfolio_value"]) == Decimal("1500")
+    assert money(overview(admin)["totals"]["portfolio_value"]) == Decimal("2000")
 
 
 # ---- overview -------------------------------------------------------------------------
