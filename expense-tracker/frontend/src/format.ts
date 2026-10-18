@@ -1,4 +1,5 @@
 import type { Account, Category, PayType, TxType } from "./api";
+import type { IconName } from "./components/Icon";
 
 const inr = new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 });
 const inrExact = new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", minimumFractionDigits: 2 });
@@ -92,7 +93,7 @@ export const GROUP_PLURAL: Record<AccountGroup, string> = {
   credit_card: "Credit cards",
   share_broker: "Share market brokers",
 };
-export const GROUP_ICON: Record<AccountGroup, string> = { bank: "🏦", credit_card: "💳", share_broker: "📈" };
+export const GROUP_ICON: Record<AccountGroup, IconName> = { bank: "bank", credit_card: "card", share_broker: "chart" };
 
 export function groupOf(payType: PayType): AccountGroup {
   return payType === "cash" ? "bank" : payType;

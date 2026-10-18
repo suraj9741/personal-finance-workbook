@@ -2,6 +2,7 @@ import { keepPreviousData, useQuery, type UseQueryResult } from "@tanstack/react
 import { Link } from "react-router-dom";
 import { api, type MonthStats, type Overview } from "../api";
 import { budgetSplit, budgetTone, currentMonth, money, monthLabel, percent, minusMoney } from "../format";
+import { Meter } from "./Meter";
 
 function Skeleton() {
   return (
@@ -82,14 +83,12 @@ export function DashboardHero({ month, stats }: { month: string; stats: UseQuery
                 </dd>
                 {/* The words above say the same thing, so the meter is hidden from screen readers. */}
                 <dd className="hero-meter" aria-hidden="true">
-                  <span className="bar-track">
-                    <span className={`bar-fill ${tone}`} style={{ width: `${Math.min(100, (Math.max(spent, 0) / budget) * 100)}%` }} />
-                  </span>
+                  <Meter ratio={Math.max(spent, 0) / budget} />
                 </dd>
               </>
             ) : (
               <dd className="hero-detail">
-                No spending budget · <Link to="/budgets">Set budgets</Link>
+                No spending budget · <Link to={`/budgets?month=${month}`}>Set budgets</Link>
               </dd>
             ))}
         </div>

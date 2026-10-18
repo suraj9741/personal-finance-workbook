@@ -13,6 +13,7 @@ import { useToasts } from "../components/toast-context";
 import { categoryLabel } from "../format";
 import { invalidProps, splitServerError, type FieldErrors } from "../forms";
 import { useCategories, useMe, useMembers, useRefreshMoney, useRules } from "../hooks";
+import { Icon } from "../components/Icon";
 
 const GROUP_LABEL: Record<StatsGroup, string> = {
   spend: "Spending",
@@ -181,6 +182,7 @@ function Categories({ isOwner }: { isOwner: boolean }) {
           return (
             <details key={`${kind}:${p}`} className="cat-group" open={open} onToggle={(e) => !q && toggleGroup(p, e.currentTarget.open)}>
               <summary>
+                <Icon name="chevron-right" className="disclosure" />
                 <h3>{p}</h3>
                 <span className="muted small">
                   {rows.length}
@@ -439,7 +441,7 @@ function RuleRow({ rule, categories, canEdit, onDelete, onSaved }: { rule: Rule;
   return (
     <li className="rule-row">
       <span className="rule-text">
-        <strong>"{rule.pattern}"</strong> <span aria-hidden="true">→</span>
+        <strong>"{rule.pattern}"</strong> <Icon name="arrow-right" />
         <span className="sr-only">goes to</span> {categoryLabel(category)}
         {category && !category.is_active && <span className="tag">Inactive</span>}
       </span>

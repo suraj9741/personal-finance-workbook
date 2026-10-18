@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useId, useMemo, useRef, type ReactNode } from "react";
 import { ModalContext, type ModalControls } from "./modal-context";
+import { Icon } from "./Icon";
 
 // Where focus goes when the opener is gone (for example, the row that was just deleted).
 const FALLBACK_FOCUS = "[data-return-focus]";
@@ -85,7 +86,7 @@ export function Modal({ title, onClose, children }: { title: string; onClose: ()
         <header>
           <h2 id={titleId}>{title}</h2>
           <button type="button" className="ghost" aria-label="Close" onClick={close}>
-            ✕
+            <Icon name="close" />
           </button>
         </header>
         <ModalContext.Provider value={controls}>{children}</ModalContext.Provider>

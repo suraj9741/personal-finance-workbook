@@ -1,11 +1,12 @@
 import type { CSSProperties } from "react";
 
-export type MeterTone = "neutral" | "warn" | "over" | "income";
+export type MeterTone = "neutral" | "warn" | "over" | "income" | "muted";
 
 /**
  * A thin bar of how much is used: spent against budget, or owed against a card's limit.
  * It only repeats what the words beside it say, so screen readers skip it.
  * Without a tone it follows the spending rule: grey under 90%, orange from 90%, red when over.
+ * "muted" is a quiet full bar for money with no budget behind it.
  */
 export function Meter({ ratio, tone, size }: { ratio: number; tone?: MeterTone; size?: "lg" }) {
   const shown = tone ?? (ratio > 1 ? "over" : ratio >= 0.9 ? "warn" : "neutral");

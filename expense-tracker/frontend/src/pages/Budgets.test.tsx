@@ -112,9 +112,9 @@ it("saves for this month only when that's the choice in the bar", async () => {
   const puts = setup();
   const food = await field("Food");
   fireEvent.change(food, { target: { value: "4500" } });
-  const later = within(bar()).getByRole("button", { name: "October and later" });
-  expect(later.getAttribute("aria-pressed")).toBe("true");
-  fireEvent.click(within(bar()).getByRole("button", { name: "October only" }));
+  const later = within(bar()).getByRole("radio", { name: "October and later" });
+  expect(later.getAttribute("aria-checked")).toBe("true");
+  fireEvent.click(within(bar()).getByRole("radio", { name: "October only" }));
   fireEvent.submit(food.closest("form")!);
   expect(await screen.findByText("Budgets saved for October 2026 only.")).toBeTruthy();
   expect(puts).toEqual([{ month: "2026-10", items: [{ category_id: "c1", amount: "4500", this_month_only: true }] }]);
