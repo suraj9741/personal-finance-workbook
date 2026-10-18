@@ -7,7 +7,6 @@ import { App } from "./App";
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
-  localStorage.removeItem("et:budgetsShowAll");
 });
 
 const ME = { id: "u1", email: "s@example.com", display_name: "Suraj", is_site_admin: true, household_id: "h1", household_name: "Home", role: "owner" };
@@ -89,7 +88,6 @@ it("shows budget, spent and what's left for expense and income", async () => {
       : [];
     return new Response(JSON.stringify(body), { status: 200 });
   });
-  localStorage.setItem("et:budgetsShowAll", "1");
   renderAt("/budgets");
   const left = (name: string) => screen.getByLabelText(`${name} budget`).closest(".budget-line")!.querySelector(".budget-status")!.textContent;
   await screen.findByLabelText("Everyday Food budget");
@@ -220,7 +218,6 @@ it("keeps unsaved budgets when you switch month and back", async () => {
       : null;
     return new Response(JSON.stringify(body), { status: 200 });
   });
-  localStorage.setItem("et:budgetsShowAll", "1");
   renderAt("/budgets");
   const input = await screen.findByLabelText("Everyday Food budget");
   fireEvent.change(input, { target: { value: "5000" } });

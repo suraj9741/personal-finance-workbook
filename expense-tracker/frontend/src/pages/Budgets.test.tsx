@@ -5,11 +5,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { ToastProvider } from "../components/Toast";
 import { Budgets } from "./Budgets";
 
-// Most tests work on every line, so they start with all categories listed.
-beforeEach(() => {
-  sessionStorage.clear();
-  localStorage.setItem("et:budgetsShowAll", "1");
-});
+beforeEach(() => sessionStorage.clear());
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
@@ -23,7 +19,7 @@ const CATEGORIES = [
   { id: "c2", kind: "expense", parent_name: "Everyday", sub_name: "Groceries", stats_group: "spend", is_active: true, sort_order: 1 },
 ];
 
-/** Budgets for October 2026: Food has ₹3,000 saved and ₹1,200 spent. Past months don't carry forward. */
+/** Budgets for October 2026: Food has ₹3,000 saved. Past months don't carry forward. */
 function setup(path = "/budgets?month=2026-10") {
   const puts: { month: string; items: { category_id: string; amount: string; this_month_only: boolean }[] }[] = [];
   vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
@@ -37,7 +33,7 @@ function setup(path = "/budgets?month=2026-10") {
     const body = url.includes("/auth/me") ? ME
       : url.includes("/budgets") ? { month, carries_forward: month >= "2026-10", items, next_changes: [] }
       : url.includes("/categories") ? CATEGORIES
-      : url.includes("/stats/month") ? { month, categories: month === "2026-10" ? [{ category_id: "c1", actual: "1200" }] : [] }
+      : url.includes("/stats/month") ? { month, categories: [{ category_id: "c1", actual: "1200" }] }
       : url.includes("/stats/attention") ? { month, uncategorized: month === "2026-10" ? 3 : 0 }
       : null;
     return new Response(JSON.stringify(body), { status: 200 });
@@ -132,24 +128,20 @@ it("says a past month saves for that month only, with no choice", async () => {
   expect(within(bar()).queryByRole("group", { name: "Apply to" })).toBeNull();
 });
 
-it("lists only categories in use until Show all, and remembers the choice", async () => {
-  localStorage.clear();
+it("starts every group card closed with its status showing, and remembers the ones opened", async () => {
   setup();
-  await field("Food");
-  expect(screen.queryByLabelText("Everyday Groceries budget")).toBeNull();
-  // Totals are unchanged by what's hidden.
-  expect(screen.getByText("₹1,800 left of ₹3,000")).toBeTruthy();
-  const more = screen.getByRole("button", { name: "Show all categories (1 more)" });
-  expect(more.getAttribute("aria-expanded")).toBe("false");
-  fireEvent.click(more);
-  expect(await field("Groceries")).toBeTruthy();
-  expect(localStorage.getItem("et:budgetsShowAll")).toBe("1");
-  // A line being typed in stays listed after going back.
-  fireEvent.change(await field("Groceries"), { target: { value: "2000" } });
-  fireEvent.click(screen.getByRole("button", { name: "Show only categories in use" }));
-  expect(await field("Groceries")).toBeTruthy();
-  expect(localStorage.getItem("et:budgetsShowAll")).toBeNull();
-  // A month with nothing in use says so.
-  fireEvent.click(screen.getByRole("button", { name: "Next month" }));
-  expect(await screen.findByText("No spending budgets or entries for November 2026 yet.")).toBeTruthy();
+  const card = (await field("Food")).closest("details")!;
+  expect(card.open).toBe(false);
+  const head = card.querySelector("summary")!;
+  expect(head.textContent).toContain("Everyday");
+  expect(head.querySelector(".budget-status")!.textContent).toBe("₹1,800 left");
+  fireEvent.click(head);
+  await waitFor(() => expect(card.open).toBe(true));
+  expect(localStorage.getItem("et:budgetsOpen")).toBe('["expense:Everyday"]');
+  // An edited line marks its card, so a closed card still shows it holds a change.
+  fireEvent.change(await field("Food"), { target: { value: "5000" } });
+  expect(head.hasAttribute("data-dirty")).toBe(true);
+  fireEvent.click(head);
+  await waitFor(() => expect(card.open).toBe(false));
+  expect(localStorage.getItem("et:budgetsOpen")).toBeNull();
 });

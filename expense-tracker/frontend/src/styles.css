@@ -579,9 +579,8 @@ html:has(.modal[open]) { overflow: hidden; }
 .invite-box input { flex: 1; }
 .budget-page .toolbar h1 { margin: 0; }
 .budget-intro { margin: 0 0 var(--space-4); }
-.budget-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(var(--budget-card-min), 100%), 1fr)); gap: var(--stack-gap); }
+.budget-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(var(--budget-card-min), 100%), 1fr)); gap: var(--stack-gap); align-items: start; }
 .budget-grid .card { margin: 0; }
-.budget-more { margin-top: var(--space-3); }
 .budget-skeleton { display: grid; gap: var(--space-4); }
 .budget-state { display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-3); }
 .budget-state p { margin: 0; }
@@ -601,6 +600,37 @@ html:has(.modal[open]) { overflow: hidden; }
 .budget-summary .meter { margin-top: var(--space-3); }
 .budget-card-head { display: flex; justify-content: space-between; align-items: baseline; gap: var(--space-3); margin-bottom: var(--space-2); }
 .budget-card-head h3 { margin: 0; }
+/* A group card opens from its header; closed, the header still shows the group's status and bar. */
+.budget-group > summary.budget-card-head {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: baseline;
+  gap: var(--space-2);
+  margin-bottom: 0;
+  list-style: none;
+  font-weight: inherit;
+}
+.budget-group > summary::-webkit-details-marker { display: none; }
+.budget-group > summary::before {
+  content: "›";
+  display: inline-block;
+  color: var(--color-text-tertiary);
+  transition: transform var(--motion-fast) var(--motion-ease);
+}
+.budget-group[open] > summary::before { transform: rotate(90deg); }
+.budget-group[open] > summary { margin-bottom: var(--space-3); }
+.budget-group > summary:focus-visible { outline: 2px solid var(--color-focus); outline-offset: 2px; border-radius: var(--radius-sm); }
+.budget-group > summary[data-dirty] h3::after {
+  content: "";
+  display: inline-block;
+  width: calc(1.5 * var(--space-1));
+  height: calc(1.5 * var(--space-1));
+  margin-left: var(--space-2);
+  vertical-align: middle;
+  border-radius: var(--radius-pill);
+  background: var(--color-accent);
+}
+.budget-group-meter { grid-column: 1 / -1; }
 .budget-status { font-size: var(--text-footnote-size); font-variant-numeric: tabular-nums; white-space: nowrap; color: var(--color-text-secondary); }
 /* One category: name, note and bar on the left; budget, spent and left in columns. */
 .budget-line {
