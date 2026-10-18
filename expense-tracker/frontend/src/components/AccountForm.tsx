@@ -16,6 +16,8 @@ interface Props {
   onDone: () => void;
   /** After a delete (the account's own page leaves for the list). */
   onDeleted?: () => void;
+  /** The field the cursor starts in, instead of the name (Update value opens on "current_value"). */
+  focusField?: string;
 }
 
 const FIELDS = ["name", "institution", "description", "opening_balance", "opening_date", "credit_limit", "statement_day", "due_day", "opening_invested", "current_value", "valued_on"];
@@ -37,7 +39,7 @@ const text = (value: string | null | undefined) => value ?? "";
 const orNull = (value: string) => (value.trim() === "" ? null : value.trim());
 
 /** Create or edit an account. The type is fixed once created: past entries depend on it. */
-export function AccountForm({ existing, group: initialGroup = "bank", onDone, onDeleted }: Props) {
+export function AccountForm({ existing, group: initialGroup = "bank", onDone, onDeleted, focusField = "name" }: Props) {
   const me = useMe().data;
   const isOwner = me?.role === "owner";
   const client = useQueryClient();
@@ -193,6 +195,8 @@ export function AccountForm({ existing, group: initialGroup = "bank", onDone, on
   const busy = save.isPending || setActive.isPending || remove.isPending;
   const field = (name: string) => invalidProps(errors, name, formId);
   const err = (name: string) => <FieldError errors={errors} name={name} formId={formId} />;
+  // The popup puts the cursor in the field marked data-autofocus.
+  const autofocus = (name: string) => (name === focusField ? { "data-autofocus": true } : {});
 
   return (
     <form ref={formRef} className="tx-form" onSubmit={submit} noValidate aria-busy={busy}>
@@ -221,7 +225,7 @@ export function AccountForm({ existing, group: initialGroup = "bank", onDone, on
       )}
       <label>
         Account name
-        <input required data-autofocus maxLength={60} value={form.name} placeholder={group === "credit_card" ? "e.g. HDFC CC" : "e.g. HDFC"} onChange={(e) => set({ name: e.target.value })} {...field("name")} />
+        <input required {...autofocus("name")} maxLength={60} value={form.name} placeholder={group === "credit_card" ? "e.g. HDFC CC" : "e.g. HDFC"} onChange={(e) => set({ name: e.target.value })} {...field("name")} />
         {err("name")}
       </label>
       {!(group === "bank" && isCash) && (
@@ -273,7 +277,7 @@ export function AccountForm({ existing, group: initialGroup = "bank", onDone, on
           <div className="form-pair">
             <label>
               Current portfolio value (₹, optional)
-              <input inputMode="decimal" value={form.current_value} onChange={(e) => set({ current_value: e.target.value })} {...field("current_value")} />
+              <input inputMode="decimal" {...autofocus("current_value")} value={form.current_value} onChange={(e) => set({ current_value: e.target.value })} {...field("current_value")} />
               {err("current_value")}
             </label>
             <label>
@@ -310,8 +314,10 @@ export function AccountForm({ existing, group: initialGroup = "bank", onDone, on
         <button type="button" disabled={busy} onClick={done}>
           Cancel
         </button>
-        {existing &&
-          (existing.is_active ? (
+      </div>
+      {existing && (
+        <div className="form-danger">
+          {existing.is_active ? (
             <button type="button" disabled={busy} title="Its history stays; it just leaves the pickers and totals." onClick={() => setActive.mutate(false)}>
               Deactivate
             </button>
@@ -319,13 +325,12 @@ export function AccountForm({ existing, group: initialGroup = "bank", onDone, on
             <button type="button" disabled={busy} onClick={() => setActive.mutate(true)}>
               Activate
             </button>
-          ))}
-        {existing && (
+          )}
           <button type="button" className="danger" disabled={busy} onClick={() => remove.mutate()}>
             <BusyLabel busy={remove.isPending} idle="Delete" working="Deleting…" />
           </button>
-        )}
-      </div>
+        </div>
+      )}
     </form>
   );
 }

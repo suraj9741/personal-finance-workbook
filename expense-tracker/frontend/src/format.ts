@@ -39,6 +39,27 @@ export function monthLabel(month: string): string {
   return new Date(y, m - 1, 1).toLocaleDateString("en-IN", { month: "long", year: "numeric" });
 }
 
+/** "+₹1,800" or "−₹1,800" with a real minus sign (money() prints a hyphen); zero has no sign. */
+export function signedMoney(value: string | number, exact = false): string {
+  const n = Number(value);
+  return `${n > 0 ? "+" : n < 0 ? "−" : ""}${money(Math.abs(n), exact)}`;
+}
+
+/** "+10%" or "−2%" for a change as a share of what it's measured on (0.1 → "+10%"). */
+export function signedPercent(ratio: number): string {
+  const p = Math.round(ratio * 100);
+  return `${p > 0 ? "+" : p < 0 ? "−" : ""}${Math.abs(p)}%`;
+}
+
+/** "Sept 2026", the short form of monthLabel. */
+export function monthShort(month: string): string {
+  const [y, m] = month.split("-").map(Number);
+  return new Date(y, m - 1, 1).toLocaleDateString("en-IN", { month: "short", year: "numeric" });
+}
+
+/** Account types as short as they go, for filters on a phone. */
+export const GROUP_SHORT: Record<AccountGroup, string> = { bank: "Banks", credit_card: "Cards", share_broker: "Brokers" };
+
 export function categoryLabel(c: Category | undefined): string {
   return c ? `${c.parent_name} › ${c.sub_name}` : "Uncategorized";
 }

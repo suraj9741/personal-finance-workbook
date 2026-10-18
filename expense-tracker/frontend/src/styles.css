@@ -627,7 +627,7 @@ html:has(.modal[open]) { overflow: hidden; }
 .inline-rename input { width: var(--field-md); }
 .unsaved-bar {
   position: sticky;
-  bottom: var(--space-4);
+  bottom: calc(var(--space-4) + env(safe-area-inset-bottom));
   z-index: 30;
   display: flex;
   flex-wrap: wrap;
@@ -637,10 +637,28 @@ html:has(.modal[open]) { overflow: hidden; }
   margin: var(--space-3) 0;
   padding: var(--space-3) var(--card-padding);
   background: var(--color-surface-raised);
+  /* A raised surface: fills step up one shade so the Apply-to track still shows in dark mode. */
+  --color-fill: var(--color-fill-elevated);
+  --color-fill-hover: var(--color-fill-elevated-hover);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-popover);
   font-weight: 600;
 }
+.unsaved-text { display: grid; gap: var(--space-1); }
+.unsaved-text .field-error { font-weight: 400; }
+.unsaved-others, .unsaved-apply {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-2);
+  font-size: var(--text-footnote-size);
+  font-weight: 400;
+  color: var(--color-text-secondary);
+}
+.unsaved-bar .segmented { margin-bottom: 0; }
+.unsaved-bar .segmented button { text-transform: none; font-size: var(--text-footnote-size); }
+.unsaved-actions { display: flex; gap: var(--space-2); margin-left: auto; }
+.unsaved-error { flex-basis: 100%; font-weight: 400; }
 
 /* ---- toasts: bottom centre, above the home indicator ---- */
 .toasts {
@@ -701,25 +719,100 @@ html:has(.modal[open]) { overflow: hidden; }
 .plain li { padding: var(--space-2) 0; border-bottom: 1px solid var(--color-separator); }
 .plain li:last-child { border-bottom: 0; }
 .invite-box input { flex: 1; }
-.budget-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(25rem, 100%), 1fr)); gap: var(--stack-gap); }
+.budget-page .toolbar h1 { margin: 0; }
+.budget-intro { margin: 0 0 var(--space-4); }
+.budget-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(var(--budget-card-min), 100%), 1fr)); gap: var(--stack-gap); align-items: start; }
 .budget-grid .card { margin: 0; }
-.budget-grid h3 { margin-top: 0; }
+.budget-skeleton { display: grid; gap: var(--space-4); }
+.budget-state { display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-3); }
+.budget-state p { margin: 0; }
 .budget-section { margin-bottom: var(--space-8); }
 .budget-section .good { color: var(--color-positive); }
 .budget-section .bad { color: var(--color-negative); }
-.budget-totals { display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-8); margin: 0 0 var(--space-4); }
-.budget-totals dt { color: var(--color-text-secondary); font-size: var(--text-footnote-size); }
-.budget-totals dd {
-  margin: 0;
+/* "₹18,200 left of ₹40,000", the share spent, then one large bar. */
+.budget-summary { max-width: var(--budget-card-min); margin: 0 0 var(--space-5); }
+.budget-summary p { margin: 0; }
+.budget-summary-figure {
   font-size: var(--text-title-size);
-  font-weight: 600;
+  font-weight: var(--text-title-weight);
+  line-height: var(--text-title-leading);
   letter-spacing: var(--text-title-tracking);
   font-variant-numeric: tabular-nums;
 }
-.budget-line { display: grid; grid-template-columns: minmax(0, 1fr) 5.5rem 5rem 5rem; gap: var(--space-2); align-items: center; padding: var(--space-0) 0; }
-.budget-line .num { text-align: right; font-variant-numeric: tabular-nums; font-size: var(--text-callout-size); }
+.budget-summary .meter { margin-top: var(--space-3); }
+.budget-card-head { display: flex; justify-content: space-between; align-items: baseline; gap: var(--space-3); margin-bottom: var(--space-2); }
+.budget-card-head h3 { margin: 0; }
+/* A group card opens from its header; closed, the header still shows the group's status and bar. */
+.budget-group > summary.budget-card-head {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: baseline;
+  gap: var(--space-2);
+  margin-bottom: 0;
+  list-style: none;
+  font-weight: inherit;
+}
+.budget-group > summary::-webkit-details-marker { display: none; }
+.budget-group > summary::before {
+  content: "›";
+  display: inline-block;
+  color: var(--color-text-tertiary);
+  transition: transform var(--motion-fast) var(--motion-ease);
+}
+.budget-group[open] > summary::before { transform: rotate(90deg); }
+.budget-group[open] > summary { margin-bottom: var(--space-3); }
+.budget-group > summary:focus-visible { outline: 2px solid var(--color-focus); outline-offset: 2px; border-radius: var(--radius-sm); }
+.budget-group > summary[data-dirty] h3::after {
+  content: "";
+  display: inline-block;
+  width: calc(1.5 * var(--space-1));
+  height: calc(1.5 * var(--space-1));
+  margin-left: var(--space-2);
+  vertical-align: middle;
+  border-radius: var(--radius-pill);
+  background: var(--color-accent);
+}
+.budget-group-meter { grid-column: 1 / -1; }
+.budget-status { font-size: var(--text-footnote-size); font-variant-numeric: tabular-nums; white-space: nowrap; color: var(--color-text-secondary); }
+/* One category: name, note and bar on the left; budget, spent and left in columns. */
+.budget-line {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--budget-col-input) var(--budget-col-num) var(--budget-col-num);
+  grid-template-areas:
+    "name input spent status"
+    "meter input spent status"
+    "error error error error";
+  column-gap: var(--space-2);
+  align-items: center;
+  padding: var(--space-2) 0;
+}
+.budget-line + .budget-line { border-top: 1px solid var(--color-separator); }
+.budget-head { padding: 0 0 var(--space-1); color: var(--color-text-secondary); font-size: var(--text-caption-size); font-weight: var(--text-caption-weight); }
 .budget-head span { text-align: right; }
-.budget-note { display: block; font-size: var(--text-caption-size); }
+.budget-line .num { text-align: right; font-variant-numeric: tabular-nums; font-size: var(--text-callout-size); }
+.budget-name { grid-area: name; min-width: 0; display: flex; flex-wrap: wrap; align-items: center; column-gap: var(--space-2); }
+.budget-name a { color: var(--color-text); font-weight: 500; text-decoration: none; }
+.budget-name a:hover { color: var(--color-accent); text-decoration: underline; }
+.budget-note { flex-basis: 100%; font-size: var(--text-caption-size); }
+/* An edit not saved yet: an accent dot before the name and an accent border on the field. */
+.budget-line[data-dirty] .budget-name::before {
+  content: "";
+  width: calc(1.5 * var(--space-1));
+  height: calc(1.5 * var(--space-1));
+  border-radius: var(--radius-pill);
+  background: var(--color-accent);
+}
+.budget-line[data-dirty] .budget-note { padding-left: calc(1.5 * var(--space-1) + var(--space-2)); }
+.budget-input { grid-area: input; position: relative; display: flex; align-items: center; }
+.budget-input > span { position: absolute; left: var(--space-3); color: var(--color-text-secondary); pointer-events: none; }
+.budget-input input { width: 100%; padding-left: var(--space-6); text-align: right; font-variant-numeric: tabular-nums; }
+.budget-line[data-dirty] .budget-input input:not([aria-invalid="true"]) { border-color: var(--color-accent); }
+.budget-amount { grid-area: input; }
+.budget-spent { grid-area: spent; }
+.budget-line .budget-status { grid-area: status; }
+.budget-meter { grid-area: meter; display: block; margin-top: var(--space-1); font-size: var(--text-caption-size); }
+.budget-caption { grid-area: caption; display: none; font-size: var(--text-caption-size); }
+.budget-error { grid-area: error; margin-top: var(--space-1); }
 .chips { display: flex; flex-wrap: wrap; gap: var(--space-2); }
 .chip {
   display: inline-flex;
@@ -740,8 +833,62 @@ html:has(.modal[open]) { overflow: hidden; }
 .account-picker.buttons { display: grid; gap: var(--space-2); }
 .account-picker.buttons .segmented { margin-bottom: 0; }
 .form-pair { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-3); }
-.account-list li { padding: var(--space-2) 0; border-bottom: 1px solid var(--color-separator); flex-wrap: wrap; }
-.account-list li:last-child { border-bottom: 0; }
+.account-state { display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-3); }
+.account-state p { margin: 0; }
+.account-group-head { display: flex; justify-content: space-between; align-items: flex-start; gap: var(--space-3); margin-bottom: var(--space-2); }
+.account-group-head h2, .account-group-head p { margin: 0; }
+.account-group-total { font-size: var(--text-headline-size); font-weight: var(--text-headline-weight); line-height: var(--text-headline-leading); }
+.account-empty { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); margin: 0; }
+/* Rows share one set of columns (subgrid), so figures line up whether or not a row has Edit. */
+.account-list {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto auto;
+  column-gap: var(--space-3);
+  list-style: none;
+  margin: 0 calc(-1 * var(--space-3));
+  padding: 0;
+}
+.account-row {
+  position: relative;
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: subgrid;
+  align-items: center;
+  min-height: var(--account-row-min-h);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  transition: background-color var(--motion-fast) var(--motion-ease), opacity var(--motion-instant) var(--motion-ease);
+}
+/* Inset hairlines between rows, as in an iOS list. */
+.account-row + .account-row::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: var(--space-3);
+  right: var(--space-3);
+  border-top: 1px solid var(--color-separator);
+}
+@media (hover: hover) {
+  .account-row:not(.account-skeleton):hover { background: var(--color-fill); }
+}
+.account-row:has(a:active) { opacity: var(--press-dim); }
+.account-row:has(a:focus-visible) { outline: 2px solid var(--color-focus); outline-offset: -2px; }
+/* The name link covers the whole row (stretched link); Edit sits above it and stays its own button. */
+.account-row a { color: var(--color-text); font-weight: 600; text-decoration: none; }
+.account-row a:focus-visible { outline: none; }
+.account-row a::after { content: ""; position: absolute; inset: 0; border-radius: inherit; }
+.account-edit { position: relative; z-index: 1; }
+.account-main { display: grid; gap: var(--space-0); min-width: 0; }
+.account-sub { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1) var(--space-2); color: var(--color-text-secondary); font-size: var(--text-footnote-size); }
+.account-sub .tag { margin-left: 0; }
+.account-figure { display: grid; justify-items: end; text-align: right; }
+.account-figure .num { font-weight: 600; }
+.account-figure small { font-size: var(--text-footnote-size); }
+.account-row.inactive a, .account-row.inactive .account-figure .num { color: var(--color-text-secondary); }
+.account-chevron { color: var(--color-text-tertiary); font-size: var(--text-title-size); line-height: 1; }
+.account-skeleton { grid-template-columns: 1fr; gap: var(--space-2); }
+.account-skeleton .skeleton:first-child { width: 40%; }
+.account-skeleton .skeleton:last-child { width: 25%; }
 .section-title {
   font-size: var(--text-title-size);
   font-weight: var(--text-title-weight);
@@ -753,8 +900,122 @@ html:has(.modal[open]) { overflow: hidden; }
 tfoot th { color: var(--color-text); font-weight: 600; border-top: 1px solid var(--color-separator); border-bottom: 0; }
 .pos-text { color: var(--color-positive); }
 .neg-text { color: var(--color-negative); }
-.detail-head { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: center; justify-content: space-between; }
-.detail-head h1 { margin: 0; }
+/* Account page: breadcrumb, a clean header, one large number, then a short list of facts. */
+.breadcrumb ol { display: flex; flex-wrap: wrap; gap: var(--space-1); list-style: none; margin: 0 0 var(--space-3); padding: 0; font-size: var(--text-footnote-size); }
+.breadcrumb li + li::before { content: "›" / ""; margin-right: var(--space-1); color: var(--color-text-tertiary); }
+.detail-head { display: flex; flex-wrap: wrap; gap: var(--space-3); align-items: flex-start; justify-content: space-between; margin-bottom: var(--space-4); }
+.detail-title { display: flex; gap: var(--space-3); align-items: flex-start; min-width: 0; }
+.detail-title p { margin: var(--space-1) 0 0; }
+.detail-icon { font-size: var(--text-title-size); line-height: var(--text-large-title-leading); }
+.detail-name { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.detail-name h1 { margin: 0; }
+.detail-name .tag { margin-left: 0; }
+.detail-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.acct-hero { display: grid; gap: var(--space-2); justify-items: start; max-width: var(--acct-hero-max); }
+.acct-hero p { margin: 0; }
+.acct-hero .meter { justify-self: stretch; margin-top: var(--space-1); }
+.acct-hero-label { color: var(--color-text-secondary); font-size: var(--text-footnote-size); }
+.acct-hero-figure {
+  font-size: var(--text-display-size);
+  font-weight: var(--text-display-weight);
+  line-height: var(--text-display-leading);
+  letter-spacing: var(--text-display-tracking);
+  font-variant-numeric: tabular-nums;
+}
+.acct-hero-figure.muted { font-size: var(--text-title-size); line-height: var(--text-title-leading); letter-spacing: var(--text-title-tracking); }
+.acct-facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: var(--space-8); margin: var(--space-5) 0 0; }
+.acct-facts > div { display: flex; justify-content: space-between; align-items: baseline; gap: var(--space-3); padding: var(--space-2) 0; border-top: 1px solid var(--color-separator); }
+.acct-facts dt { color: var(--color-text-secondary); }
+.acct-facts dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; }
+.acct-facts dd small { display: block; }
+.acct-month-head { margin-top: var(--space-8); }
+.acct-month-head .section-title { margin: 0; }
+.acct-month { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--space-4); margin-top: 0; }
+.acct-month.cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.acct-month > div { display: grid; gap: var(--space-0); align-content: start; }
+.acct-month dt { color: var(--color-text-secondary); font-size: var(--text-footnote-size); }
+.acct-month dd { margin: 0; }
+.acct-month .num { text-align: left; font-size: var(--text-headline-size); font-weight: 600; }
+.acct-month-note { color: var(--color-text-secondary); font-size: var(--text-caption-size); }
+.acct-skeleton { display: grid; gap: var(--space-4); max-width: var(--acct-hero-max); }
+.acct-skeleton .skeleton:first-child { width: 40%; }
+.acct-skeleton .skeleton:nth-child(2) { height: var(--text-display-size); }
+/* Deactivate and Delete sit apart from Save, under a hairline. */
+.form-danger { display: flex; flex-wrap: wrap; gap: var(--space-2); padding-top: var(--space-3); border-top: 1px solid var(--color-separator); }
+
+/* ---- meters: Meter.tsx (budgets, card limit) ---- */
+.meter { display: block; height: var(--meter-height); background: var(--color-meter-track); border-radius: var(--radius-pill); overflow: hidden; }
+.meter-lg { height: var(--meter-height-lg); }
+/* Sized with transform, so a change animates on the GPU without relayout. */
+.meter-fill {
+  display: block;
+  height: 100%;
+  background: var(--color-meter-fill);
+  transform: scaleX(var(--meter-value));
+  transform-origin: left;
+  transition: transform var(--motion-base) var(--motion-ease-out);
+}
+.meter-fill.warn { background: var(--color-meter-warn); }
+.meter-fill.over { background: var(--color-meter-over); }
+.meter-fill.income { background: var(--color-meter-income); }
+@media (prefers-reduced-motion: reduce) {
+  .meter-fill { transition: none; }
+}
+
+/* ---- budgets, accounts and day-grouped lists on a phone (≤ 640px) ---- */
+@media (max-width: 640px) {
+  /* A budget line: name and field, then the bar across, then "₹1,200 spent · ₹1,800 left". */
+  .budget-line {
+    grid-template-columns: minmax(0, 1fr) var(--budget-col-input);
+    grid-template-areas:
+      "name input"
+      "meter meter"
+      "caption caption"
+      "error error";
+    row-gap: var(--space-1);
+  }
+  .budget-head, .budget-spent, .budget-line .budget-status { display: none; }
+  .budget-caption { display: block; }
+  .unsaved-bar { flex-direction: column; align-items: stretch; }
+  .unsaved-apply .segmented { display: flex; width: 100%; }
+  .unsaved-apply .segmented button { flex: 1; }
+  .unsaved-actions { margin-left: 0; }
+  .unsaved-actions button { flex: 1; }
+
+  /* Account rows: Edit is one tap away on the account page; captions wrap under the figure. */
+  .account-list { grid-template-columns: minmax(0, 1fr) fit-content(55%) auto; }
+  .account-edit { display: none; }
+
+  .detail-head { flex-direction: column; align-items: stretch; }
+  .detail-actions > button { flex: 1; }
+  .acct-hero-figure {
+    font-size: var(--text-large-title-size);
+    font-weight: var(--text-large-title-weight);
+    line-height: var(--text-large-title-leading);
+    letter-spacing: var(--text-large-title-tracking);
+  }
+  .acct-facts { grid-template-columns: 1fr; }
+  .acct-month, .acct-month.cols-3 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+
+  /*
+   * Entries (Transactions and an account's page) become stacked rows instead of a sideways scroll:
+   * description and amount, then category, account and actions as a caption line.
+   */
+  .tx-table, .tx-table tbody { display: block; }
+  .tx-table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .tx-table tr { display: flex; flex-wrap: wrap; align-items: center; column-gap: var(--space-2); padding: var(--space-2) var(--space-3); border-bottom: 1px solid var(--color-separator); }
+  .tx-table tbody:last-child tr:last-child { border-bottom: 0; }
+  .tx-table tr > * { padding: 0; border: 0; }
+  .tx-table tr:not(.day-head)::after { content: ""; order: 3; flex-basis: 100%; }
+  .tx-table tr:not(.day-head) > td { order: 4; margin-top: var(--space-0); }
+  .tx-table tr:not(.day-head) > td:not(.num, :first-child) { color: var(--color-text-secondary); font-size: var(--text-footnote-size); }
+  .tx-table tr:not(.day-head) > td:first-child { order: 1; flex: 1 1 0; min-width: 0; margin-top: 0; }
+  .tx-table tr:not(.day-head) > td.num { order: 2; margin-top: 0; }
+  .tx-table tr:not(.day-head) > td.actions { order: 5; margin-left: auto; }
+  .tx-table .day-head { justify-content: space-between; align-items: baseline; padding-top: var(--space-3); background: var(--color-bg); }
+  .tx-table .day-head > td:empty { display: none; }
+  .tx-table tr.skeleton-row:not(.day-head) > td { flex: 1 1 30%; order: 0; }
+}
 
 /* ---- compact (≤ 640px) ---- */
 @media (max-width: 640px) {

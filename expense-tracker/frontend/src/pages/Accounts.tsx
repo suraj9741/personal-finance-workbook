@@ -1,11 +1,45 @@
 import { useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import type { Account, AccountFigures } from "../api";
+import type { Account, AccountFigures, Overview } from "../api";
 import { AccountForm } from "../components/AccountForm";
 import { Modal } from "../components/Modal";
 import { useToasts } from "../components/toast-context";
-import { ACCOUNT_GROUPS, GROUP_ICON, GROUP_PLURAL, currentMonth, groupOf, money, type AccountGroup } from "../format";
+import {
+  ACCOUNT_GROUPS,
+  GROUP_ICON,
+  GROUP_PLURAL,
+  GROUP_SHORT,
+  currentMonth,
+  groupOf,
+  money,
+  signedMoney,
+  signedPercent,
+  type AccountGroup,
+} from "../format";
 import { useMe, useOverview } from "../hooks";
+
+/** The search box only shows once there are more accounts than fit at a glance. */
+const SEARCH_FROM = 8;
+
+const ADD_LABEL: Record<AccountGroup, string> = {
+  bank: "Add bank account",
+  credit_card: "Add credit card",
+  share_broker: "Add broker",
+};
+
+/** A balance in normal text; below zero it gets a real minus sign. */
+const balanceText = (value: string | number | null) => (Number(value ?? 0) < 0 ? signedMoney(Number(value)) : money(value ?? 0));
+
+/** What a group adds up to: banks' balance, what cards owe, what brokers hold. */
+function groupTotal(group: AccountGroup, totals: Overview["totals"]): string {
+  if (group === "bank") return balanceText(totals.bank_balance);
+  if (group === "credit_card") {
+    const owed = Number(totals.card_outstanding);
+    return owed < 0 ? `${money(-owed)} in credit` : `${money(owed)} owed`;
+  }
+  const valued = totals.brokers > 0 && totals.brokers_valued === totals.brokers && totals.portfolio_value !== null;
+  return valued ? `worth ${money(totals.portfolio_value)}` : `${money(totals.invested)} invested`;
+}
 
 /** All accounts grouped by type (bank, card, broker), with their current figures. */
 export function Accounts() {
@@ -19,13 +53,19 @@ export function Accounts() {
   const { hidden } = useToasts();
 
   const rows = (overview.data?.accounts ?? []).filter((r) => !hidden.has(r.account.id));
-  const needle = search.trim().toLowerCase();
-  const visible = rows.filter(
-    (r) =>
-      (showInactive || r.account.is_active) &&
-      (!needle || `${r.account.name} ${r.account.institution ?? ""}`.toLowerCase().includes(needle)),
-  );
+  const searchable = rows.length > SEARCH_FROM;
+  const needle = searchable ? search.trim().toLowerCase() : "";
+  // Inactive accounts sit at the bottom of their group (sort is stable, so the rest keep their order).
+  const visible = rows
+    .filter(
+      (r) =>
+        (showInactive || r.account.is_active) &&
+        (!needle || `${r.account.name} ${r.account.institution ?? ""}`.toLowerCase().includes(needle)),
+    )
+    .sort((a, b) => Number(b.account.is_active) - Number(a.account.is_active));
   const groups = only && ACCOUNT_GROUPS.includes(only) ? [only] : ACCOUNT_GROUPS;
+  // While searching, groups with no match step aside.
+  const shown = needle ? groups.filter((g) => visible.some((r) => groupOf(r.account.pay_type) === g)) : groups;
   const canManage = (a: Account) => (a.visibility === "private" ? a.owner_user_id === me?.id : me?.role === "owner");
 
   function setType(value: AccountGroup | "") {
@@ -43,69 +83,122 @@ export function Accounts() {
           Add account
         </button>
       </div>
-      <nav className="segmented wrap" aria-label="Account types">
+      <div className="segmented wrap" role="group" aria-label="Show">
         <button type="button" className={!only ? "active" : ""} aria-pressed={!only} onClick={() => setType("")}>
           All
         </button>
         {ACCOUNT_GROUPS.map((g) => (
           <button key={g} type="button" className={only === g ? "active" : ""} aria-pressed={only === g} onClick={() => setType(g)}>
-            <span aria-hidden="true">{GROUP_ICON[g]}</span> {GROUP_PLURAL[g]}
+            {GROUP_SHORT[g]}
           </button>
         ))}
-      </nav>
-      <div className="filters">
-        <input type="search" placeholder="Search accounts" aria-label="Search accounts" value={search} onChange={(e) => setSearch(e.target.value)} />
-        <label className="check">
-          <input type="checkbox" checked={showInactive} onChange={(e) => setShowInactive(e.target.checked)} />
-          Show inactive
-        </label>
       </div>
-      {overview.isLoading && <p className="muted">Loading accounts…</p>}
-      {overview.isError && <p className="error">Couldn't load accounts: {overview.error.message}</p>}
+      {(searchable || rows.some((r) => !r.account.is_active)) && (
+        <div className="filters">
+          {searchable && (
+            <input type="search" placeholder="Search accounts" aria-label="Search accounts" value={search} onChange={(e) => setSearch(e.target.value)} />
+          )}
+          {rows.some((r) => !r.account.is_active) && (
+            <label className="check">
+              <input type="checkbox" checked={showInactive} onChange={(e) => setShowInactive(e.target.checked)} />
+              Show inactive
+            </label>
+          )}
+        </div>
+      )}
+      {overview.isPending &&
+        groups.map((g) => (
+          <div className="card" key={g} aria-hidden="true">
+            <span className="skeleton account-skeleton-title" />
+            <ul className="account-list">
+              {[0, 1].map((i) => (
+                <li key={i} className="account-row account-skeleton">
+                  <span className="skeleton" />
+                  <span className="skeleton" />
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))}
+      {overview.isError && (
+        <div className="card account-state">
+          <p>Couldn't load accounts: {overview.error.message}</p>
+          <button type="button" onClick={() => overview.refetch()}>
+            Try again
+          </button>
+        </div>
+      )}
       {overview.isSuccess && rows.length === 0 && (
-        <div className="card">
-          <p>No accounts yet. Add your bank accounts, credit cards and broker accounts to see balances and record entries against them.</p>
-          <button type="button" className="primary" onClick={() => setEditing("bank")}>
-            Add your first account
+        <div className="card account-state">
+          <p>No accounts yet. Add one to see its balance and record entries against it.</p>
+          <div className="row wrap">
+            {ACCOUNT_GROUPS.map((g) => (
+              <button key={g} type="button" className={g === "bank" ? "primary" : "tinted"} onClick={() => setEditing(g)}>
+                {ADD_LABEL[g]}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+      {overview.isSuccess && rows.length > 0 && needle && shown.length === 0 && (
+        <div className="card account-state">
+          <p>No accounts match "{search.trim()}".</p>
+          <button type="button" className="ghost" onClick={() => setSearch("")}>
+            Clear search
           </button>
         </div>
       )}
       {overview.isSuccess &&
         rows.length > 0 &&
-        groups.map((g) => {
+        shown.map((g) => {
           const items = visible.filter((r) => groupOf(r.account.pay_type) === g);
-          const total = rows.filter((r) => groupOf(r.account.pay_type) === g && r.account.is_active).length;
+          const count = rows.filter((r) => groupOf(r.account.pay_type) === g && r.account.is_active).length;
           return (
             <div className="card" key={g}>
-              <h2>
-                <span aria-hidden="true">{GROUP_ICON[g]}</span> {GROUP_PLURAL[g]} <small className="muted">({total} active)</small>
-              </h2>
+              <div className="account-group-head">
+                <div>
+                  <h2>
+                    <span aria-hidden="true">{GROUP_ICON[g]}</span> {GROUP_PLURAL[g]}
+                  </h2>
+                  <p className="muted small">
+                    {count} {count === 1 ? "account" : "accounts"}
+                  </p>
+                </div>
+                {count > 0 && <span className="num account-group-total">{groupTotal(g, overview.data.totals)}</span>}
+              </div>
               {items.length === 0 ? (
-                <p className="muted">
-                  {needle ? "No match." : `No ${GROUP_PLURAL[g].toLowerCase()} yet.`}{" "}
-                  <button type="button" className="ghost small" onClick={() => setEditing(g)}>
-                    Add one
+                <p className="muted account-empty">
+                  No {GROUP_PLURAL[g].toLowerCase()} yet.{" "}
+                  <button type="button" className="tinted small" onClick={() => setEditing(g)}>
+                    {ADD_LABEL[g]}
                   </button>
                 </p>
               ) : (
-                <ul className="plain account-list">
+                <ul className="account-list">
                   {items.map((r) => (
-                    <li key={r.account.id} className="row">
-                      <span className={r.account.is_active ? "" : "muted"}>
-                        <Link to={`/accounts/${r.account.id}`}>
-                          <strong>{r.account.name}</strong>
-                        </Link>
-                        {r.account.pay_type === "cash" && <small className="tag">cash</small>}
-                        {r.account.institution && <small className="muted"> · {r.account.institution}</small>}
-                        {r.account.visibility === "private" && <small className="tag">private</small>}
-                        {!r.account.is_active && <small className="tag">inactive</small>}
+                    <li key={r.account.id} className={r.account.is_active ? "account-row" : "account-row inactive"}>
+                      <span className="account-main">
+                        <Link to={`/accounts/${r.account.id}`}>{r.account.name}</Link>
+                        {(r.account.institution || r.account.pay_type === "cash" || r.account.visibility === "private" || !r.account.is_active) && (
+                          <small className="account-sub">
+                            {r.account.institution}
+                            {r.account.pay_type === "cash" && <span className="tag">Cash</span>}
+                            {r.account.visibility === "private" && <span className="tag">Private</span>}
+                            {!r.account.is_active && <span className="tag">Inactive</span>}
+                          </small>
+                        )}
                       </span>
                       <KeyFigure row={r} />
-                      {canManage(r.account) && (
-                        <button type="button" className="ghost small" aria-label={`Edit ${r.account.name}`} onClick={() => setEditing(r.account)}>
+                      {canManage(r.account) ? (
+                        <button type="button" className="ghost small account-edit" aria-label={`Edit ${r.account.name}`} onClick={() => setEditing(r.account)}>
                           Edit
                         </button>
+                      ) : (
+                        <span />
                       )}
+                      <span className="account-chevron" aria-hidden="true">
+                        ›
+                      </span>
                     </li>
                   ))}
                 </ul>
@@ -126,28 +219,37 @@ export function Accounts() {
   );
 }
 
-/** Balance for banks, outstanding and available credit for cards, invested/value for brokers. */
+/**
+ * The one figure that matters for each type, with a caption under it. Bank: the balance. Card: what's
+ * owed and what's available (or "in credit"). Broker: the current value and its gain, or what went in.
+ */
 export function KeyFigure({ row }: { row: AccountFigures }) {
   const group = groupOf(row.account.pay_type);
-  if (group === "credit_card")
+  if (group === "credit_card") {
+    const owed = Number(row.outstanding ?? 0);
+    if (owed < 0) return <Figure value={money(-owed)} caption="in credit" />;
+    return <Figure value={money(owed)} caption={row.available_credit !== null ? `owed · ${money(row.available_credit)} available` : "owed"} />;
+  }
+  if (group === "share_broker") {
+    if (row.current_value === null) return <Figure value={money(row.invested ?? 0)} caption="invested · no value entered" />;
+    const gain = Number(row.unrealized_pl ?? 0);
+    const base = Number(row.invested ?? 0);
     return (
-      <span className="num">
-        {money(row.outstanding)} <small className="muted">owed</small>
-        {row.available_credit !== null && (
-          <small className="muted"> · {money(row.available_credit)} available credit</small>
-        )}
-      </span>
+      <Figure
+        value={money(row.current_value)}
+        caption={base ? `${signedMoney(gain)} (${signedPercent(gain / base)})` : signedMoney(gain)}
+        captionTone={gain > 0 ? "pos-text" : gain < 0 ? "neg-text" : undefined}
+      />
     );
-  if (group === "share_broker")
-    return (
-      <span className="num">
-        {money(row.invested)} <small className="muted">invested</small>
-        {row.current_value !== null ? (
-          <small className="muted"> · worth {money(row.current_value)}</small>
-        ) : (
-          <small className="muted"> · no value entered</small>
-        )}
-      </span>
-    );
-  return <span className={`num ${Number(row.balance) < 0 ? "expense" : ""}`}>{money(row.balance)}</span>;
+  }
+  return <Figure value={balanceText(row.balance)} valueTone={Number(row.balance) < 0 ? "neg-text" : undefined} />;
+}
+
+function Figure({ value, caption, valueTone, captionTone }: { value: string; caption?: string; valueTone?: string; captionTone?: string }) {
+  return (
+    <span className="account-figure">
+      <span className={valueTone ? `num ${valueTone}` : "num"}>{value}</span>
+      {caption && <small className={captionTone ?? "muted"}>{caption}</small>}
+    </span>
+  );
 }
