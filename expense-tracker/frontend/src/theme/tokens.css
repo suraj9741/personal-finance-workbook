@@ -120,6 +120,14 @@
   --field-lg: 12rem;
   --bar-height: 0.5rem;
 
+  /* settings & admin: section menu width, content cap, small number fields, and how far below
+     the sticky top bar a #section lands (the bar wraps to two rows on a phone) */
+  --settings-nav-width: 11rem;
+  --settings-content-max: 50rem;
+  --field-xs: 5.5rem;
+  --anchor-offset: 4rem;
+  --anchor-offset-compact: 6.5rem;
+
   /* ---- radii ---- */
   --radius-sm: 0.375rem;
   --radius-md: 0.625rem;

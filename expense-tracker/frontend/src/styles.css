@@ -481,8 +481,8 @@ html:has(.modal[open]) { overflow: hidden; }
 .fields { align-items: flex-end; }
 .field { display: grid; gap: var(--space-1); font-size: var(--text-footnote-size); color: var(--color-text-secondary); }
 .field > :is(input, select) { color: var(--color-text); font-size: var(--text-callout-size); }
-.inline-rename { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
-.inline-rename input { width: var(--field-md); }
+.inline-rename { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1) var(--space-2); min-width: 0; }
+.inline-rename input { flex: 1 1 var(--field-md); min-width: 0; max-width: var(--field-lg); }
 .unsaved-bar {
   position: sticky;
   bottom: var(--space-4);
@@ -613,6 +613,275 @@ tfoot th { color: var(--color-text); font-weight: 600; border-top: 1px solid var
 .neg-text { color: var(--color-negative); }
 .detail-head { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: center; justify-content: space-between; }
 .detail-head h1 { margin: 0; }
+
+/* ---- settings & admin ---- */
+/* Named sections with a menu: a sticky list on the left on a laptop, a row of jump links below that. */
+.settings-head { margin-bottom: var(--space-4); }
+.settings-head h1 { margin: 0; }
+.settings-head p { margin: var(--space-1) 0 0; }
+.settings-layout { display: grid; gap: var(--space-4); }
+.settings-content { min-width: 0; }
+/* Settings keeps a name and its control close together; Admin is dense and uses the full width. */
+.settings-page .settings-content { max-width: var(--settings-content-max); }
+.settings-nav ul { display: flex; flex-wrap: wrap; gap: var(--space-1); margin: 0; padding: 0; list-style: none; }
+.settings-nav a {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--control-h-sm);
+  padding: 0 var(--space-3);
+  border-radius: var(--radius-md);
+  color: var(--color-text-secondary);
+  font-size: var(--text-footnote-size);
+  font-weight: 500;
+  text-decoration: none;
+  transition: background-color var(--motion-fast) var(--motion-ease), color var(--motion-fast) var(--motion-ease);
+}
+@media (hover: hover) {
+  .settings-nav a:hover { color: var(--color-text); }
+}
+.settings-nav a:focus-visible { outline: 2px solid var(--color-focus); outline-offset: 2px; }
+.settings-nav a[aria-current="true"] { background: var(--color-fill); color: var(--color-text); font-weight: 600; }
+
+.settings-section { margin-bottom: var(--space-8); scroll-margin-top: var(--anchor-offset); }
+.settings-section > h2 {
+  font-size: var(--text-title-size);
+  font-weight: var(--text-title-weight);
+  line-height: var(--text-title-leading);
+  letter-spacing: var(--text-title-tracking);
+  margin: 0 0 var(--space-3);
+  scroll-margin-top: var(--anchor-offset);
+}
+/* The heading takes focus after a menu jump; a ring there would only distract a mouse user. */
+.settings-section > h2:focus:not(:focus-visible) { outline: none; }
+.settings-intro { margin: calc(-1 * var(--space-2)) 0 var(--space-3); color: var(--color-text-secondary); font-size: var(--text-footnote-size); }
+.settings-section .card, .settings-section .table-wrap { margin-bottom: 0; }
+.settings-section h3 { margin: 0; }
+
+/* Rows inside a section's card, split by hairlines. */
+.settings-list { list-style: none; margin: 0; padding: 0; }
+.settings-list > li, .settings-row { padding: var(--space-3) 0; border-bottom: 1px solid var(--color-separator); }
+.settings-list > li:first-child, .settings-row:first-child { padding-top: 0; }
+.settings-list > li:last-child, .settings-row:last-child { border-bottom: 0; }
+.settings-row { display: grid; grid-template-columns: var(--field-sm) minmax(0, 1fr); gap: var(--space-1) var(--space-4); align-items: center; }
+.settings-row dt { color: var(--color-text-secondary); }
+.settings-row dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.settings-help { display: block; margin: var(--space-1) 0 0; color: var(--color-text-secondary); font-size: var(--text-footnote-size); }
+/* A line that says what just happened. Empty, it stays in the page for screen readers but takes no room. */
+.settings-status { margin: var(--space-3) 0 0; font-size: var(--text-footnote-size); }
+.settings-status:empty { position: absolute; margin: 0; }
+.settings-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2) var(--space-4);
+  margin-top: var(--space-4);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--color-separator);
+}
+.settings-footer p { margin: 0; }
+.settings-footer .settings-status { margin: 0; }
+.settings-foot-note { margin: var(--space-4) 0 0; }
+.settings-disclosure { border-top: 1px solid var(--color-separator); margin-top: var(--space-3); }
+.settings-disclosure > summary {
+  padding: var(--space-3) 0 0;
+  min-height: var(--control-h);
+  cursor: pointer;
+  color: var(--color-accent);
+  font-weight: 500;
+}
+.settings-disclosure[open] > summary { margin-bottom: var(--space-2); }
+.settings-disclosure.muted > summary { color: var(--color-text-secondary); }
+.settings-disclosure > summary:focus-visible { outline: 2px solid var(--color-focus); outline-offset: 2px; border-radius: var(--radius-sm); }
+
+/* Forms: fields side by side, wrapping. Labels sit on top, so a button drops by one label line. */
+.settings-form { display: flex; flex-wrap: wrap; align-items: flex-start; gap: var(--space-3); margin-top: var(--space-4); }
+.settings-form .field { flex: 1 1 var(--field-sm); min-width: 0; }
+.settings-form .field > :is(input, select) { width: 100%; }
+.settings-form .plain-fieldset { flex: 0 1 auto; }
+.settings-form .plain-fieldset legend { font-size: var(--text-footnote-size); line-height: var(--text-body-leading); }
+.settings-form .plain-fieldset .segmented { margin-bottom: 0; }
+.settings-form > button, .settings-form > .form-actions { margin-top: calc(var(--text-footnote-size) * var(--text-body-leading) + var(--space-1)); }
+.settings-form > .check { flex-basis: 100%; }
+.settings-form .form-line { flex-basis: 100%; margin: 0; }
+.card > .settings-form:first-child { margin-top: 0; }
+.settings-form .order-field { flex: 0 0 auto; }
+.settings-form .order-field input { width: var(--field-xs); }
+.form-actions { display: inline-flex; gap: var(--space-2); }
+.row-error { grid-column: 1 / -1; margin: 0; font-size: var(--text-footnote-size); }
+
+/* Categories: type, find and show-inactive on one line; the add form under them. */
+.cat-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-4); margin-bottom: var(--space-3); }
+.cat-toolbar .segmented { margin-bottom: 0; }
+.cat-toolbar input[type="search"] { flex: 1 1 var(--field-lg); min-width: 0; }
+.cat-toolbar > p { flex-basis: 100%; margin: 0; }
+.cat-toolbar .settings-form { flex-basis: 100%; margin-top: 0; }
+.cat-empty { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); padding: var(--space-3) 0; border-top: 1px solid var(--color-separator); color: var(--color-text-secondary); }
+.cat-empty p { margin: 0; }
+.cat-group { border-top: 1px solid var(--color-separator); }
+.cat-group > summary {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--control-h);
+  padding: var(--space-1) 0;
+  cursor: pointer;
+  list-style: none;
+}
+.cat-group > summary::-webkit-details-marker { display: none; }
+/* A chevron that turns down when the group is open. */
+.cat-group > summary::before {
+  content: "";
+  flex: none;
+  width: var(--space-2);
+  height: var(--space-2);
+  margin: 0 var(--space-1);
+  border-right: var(--space-0) solid var(--color-text-secondary);
+  border-bottom: var(--space-0) solid var(--color-text-secondary);
+  transform: rotate(-45deg);
+  transition: transform var(--motion-fast) var(--motion-ease);
+}
+.cat-group[open] > summary::before { transform: rotate(45deg); }
+.cat-group > summary h3 { flex: 1; font-size: var(--text-callout-size); }
+.cat-group > summary:focus-visible { outline: 2px solid var(--color-focus); outline-offset: 2px; border-radius: var(--radius-sm); }
+.cat-group > .settings-list, .cat-group > .cat-head { margin-left: var(--space-6); }
+.cat-group[open] { padding-bottom: var(--space-2); }
+.cat-group .settings-list > li { padding: var(--space-2) 0; }
+.cat-row {
+  display: grid;
+  /* Fixed side columns, so the caption row lines up with every row in the group. */
+  grid-template-columns: minmax(0, 1fr) var(--field-md) var(--field-md);
+  grid-template-areas: "name counts actions";
+  gap: var(--space-1) var(--space-3);
+  align-items: center;
+}
+.cat-row.cat-head {
+  padding: var(--space-1) 0;
+  border-bottom: 1px solid var(--color-separator);
+  color: var(--color-text-secondary);
+  font-size: var(--text-caption-size);
+  font-weight: var(--text-caption-weight);
+  letter-spacing: var(--text-caption-tracking);
+}
+.cat-name { grid-area: name; display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1); min-width: 0; }
+.cat-name .tag { margin-left: 0; }
+.cat-counts { grid-area: counts; display: flex; align-items: center; gap: var(--space-2); min-width: 0; }
+.cat-counts select { width: 100%; min-width: 0; }
+.cat-caption { display: none; color: var(--color-text-secondary); font-size: var(--text-footnote-size); white-space: nowrap; }
+.cat-actions { grid-area: actions; display: flex; justify-content: flex-end; gap: var(--space-1); }
+.cat-note { flex-basis: 100%; display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1) var(--space-2); margin: 0; color: var(--color-text-secondary); font-size: var(--text-footnote-size); }
+.cat-note.error { color: var(--color-negative); }
+.rename-name { min-width: 0; overflow-wrap: anywhere; }
+.inline-rename form { display: contents; }
+.inline-rename .field-error { flex-basis: 100%; }
+
+/* Rules: "swiggy" → Food › Delivery, its order, then Edit and Delete. */
+.rule-row { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; grid-template-areas: "text order actions"; gap: var(--space-1) var(--space-3); align-items: center; }
+.rule-row.editing { display: block; }
+.rule-row.editing .settings-form { margin-top: 0; }
+.rule-text { grid-area: text; min-width: 0; overflow-wrap: anywhere; }
+.rule-order { grid-area: order; white-space: nowrap; }
+.rule-actions { grid-area: actions; display: flex; gap: var(--space-1); }
+
+/* Household. */
+.member-row { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; grid-template-areas: "name role remove"; gap: var(--space-1) var(--space-3); align-items: center; }
+.member-name { grid-area: name; display: grid; min-width: 0; overflow-wrap: anywhere; }
+.member-role { grid-area: role; }
+.member-remove { grid-area: remove; }
+.settings-disclosure .member-row { padding: var(--space-2) 0; }
+
+/* A link to pass on by hand: what it is, then the link with Copy and Share. */
+.copy-link { display: grid; gap: var(--space-2); margin-top: var(--space-3); padding: var(--space-3); background: var(--color-fill); border-radius: var(--radius-md); }
+.copy-link p { margin: 0; font-size: var(--text-footnote-size); color: var(--color-text-secondary); }
+.copy-link .settings-status { color: var(--color-text); }
+.copy-link-row { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.copy-link-row input { flex: 1 1 var(--field-lg); min-width: 0; }
+/* On the grey panel the buttons take the card colour, so they still read as buttons. */
+.copy-link-row button { background: var(--color-surface); }
+@media (hover: hover) {
+  .copy-link-row button:hover:not(:disabled) { background: var(--color-fill-hover); }
+}
+
+/* Appearance in Settings: the switch with words, not just icons. */
+.segmented.labelled { margin-bottom: 0; }
+.segmented.labelled button { display: inline-flex; align-items: center; gap: var(--space-2); }
+
+/* Admin. */
+.admin-users td { vertical-align: top; }
+.admin-users .rename-name { font-weight: 500; }
+.admin-user-meta { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1); }
+.admin-user-meta .tag { margin-left: 0; }
+.admin-users .actions { white-space: normal; }
+.admin-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--space-1); }
+.admin-actions button, .admin-users td[data-label] { white-space: nowrap; }
+.admin-link-row td { padding-top: 0; }
+.admin-link-row .error { margin: 0 0 var(--space-2); font-size: var(--text-footnote-size); }
+.admin-link { display: flex; align-items: flex-start; gap: var(--space-2); }
+.admin-link .copy-link { flex: 1; min-width: 0; margin-top: 0; }
+.household-row { display: grid; gap: var(--space-0); }
+.household-row .rename-name { font-weight: 600; }
+.template-group { margin-top: var(--space-4); }
+.template-group h3 { margin-bottom: var(--space-2); }
+.template-chips { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.template-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-0);
+  padding-left: var(--space-3);
+  border-radius: var(--radius-pill);
+  background: var(--color-fill);
+  font-size: var(--text-footnote-size);
+}
+.template-chip button {
+  min-width: var(--control-h-sm);
+  min-height: var(--control-h-sm);
+  padding: 0;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--color-text-secondary);
+}
+.app-settings-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(var(--field-lg), 100%), 1fr)); gap: var(--space-4); align-items: start; }
+.app-settings-grid .field { align-content: start; }
+.app-settings-grid .field > input { width: 100%; }
+.app-settings-grid + h3 { margin: var(--space-5) 0 var(--space-2); }
+
+@media (prefers-reduced-motion: no-preference) {
+  html:has(.settings-page, .admin-page) { scroll-behavior: smooth; }
+}
+
+@media (min-width: 1024px) {
+  .settings-layout { grid-template-columns: var(--settings-nav-width) minmax(0, 1fr); gap: var(--space-8); align-items: start; }
+  .settings-nav { position: sticky; top: var(--anchor-offset); }
+  .settings-nav ul { flex-direction: column; }
+  .settings-nav a { display: flex; font-size: var(--text-callout-size); }
+}
+
+@media (max-width: 640px) {
+  /* The top bar wraps to two rows here, so a #section has to land lower. */
+  .settings-page, .admin-page { --anchor-offset: var(--anchor-offset-compact); }
+  .settings-row { grid-template-columns: minmax(0, 1fr); }
+  .cat-group > .settings-list, .cat-group > .cat-head { margin-left: var(--space-5); }
+  /* Rows go to two lines (name and actions, then "Counts as"), so each select gets its own caption. */
+  .cat-row.cat-head { display: none; }
+  .cat-row { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "name actions" "counts counts"; }
+  .cat-caption { display: inline; }
+  .cat-counts select { width: auto; flex: 1; max-width: var(--field-md); }
+  .rule-row { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "text text" "order actions"; }
+  .member-row { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "name name" "role remove"; }
+  .member-row .member-role { justify-self: start; }
+  /* Users: each row becomes a stacked block, so the table never scrolls sideways. */
+  .admin-users, .admin-users tbody, .admin-users tr, .admin-users td { display: block; }
+  .admin-users thead { display: none; }
+  .admin-users tr { padding: var(--space-3) var(--space-4); border-bottom: 1px solid var(--color-separator); }
+  .admin-users tbody tr:last-child { border-bottom: 0; }
+  .admin-users td, .admin-users tbody tr:last-child td { padding: var(--space-0) 0; border-bottom: 0; }
+  .admin-users td[data-label]::before { content: attr(data-label) ": "; color: var(--color-text-secondary); }
+  .admin-users .actions { text-align: left; }
+  .admin-actions { justify-content: flex-start; margin-left: calc(-1 * var(--space-3)); }
+  .admin-users tr.admin-link-row { padding-top: 0; }
+  .admin-link { flex-direction: column; }
+  .admin-link .copy-link { width: 100%; }
+}
 
 /* ---- compact (≤ 640px) ---- */
 @media (max-width: 640px) {

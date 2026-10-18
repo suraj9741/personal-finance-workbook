@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 import type { FieldErrors } from "../forms";
 
 export function FieldError({ errors, name, formId }: { errors: FieldErrors; name: string; formId: string }) {
@@ -26,72 +26,115 @@ export function BusyLabel({ busy, idle, working }: { busy: boolean; idle: string
   );
 }
 
-/** "Rename" turns the name into a field in place: Enter saves, Esc cancels, focus returns to Rename. */
-export function InlineRename({ value, label, onSave }: { value: string; label: string; onSave: (name: string) => Promise<unknown> }) {
+/**
+ * The name with "Rename" beside it. Rename turns the name into a field in the same place:
+ * Enter saves, Esc cancels, focus returns to Rename. Clicking away cancels only when nothing
+ * was changed, so typing is never lost. A hidden status line says "Renamed to X" after a save.
+ */
+export function InlineRename({ value, label, onSave, maxLength = 60 }: { value: string; label: string; onSave: (name: string) => Promise<unknown>; maxLength?: number }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(value);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [status, setStatus] = useState("");
   const renameRef = useRef<HTMLButtonElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const wasEditing = useRef(false);
+  // False when the edit ended by clicking elsewhere: focus stays where the click put it.
+  const returnFocus = useRef(true);
+  const errorId = useId();
 
   useEffect(() => {
     if (editing) inputRef.current?.select();
-    else if (wasEditing.current) renameRef.current?.focus();
+    else if (wasEditing.current && returnFocus.current) renameRef.current?.focus();
     wasEditing.current = editing;
   }, [editing]);
 
   function start() {
     setDraft(value);
     setError("");
+    setStatus("");
     setEditing(true);
+  }
+
+  function stop(refocus = true) {
+    returnFocus.current = refocus;
+    setEditing(false);
   }
 
   async function save(event: FormEvent) {
     event.preventDefault();
     const name = draft.trim();
-    if (!name || name === value) return setEditing(false);
+    if (name === value) return stop();
+    if (!name) {
+      setError("Enter a name.");
+      return inputRef.current?.focus();
+    }
     setBusy(true);
     try {
       await onSave(name);
-      setEditing(false);
+      setStatus(`Renamed to ${name}`);
+      stop();
     } catch (e) {
       setError((e as Error).message);
+      inputRef.current?.focus();
     } finally {
       setBusy(false);
     }
   }
 
-  if (!editing)
-    return (
-      <button ref={renameRef} type="button" className="ghost small" aria-label={`Rename ${value}`} onClick={start}>
-        Rename
-      </button>
-    );
   return (
-    <form className="inline-rename" onSubmit={save} aria-busy={busy}>
-      <input
-        ref={inputRef}
-        aria-label={label}
-        value={draft}
-        maxLength={60}
-        onChange={(e) => setDraft(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === "Escape") {
-            e.preventDefault();
-            setEditing(false);
-          }
-        }}
-      />
-      <button type="submit" className="small primary" disabled={busy}>
-        <BusyLabel busy={busy} idle="Save" working="Saving…" />
-      </button>
-      <button type="button" className="ghost small" disabled={busy} onClick={() => setEditing(false)}>
-        Cancel
-      </button>
-      {error && <span className="field-error" role="alert">{error}</span>}
-    </form>
+    <div className="inline-rename">
+      {editing ? (
+        <form
+          onSubmit={save}
+          aria-busy={busy}
+          onBlur={(e) => {
+            if (!busy && !e.currentTarget.contains(e.relatedTarget as Node | null) && draft.trim() === value) stop(false);
+          }}
+        >
+          <input
+            ref={inputRef}
+            aria-label={label}
+            value={draft}
+            maxLength={maxLength}
+            aria-invalid={error ? true : undefined}
+            aria-describedby={error ? errorId : undefined}
+            onChange={(e) => {
+              setDraft(e.target.value);
+              setError("");
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Escape") {
+                e.preventDefault();
+                stop();
+              }
+            }}
+          />
+          <button type="submit" className="small primary" disabled={busy}>
+            <BusyLabel busy={busy} idle="Save" working="Saving…" />
+          </button>
+          <button type="button" className="ghost small" disabled={busy} onClick={() => stop()}>
+            Cancel
+          </button>
+          {error && (
+            <span id={errorId} className="field-error" role="alert">
+              {error}
+            </span>
+          )}
+        </form>
+      ) : (
+        <>
+          <span className="rename-name">{value}</span>
+          <button ref={renameRef} type="button" className="ghost small" aria-label={`Rename ${value}`} onClick={start}>
+            Rename
+          </button>
+        </>
+      )}
+      <span className="sr-only" role="status">
+        {status}
+      </span>
+    </div>
   );
 }
 

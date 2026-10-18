@@ -2,6 +2,8 @@
 export type ThemePref = "system" | "light" | "dark";
 
 export const THEME_KEY = "et:theme";
+/** Same-tab news of a new choice: `storage` events only reach other tabs. */
+const THEME_EVENT = "et:themechange";
 export const THEME_PREFS: ThemePref[] = ["system", "light", "dark"];
 
 export function readTheme(): ThemePref {
@@ -20,6 +22,8 @@ export function saveTheme(pref: ThemePref) {
   } catch {
     /* storage unavailable: the choice lasts until reload */
   }
+  // The top bar and Settings each have a switch; this keeps the other one in step.
+  window.dispatchEvent(new CustomEvent<ThemePref>(THEME_EVENT, { detail: pref }));
 }
 
 // The browser bar colour comes from the two theme-color metas in index.html; keep their
@@ -39,11 +43,16 @@ export function applyTheme(pref: ThemePref) {
   for (const meta of all) meta.content = pref === "system" ? meta.dataset.color! : colourFor(pref);
 }
 
-/** Follow a choice made in another open tab. */
+/** Follow a choice made in another switch on this page, or in another open tab. */
 export function onThemeChange(listener: (pref: ThemePref) => void): () => void {
-  const handle = (event: StorageEvent) => {
+  const fromTab = (event: Event) => listener((event as CustomEvent<ThemePref>).detail);
+  const fromStorage = (event: StorageEvent) => {
     if (event.key === THEME_KEY || event.key === null) listener(readTheme());
   };
-  window.addEventListener("storage", handle);
-  return () => window.removeEventListener("storage", handle);
+  window.addEventListener(THEME_EVENT, fromTab);
+  window.addEventListener("storage", fromStorage);
+  return () => {
+    window.removeEventListener(THEME_EVENT, fromTab);
+    window.removeEventListener("storage", fromStorage);
+  };
 }
