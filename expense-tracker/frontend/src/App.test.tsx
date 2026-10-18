@@ -50,6 +50,8 @@ it("shows the dashboard and quick-add bar when logged in", async () => {
   });
   renderAt("/");
   expect(await screen.findByText("₹60,000")).toBeTruthy();
+  expect(screen.getByRole("heading", { level: 1, name: "Dashboard" })).toBeTruthy();
+  expect(screen.getByText("Spent this month").nextSibling?.textContent).toBe("₹40,000");
   expect(screen.getByRole("form", { name: "Quick add" })).toBeTruthy();
   expect(await screen.findByText("2 entries have no category")).toBeTruthy();
   expect(screen.getByRole("link", { name: "Admin" })).toBeTruthy();
@@ -173,7 +175,12 @@ it("shows the financial overview above the monthly dashboard", async () => {
   renderAt("/");
   const overview = await screen.findByRole("region", { name: "Financial overview" });
   expect(within(overview).getByText("Total bank balance").nextSibling?.textContent).toBe("₹42,000");
-  expect(within(overview).getByText("Available credit", { selector: ".kpi-label" }).parentElement?.textContent).toContain("Not cash");
+  // Available credit is a note on the card tile now; Net cash and the month totals live in the hero.
+  expect(within(overview).getByText("Credit card outstanding").parentElement?.textContent).toContain("₹75,000 of limits still available, not cash");
+  expect(within(overview).queryByText("Net cash position")).toBeNull();
+  expect(within(overview).queryByText("Expenses this month")).toBeNull();
+  expect(within(overview).getByRole("columnheader", { name: "All expenses (month)" })).toBeTruthy();
+  expect(screen.getByText("Net cash").nextSibling?.textContent).toBe("₹17,000");
   expect(within(overview).getByText("Portfolio value").nextSibling?.textContent).toBe("Not valued");
   expect(within(overview).getByText("0 of 1 brokers have a value entered")).toBeTruthy();
   expect(within(overview).getByRole("link", { name: "HDFC CC" }).getAttribute("href")).toBe("/accounts/a4");

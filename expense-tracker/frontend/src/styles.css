@@ -325,19 +325,161 @@ details.card[open] > summary { margin-bottom: var(--space-3); }
 .grid-2 > .card { margin-bottom: 0; }
 .attention { margin: 0; padding-left: var(--space-5); }
 .attention li { margin-bottom: var(--space-2); }
-.bars { list-style: none; margin: 0; padding: 0; }
-.bars li { display: grid; grid-template-columns: minmax(8rem, 14rem) 1fr auto; gap: var(--space-3); align-items: center; padding: var(--space-1) 0; }
+/* Rows share the list's columns (subgrid), so every track starts and ends at the same place. */
+.bars { display: grid; grid-template-columns: minmax(8rem, 14rem) 1fr auto; list-style: none; margin: 0; padding: 0; }
+.bars li { display: grid; grid-column: 1 / -1; grid-template-columns: subgrid; gap: var(--space-3); align-items: center; padding: var(--space-1) 0; }
 .bar-track { height: var(--bar-height); background: var(--color-fill); border-radius: var(--radius-pill); overflow: hidden; }
-.bar-fill { display: block; height: 100%; background: var(--color-positive); border-radius: var(--radius-pill); }
-.bar-fill.over { background: var(--color-negative); }
+/* Budget bars: grey inside the budget, orange from 90%, red past it (the words say "over by" too). */
+.bar-fill { display: block; height: 100%; background: var(--color-text-secondary); border-radius: var(--radius-pill); }
+.bar-fill.warn { background: var(--color-warning); }
+.bar-fill.over { background: var(--color-expense); }
 .bar-fill.nobudget { background: var(--color-text-tertiary); }
 .bar-value { font-variant-numeric: tabular-nums; text-align: right; }
+.bar-over { display: block; color: var(--color-expense); font-size: var(--text-footnote-size); }
 .trend { margin: 0; }
-.trend svg { width: 100%; height: auto; }
+/* Stacked full width, the chart stops growing at --trend-max-height and centres. */
+.trend svg { width: 100%; height: auto; max-height: var(--trend-max-height); }
 .trend .axis { stroke: var(--color-separator); }
 .trend .pos { fill: var(--color-positive); }
 .trend .neg { fill: var(--color-negative); }
 .trend .tick { fill: var(--color-text-secondary); font-size: var(--text-caption-size); }
+
+/* Title and month on the left, Household / Just me on the right; the caption says whose figures these are. */
+.dashboard .toolbar { margin-bottom: var(--space-1); }
+.dashboard .toolbar h1 { margin: 0; }
+.dashboard .toolbar .segmented { margin: 0 0 0 auto; }
+.dashboard .toolbar .segmented button { text-transform: none; }
+.hero-caption {
+  margin: 0 0 var(--space-4);
+  color: var(--color-text-secondary);
+  font-size: var(--text-footnote-size);
+  line-height: var(--text-footnote-leading);
+  letter-spacing: var(--text-footnote-tracking);
+}
+.dashboard .card h3 {
+  font-size: var(--text-headline-size);
+  line-height: var(--text-headline-leading);
+  letter-spacing: var(--text-headline-tracking);
+  margin: 0 0 var(--space-3);
+}
+
+/* While the next month or scope loads, the old numbers dim instead of blanking. Opacity only, so fine with reduced motion. */
+.dash-glance, .dash-section-body { transition: opacity var(--motion-fast) var(--motion-ease); }
+.dash-glance[aria-busy="true"], .dash-section-body[aria-busy="true"] { opacity: var(--stale-opacity); }
+
+/* Hero: Net cash, Spent, Saved. */
+.hero { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-3); margin: 0 0 var(--space-5); }
+.hero-item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+  background: var(--color-surface);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+  padding: var(--card-padding);
+}
+.hero-label { color: var(--color-text-secondary); font-size: var(--text-footnote-size); font-weight: 500; letter-spacing: var(--text-footnote-tracking); }
+.hero-value {
+  margin: 0;
+  font-size: var(--text-hero-size);
+  font-weight: var(--text-display-weight);
+  line-height: var(--text-display-leading);
+  letter-spacing: var(--text-display-tracking);
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+/* The skeleton is one line of the number tall, so the card doesn't grow when the number arrives. */
+.hero-value .skeleton { width: 60%; height: calc(var(--text-hero-size) * var(--text-display-leading)); }
+.hero-item.good .hero-value { color: var(--color-positive); }
+.hero-item.bad .hero-value { color: var(--color-negative); }
+.hero-item.expense .hero-value { color: var(--color-expense); }
+.hero-detail {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: var(--text-footnote-size);
+  line-height: var(--text-footnote-leading);
+  font-variant-numeric: tabular-nums;
+}
+.hero-detail.neg-text { color: var(--color-negative); }
+.hero-meter { margin: var(--space-1) 0 0; }
+.hero-meter .bar-track { display: block; }
+
+/* Smaller figures under the hero: a plain row on the page background, not tiles. */
+.figures { display: flex; flex-wrap: wrap; gap: var(--figures-gap); margin: 0 0 var(--space-2); }
+.figures dt { color: var(--color-text-secondary); font-size: var(--text-footnote-size); letter-spacing: var(--text-footnote-tracking); }
+.figures dd {
+  margin: 0;
+  font-size: var(--text-headline-size);
+  font-weight: 600;
+  letter-spacing: var(--text-headline-tracking);
+  font-variant-numeric: tabular-nums;
+}
+.figures-note {
+  margin: 0 0 var(--stack-gap);
+  color: var(--color-text-secondary);
+  font-size: var(--text-footnote-size);
+  line-height: var(--text-footnote-leading);
+  letter-spacing: var(--text-footnote-tracking);
+}
+
+/* Needs attention: heading with a scope caption. With nothing to flag, the card is one line. */
+.card-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-1) var(--space-2); margin-bottom: var(--space-3); }
+.card-head h2 { margin: 0; }
+.card-caption { color: var(--color-text-secondary); font-size: var(--text-footnote-size); }
+.attention-card.quiet { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-1) var(--space-4); }
+.attention-card.quiet .card-head, .attention-card.quiet p { margin: 0; }
+
+/* This month by category: bars beside the trend when wide, stacked below that. */
+.dash-section-body { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: var(--stack-gap); align-items: start; margin-bottom: var(--stack-gap); }
+.dash-section-body > .card { margin-bottom: 0; }
+
+@media (max-width: 1024px) {
+  .dash-section-body { grid-template-columns: minmax(0, 1fr); }
+}
+
+@media (max-width: 640px) {
+  .hero { grid-template-columns: minmax(0, 1fr); }
+  .figures { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  /* The switch gets its own full-width row. */
+  .dashboard .toolbar .segmented { display: flex; flex-basis: 100%; margin: 0; }
+  .dashboard .toolbar .segmented button { flex: 1; }
+  /* Account tables become stacked rows: the account name, then one "label  value" line per column. */
+  .overview .table-wrap { overflow-x: visible; }
+  .overview table, .overview tbody, .overview tfoot, .overview tr { display: block; }
+  .overview thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  .overview tr { padding: var(--space-2) var(--space-3); border-bottom: 1px solid var(--color-separator); }
+  .overview tbody tr:last-child { border-bottom: 0; }
+  .overview tfoot tr { border-top: 1px solid var(--color-separator); }
+  .overview :is(td, th) {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 0 var(--space-2);
+    padding: var(--space-0) 0;
+    border: 0;
+    font-size: var(--text-callout-size);
+    text-align: right;
+    white-space: normal;
+  }
+  .overview :is(td, th):first-child { justify-content: flex-start; text-align: left; font-weight: 600; }
+  .overview :is(td, th)[data-label]::before {
+    content: attr(data-label);
+    margin-right: auto;
+    color: var(--color-text-secondary);
+    font-size: var(--text-footnote-size);
+    font-weight: 400;
+    text-align: left;
+  }
+  .overview tfoot th:not([data-label], :first-child) { display: none; }
+}
 
 /* ---- tables ---- */
 .table-wrap {

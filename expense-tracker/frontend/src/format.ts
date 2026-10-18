@@ -139,3 +139,32 @@ export function shiftDay(iso: string, delta: number): string {
   d.setDate(d.getDate() + delta);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
+
+/** money() with a real minus sign, so a negative reads −₹5,000 rather than -₹5,000. */
+export function minusMoney(value: string | number | null | undefined): string {
+  if (value === null || value === undefined || value === "") return "—";
+  const n = Number(value);
+  return n < 0 ? `−${money(-n)}` : money(n);
+}
+
+/**
+ * Budgets split the way /stats/month counts money: spending budgets (compared with "spent")
+ * and planned savings (PPF, shares…), which "spent" leaves out. budget_total mixes the two.
+ */
+export function budgetSplit(lines: { kind: string; stats_group: string; budget: string | null }[]): { spend: number; saving: number } {
+  let spend = 0;
+  let saving = 0;
+  for (const line of lines) {
+    if (line.kind !== "expense" || !line.budget) continue;
+    if (line.stats_group === "spend") spend += Number(line.budget);
+    else if (line.stats_group === "saving") saving += Number(line.budget);
+  }
+  return { spend, saving };
+}
+
+/** A budget bar's state: under budget (""), close to it from 90% ("warn"), or past it ("over"). */
+export function budgetTone(actual: number, budget: number): "" | "warn" | "over" {
+  if (budget <= 0) return "";
+  if (actual > budget) return "over";
+  return actual >= budget * 0.9 ? "warn" : "";
+}
