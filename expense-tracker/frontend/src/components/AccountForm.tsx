@@ -8,6 +8,8 @@ import { useMe } from "../hooks";
 import { BusyLabel, DraftNote, FieldError } from "./FormBits";
 import { useModal } from "./modal-context";
 import { useToasts } from "./toast-context";
+import { Icon } from "./Icon";
+import { SegmentedRadio } from "./SegmentedRadio";
 
 interface Props {
   existing?: Account;
@@ -203,18 +205,25 @@ export function AccountForm({ existing, group: initialGroup = "bank", onDone, on
       {showRestored && <DraftNote onClear={clearDraft} />}
       {existing ? (
         <p className="muted small">
-          <span aria-hidden="true">{GROUP_ICON[group]}</span> {existing.pay_type === "cash" ? "Cash" : GROUP_LABEL[group]}. The type
+          <Icon name={GROUP_ICON[group]} /> {existing.pay_type === "cash" ? "Cash" : GROUP_LABEL[group]}. The type
           can't change, because every past entry on this account depends on it.
         </p>
       ) : (
         <>
-          <div className="segmented wrap" role="radiogroup" aria-label="Account type">
-            {ACCOUNT_GROUPS.map((g) => (
-              <button key={g} type="button" role="radio" aria-checked={group === g} className={group === g ? "active" : ""} onClick={() => setGroup(g)}>
-                <span aria-hidden="true">{GROUP_ICON[g]}</span> {GROUP_LABEL[g]}
-              </button>
-            ))}
-          </div>
+          <SegmentedRadio
+            label="Account type"
+            className="segmented wrap"
+            value={group}
+            onChange={setGroup}
+            options={ACCOUNT_GROUPS.map((g) => ({
+              value: g,
+              label: (
+                <>
+                  <Icon name={GROUP_ICON[g]} /> {GROUP_LABEL[g]}
+                </>
+              ),
+            }))}
+          />
           {group === "bank" && (
             <label className="check">
               <input type="checkbox" checked={isCash} onChange={(e) => setIsCash(e.target.checked)} />

@@ -10,6 +10,7 @@ import { CategoryPicker } from "./CategoryPicker";
 import { BusyLabel, DraftNote, FieldError } from "./FormBits";
 import { useModal } from "./modal-context";
 import { useToasts } from "./toast-context";
+import { SegmentedRadio } from "./SegmentedRadio";
 
 const TYPES: TxType[] = ["expense", "income", "transfer", "refund", "buy", "sell"];
 const TYPE_HINT: Partial<Record<TxType, string>> = {
@@ -152,26 +153,19 @@ export function TransactionForm({ existing, accountId, onDone }: Props) {
   return (
     <form ref={formRef} className="tx-form" onSubmit={submit} noValidate aria-busy={busy}>
       {showRestored && <DraftNote onClear={clearDraft} />}
-      <div className="segmented wrap" role="radiogroup" aria-label="Transaction type">
-        {TYPES.map((k) => (
-          <button
-            type="button"
-            key={k}
-            role="radio"
-            aria-checked={form.type === k}
-            className={form.type === k ? "active" : ""}
-            onClick={() => {
-              const changes: Partial<TransactionInput> = { type: k, category_id: null };
-              const current = accounts.find((a) => a.id === form.account_id);
-              if ((k === "buy" || k === "sell") && current && groupOf(current.pay_type) !== "share_broker")
-                changes.account_id = accounts.find((a) => a.pay_type === "share_broker")?.id ?? "";
-              set(changes);
-            }}
-          >
-            {TX_TYPE_LABEL[k]}
-          </button>
-        ))}
-      </div>
+      <SegmentedRadio
+        label="Transaction type"
+        className="segmented wrap"
+        value={form.type}
+        onChange={(k) => {
+          const changes: Partial<TransactionInput> = { type: k, category_id: null };
+          const current = accounts.find((a) => a.id === form.account_id);
+          if ((k === "buy" || k === "sell") && current && groupOf(current.pay_type) !== "share_broker")
+            changes.account_id = accounts.find((a) => a.pay_type === "share_broker")?.id ?? "";
+          set(changes);
+        }}
+        options={TYPES.map((k) => ({ value: k, label: TX_TYPE_LABEL[k] }))}
+      />
       {TYPE_HINT[form.type] && <p className="hint">{TYPE_HINT[form.type]}</p>}
       <fieldset className="plain-fieldset" {...field("account_id")}>
         <legend>{form.type === "transfer" ? "From account" : "Account"}</legend>

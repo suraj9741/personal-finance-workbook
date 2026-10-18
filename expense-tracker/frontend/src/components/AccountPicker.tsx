@@ -1,6 +1,8 @@
 import { useState } from "react";
 import type { Account } from "../api";
 import { ACCOUNT_GROUPS, GROUP_ICON, GROUP_LABEL, accountLabel, groupOf, type AccountGroup } from "../format";
+import { Icon } from "./Icon";
+import { SegmentedRadio } from "./SegmentedRadio";
 
 interface Props {
   accounts: Account[];
@@ -32,13 +34,19 @@ export function AccountPicker({ accounts, value, onChange, label, groups = ACCOU
 
   const typeControl =
     variant === "buttons" ? (
-      <div className="segmented" role="radiogroup" aria-label={typeLabel}>
-        {groups.map((g) => (
-          <button key={g} type="button" role="radio" aria-checked={group === g} className={group === g ? "active" : ""} onClick={() => pick(g)}>
-            <span aria-hidden="true">{GROUP_ICON[g]}</span> {GROUP_LABEL[g]}
-          </button>
-        ))}
-      </div>
+      <SegmentedRadio
+        label={typeLabel}
+        value={group}
+        onChange={pick}
+        options={groups.map((g) => ({
+          value: g,
+          label: (
+            <>
+              <Icon name={GROUP_ICON[g]} /> {GROUP_LABEL[g]}
+            </>
+          ),
+        }))}
+      />
     ) : (
       <select aria-label={typeLabel} value={group} onChange={(e) => pick(e.target.value as AccountGroup)}>
         {groups.map((g) => (

@@ -126,7 +126,6 @@
   --field-sm: 9.5rem;
   --field-md: 11rem;
   --field-lg: 12rem;
-  --bar-height: 0.5rem;
 
   /* ---- meters, budgets, accounts (step 5) ---- */
   /* Meter.tsx sets --meter-value (0–1) inline on each fill; this is the default. */
@@ -152,6 +151,19 @@
   --field-xs: 5.5rem;
   --anchor-offset: 4rem;
   --anchor-offset-compact: 6.5rem;
+
+  /* ---- icons & segmented (step 7) ---- */
+  --icon-stroke: 1.75;
+  --icon-size-heading: 1.25em;
+  /* Pressing the chosen segment shrinks its highlight a little, like iOS. */
+  --thumb-press-scale: 0.96;
+  /* SegmentedRadio sets where the highlight sits, inline, once it has measured the buttons. */
+  --thumb-x: 0px;
+  --thumb-y: 0px;
+  --thumb-w: 0px;
+  --thumb-h: 0px;
+  /* A bar with no budget behind it: present, but quiet. */
+  --color-meter-muted: var(--color-text-tertiary);
 
   /* ---- radii ---- */
   --radius-sm: 0.375rem;

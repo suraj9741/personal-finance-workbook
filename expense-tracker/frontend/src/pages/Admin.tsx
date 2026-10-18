@@ -9,6 +9,7 @@ import { SettingsNav, SettingsSection } from "../components/SettingsNav";
 import { useToasts } from "../components/toast-context";
 import { invalidProps, splitServerError, type FieldErrors } from "../forms";
 import { useMe } from "../hooks";
+import { Icon } from "../components/Icon";
 
 interface Template {
   id: string;
@@ -406,7 +407,7 @@ function TemplateSection() {
                   <span key={r.id} className="template-chip">
                     {r.sub_name}
                     <button type="button" aria-label={`Remove ${r.sub_name} from the template`} onClick={() => remove(r)}>
-                      <span aria-hidden="true">✕</span>
+                      <Icon name="close" />
                     </button>
                   </span>
                 ))}

@@ -8,6 +8,8 @@ import { MonthPicker } from "../components/MonthPicker";
 import { useToasts } from "../components/toast-context";
 import { budgetDiff, currentMonth, money, monthLabel, monthShort } from "../format";
 import { useCategories, useMe, useRefreshMoney } from "../hooks";
+import { Icon } from "../components/Icon";
+import { SegmentedRadio } from "../components/SegmentedRadio";
 
 interface BudgetsOut {
   month: string;
@@ -242,7 +244,7 @@ export function Budgets() {
         <p className="notice" role="status">
           {notice}{" "}
           <button type="button" className="ghost small" aria-label="Dismiss" onClick={() => setNotice("")}>
-            ✕
+            <Icon name="close" />
           </button>
         </p>
       )}
@@ -315,16 +317,17 @@ export function Budgets() {
           </div>
           {edits > 0 &&
             (carries ? (
-              <div className="unsaved-apply" role="group" aria-label="Apply to">
+              <div className="unsaved-apply">
                 <span aria-hidden="true">Apply to:</span>
-                <div className="segmented">
-                  <button type="button" className={forward ? "active" : ""} aria-pressed={forward} onClick={() => setForward(true)}>
-                    {monthName(month)} and later
-                  </button>
-                  <button type="button" className={forward ? "" : "active"} aria-pressed={!forward} onClick={() => setForward(false)}>
-                    {monthName(month)} only
-                  </button>
-                </div>
+                <SegmentedRadio
+                  label="Apply to"
+                  value={forward ? "later" : "only"}
+                  onChange={(v) => setForward(v === "later")}
+                  options={[
+                    { value: "later", label: `${monthName(month)} and later` },
+                    { value: "only", label: `${monthName(month)} only` },
+                  ]}
+                />
               </div>
             ) : (
               <span className="muted small">Past month: saves for {monthLabel(month)} only</span>
@@ -418,6 +421,7 @@ function BudgetSection({
                   }}
                 >
                   <summary className="budget-card-head" data-dirty={subs.some((c) => pending[c.id] !== undefined) || undefined}>
+                    <Icon name="chevron-right" className="disclosure" />
                     <h3>{parent}</h3>
                     <span className={`budget-status ${group.tone}`}>
                       {group.ratio === null ? `${money(total)} ${spentLabel.toLowerCase()}` : group.text}

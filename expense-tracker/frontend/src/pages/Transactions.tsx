@@ -9,6 +9,7 @@ import { useToasts } from "../components/toast-context";
 import { TransactionForm } from "../components/TransactionForm";
 import { TX_TYPE_LABEL, accountLabel, categoryKind, currentMonth, dayHeading, dayLabel, dayTotals, money, monthLabel, txSign } from "../format";
 import { useAccounts, useCategories, useMembers, useRefreshMoney } from "../hooks";
+import { Icon } from "../components/Icon";
 
 const PAGE = 100;
 const FILTERS = ["q", "type", "category_id", "account_id", "created_by", "uncategorized"];
@@ -60,7 +61,7 @@ export function Transactions() {
       else delete next[id];
       return next;
     });
-    // "Saved ✓" fades on its own; errors stay until the next try.
+    // "✓ Saved" fades on its own; errors stay until the next try.
     if (state?.status === "saved") timers.current[id] = window.setTimeout(() => setRow(id, null), 2500);
   }
 
@@ -181,7 +182,9 @@ export function Transactions() {
       </div>
       {notice && (
         <p className="notice" role="status">
-          {notice} <button type="button" className="ghost" onClick={() => setNotice("")}>✕</button>
+          {notice} <button type="button" className="ghost" aria-label="Dismiss" onClick={() => setNotice("")}>
+            <Icon name="close" />
+          </button>
         </p>
       )}
       <p className="muted small" aria-live="polite">
@@ -284,7 +287,13 @@ export function Transactions() {
                         </td>
                         <td>
                           {accountName(t.account_id)}
-                          {t.to_account_id && ` → ${accountName(t.to_account_id)}`}
+                          {t.to_account_id && (
+                            <>
+                              {" "}
+                              <Icon name="arrow-right" />
+                              <span className="sr-only">to</span> {accountName(t.to_account_id)}
+                            </>
+                          )}
                         </td>
                         <td className={`num ${t.type}`}>
                           {txSign(t.type)}
@@ -301,7 +310,13 @@ export function Transactions() {
                               disabled={state?.kind === "rule" && state.status === "saving"}
                               onClick={() => makeRule.mutate(t.id)}
                             >
-                              {state?.kind === "rule" && state.status === "saved" ? "Rule saved ✓" : "Save as rule"}
+                              {state?.kind === "rule" && state.status === "saved" ? (
+                                <>
+                                  <Icon name="check" /> Rule saved
+                                </>
+                              ) : (
+                                "Save as rule"
+                              )}
                             </button>
                           )}
                           <button type="button" className="ghost small" aria-label={`Edit ${label}`} onClick={() => setEditing(t)}>
@@ -348,7 +363,9 @@ function DayTotal({ net, spent, earned, partial }: { net: number; spent: number;
 
 function RowStatus({ state, onRetry }: { state: RowState; onRetry: () => void }) {
   if (state.status === "saving") return <span className="row-status muted">Saving…</span>;
-  if (state.status === "saved") return state.kind === "category" ? <span className="row-status pos-text">Saved ✓</span> : null;
+  if (state.status === "saved") return state.kind === "category" ? <span className="row-status pos-text">
+        <Icon name="check" /> Saved
+      </span> : null;
   return (
     <span className="row-status neg-text" title={state.message}>
       Couldn't save

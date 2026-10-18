@@ -1,5 +1,5 @@
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import { useRef, useState, type KeyboardEvent } from "react";
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import { api, type Attention, type MonthStats, type TrendPoint } from "../api";
 import { DashboardHero } from "../components/DashboardHero";
@@ -7,6 +7,8 @@ import { FinancialOverview } from "../components/FinancialOverview";
 import { MonthPicker } from "../components/MonthPicker";
 import { TrendChart } from "../components/TrendChart";
 import { budgetSplit, budgetTone, currentMonth, money } from "../format";
+import { SegmentedRadio } from "../components/SegmentedRadio";
+import { Meter } from "../components/Meter";
 
 type Scope = MonthStats["scope"];
 const SCOPES: Scope[] = ["household", "me"];
@@ -16,45 +18,17 @@ const SCOPE_CAPTION: Record<Scope, string> = {
   me: "Just me · entries you added and your private accounts",
 };
 
-/** Household / Just me: a radio group, so arrows move and Tab enters once (as ThemeSwitch). */
+/** Household / Just me: a radio group, so arrows move and Tab enters once. */
 function ScopeSwitch({ scope, onChange }: { scope: Scope; onChange: (next: Scope) => void }) {
-  const refs = useRef<(HTMLButtonElement | null)[]>([]);
-
-  function onKeyDown(event: KeyboardEvent) {
-    const step = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[event.key];
-    if (!step) return;
-    event.preventDefault();
-    const index = (SCOPES.indexOf(scope) + step + SCOPES.length) % SCOPES.length;
-    onChange(SCOPES[index]);
-    refs.current[index]?.focus();
-  }
-
   return (
-    <div
-      className="segmented"
-      role="radiogroup"
-      aria-label="Show figures for"
-      aria-describedby="scope-caption"
-      aria-controls="dash-glance dash-categories"
-      onKeyDown={onKeyDown}
-    >
-      {SCOPES.map((v, i) => (
-        <button
-          key={v}
-          ref={(el) => {
-            refs.current[i] = el;
-          }}
-          type="button"
-          role="radio"
-          aria-checked={scope === v}
-          tabIndex={scope === v ? 0 : -1}
-          className={scope === v ? "active" : undefined}
-          onClick={() => onChange(v)}
-        >
-          {SCOPE_LABEL[v]}
-        </button>
-      ))}
-    </div>
+    <SegmentedRadio
+      label="Show figures for"
+      describedBy="scope-caption"
+      controls="dash-glance dash-categories"
+      value={scope}
+      onChange={onChange}
+      options={SCOPES.map((v) => ({ value: v, label: SCOPE_LABEL[v] }))}
+    />
   );
 }
 
@@ -151,7 +125,7 @@ export function Dashboard() {
             {me && <p className="muted small">Budgets are household-wide, so they're hidden in Just me.</p>}
             {s && lines.length === 0 && (
               <p className="muted">
-                No spending yet this month.{!me && <> <Link to="/budgets">Set budgets</Link></>}
+                No spending yet this month.{!me && <> <Link to={`/budgets?month=${month}`}>Set budgets</Link></>}
               </p>
             )}
             <ul className="bars">
@@ -159,15 +133,18 @@ export function Dashboard() {
                 const actual = Number(line.actual);
                 const budget = !me && line.budget && Number(line.budget) > 0 ? Number(line.budget) : null;
                 const tone = budget ? budgetTone(actual, budget) : "";
-                const pct = budget ? Math.min(100, (actual / budget) * 100) : me ? (Math.max(actual, 0) / largest) * 100 : 100;
                 return (
                   <li key={line.category_id}>
                     <span className="bar-label">
                       {line.parent_name} › {line.sub_name}
                     </span>
-                    <span className="bar-track">
-                      <span className={`bar-fill ${budget ? tone : me ? "" : "nobudget"}`} style={{ width: `${pct}%` }} />
-                    </span>
+                    {budget ? (
+                      <Meter ratio={actual / budget} />
+                    ) : me ? (
+                      <Meter ratio={Math.max(actual, 0) / largest} tone="neutral" />
+                    ) : (
+                      <Meter ratio={1} tone="muted" />
+                    )}
                     <span className="bar-value">
                       {money(actual)}
                       {budget !== null && <small> / {money(budget)}</small>}

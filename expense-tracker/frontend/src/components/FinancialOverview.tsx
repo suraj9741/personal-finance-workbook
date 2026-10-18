@@ -3,6 +3,7 @@ import type { AccountFigures, Overview } from "../api";
 import { GROUP_ICON, groupOf, money } from "../format";
 import { useOverview } from "../hooks";
 import { Kpi } from "./Kpi";
+import { Icon } from "./Icon";
 
 const sum = (rows: AccountFigures[], pick: (r: AccountFigures) => string | null) =>
   rows.reduce((total, r) => total + Number(pick(r) ?? 0), 0);
@@ -81,7 +82,7 @@ export function FinancialOverview({ month }: { month: string }) {
 
       <div className="card">
         <h3>
-          <span aria-hidden="true">{GROUP_ICON.bank}</span> Bank accounts
+          <Icon name={GROUP_ICON.bank} className="icon-heading" /> Bank accounts
         </h3>
         {banks.length === 0 ? (
           <p className="muted">No bank accounts.</p>
@@ -127,7 +128,7 @@ export function FinancialOverview({ month }: { month: string }) {
 
       <div className="card">
         <h3>
-          <span aria-hidden="true">{GROUP_ICON.credit_card}</span> Credit cards
+          <Icon name={GROUP_ICON.credit_card} className="icon-heading" /> Credit cards
         </h3>
         {cards.length === 0 ? (
           <p className="muted">No credit cards.</p>
@@ -185,7 +186,7 @@ export function FinancialOverview({ month }: { month: string }) {
 
       <div className="card">
         <h3>
-          <span aria-hidden="true">{GROUP_ICON.share_broker}</span> Share market brokers
+          <Icon name={GROUP_ICON.share_broker} className="icon-heading" /> Share market brokers
         </h3>
         {brokers.length === 0 ? (
           <p className="muted">No broker accounts.</p>

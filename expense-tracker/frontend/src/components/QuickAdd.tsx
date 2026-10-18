@@ -6,11 +6,12 @@ import { categoryLabel, money, shiftDay, today } from "../format";
 import { useAccounts, useCategories, useRefreshMoney } from "../hooks";
 import { stillToRepeat } from "../repeat";
 import { AccountPicker } from "./AccountPicker";
+import { Icon } from "./Icon";
 
 const LAST_ACCOUNT = "et:lastAccount";
 const CONFIRM_MS = 4000;
 
-type Message = { text: string; error?: boolean; retry?: boolean };
+type Message = { text: string; error?: boolean; retry?: boolean; done?: boolean };
 
 function readLastAccount(): string {
   try {
@@ -73,7 +74,7 @@ export function QuickAdd() {
     mutationFn: (body: TransactionInput) => post<Transaction>("/transactions", body),
     onSuccess: (tx) => {
       const category = categories.find((c) => c.id === tx.category_id);
-      setMessage({ text: `✓ Saved ${money(tx.amount, true)} · ${categoryLabel(category)}` });
+      setMessage({ text: `Saved ${money(tx.amount, true)} · ${categoryLabel(category)}`, done: true });
       setAmount("");
       setDescription("");
       setPicked(null);
@@ -113,7 +114,7 @@ export function QuickAdd() {
       return { tried: rows.length, failed };
     },
     onSuccess: ({ tried, failed }) => {
-      if (failed.length === 0) setMessage({ text: `✓ Repeated ${entries(tried)} from yesterday` });
+      if (failed.length === 0) setMessage({ text: `Repeated ${entries(tried)} from yesterday`, done: true });
       else {
         const names = failed.map((t) => `${t.description || "(no description)"} ${money(t.amount)}`).join(", ");
         setMessage({ text: `Repeated ${tried - failed.length} of ${tried}. Couldn't add: ${names}`, error: true, retry: true });
@@ -266,7 +267,7 @@ export function QuickAdd() {
         </button>
       )}
       <p className={message?.error ? "qa-msg error" : "qa-msg"} role="status">
-        {message?.text}
+        {message?.done && <Icon name="check" />} {message?.text}
         {message?.retry && toRepeat.length > 0 && (
           <>
             {" · "}

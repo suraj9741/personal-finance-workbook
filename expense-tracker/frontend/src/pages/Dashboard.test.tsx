@@ -74,7 +74,7 @@ it("compares spent with the spending budget only, leaving savings budgets out", 
   // 95% of the budget: the meter turns orange, and it's hidden from screen readers.
   const meter = hero().querySelector(".hero-meter")!;
   expect(meter.getAttribute("aria-hidden")).toBe("true");
-  expect(meter.querySelector(".bar-fill")!.className).toContain("warn");
+  expect(meter.querySelector(".meter-fill")!.className).toContain("warn");
   expect(screen.getByText("spending budget ₹10,000 + ₹5,000 planned savings")).toBeTruthy();
 });
 
@@ -82,13 +82,14 @@ it("says when spending is over budget, in words", async () => {
   renderWith({ household: month("household", { spend: "12300", saved: "87700", categories: [line("Food", "spend", "10000", "12300")] }) });
   expect((await screen.findByText("₹2,300 over budget")).className).toContain("neg-text");
   expect(screen.getByText("over by ₹2,300")).toBeTruthy();
-  expect(hero().querySelector(".hero-meter .bar-fill")!.className).toContain("over");
+  expect(hero().querySelector(".hero-meter .meter-fill")!.className).toContain("over");
 });
 
 it("offers to set budgets when there is no spending budget", async () => {
   renderWith({ household: month("household", { categories: [line("Food", "spend", null, "9500"), line("PPF", "saving", "5000", "5000")] }) });
   const link = await within(hero()).findByRole("link", { name: "Set budgets" });
-  expect(link.getAttribute("href")).toBe("/budgets");
+  // It opens Budgets on the month being looked at.
+  expect(link.getAttribute("href")).toMatch(/^\/budgets\?month=\d{4}-\d{2}$/);
   expect(link.parentElement?.textContent).toBe("No spending budget · Set budgets");
   expect(hero().querySelector(".hero-meter")).toBeNull();
 });

@@ -17,6 +17,8 @@ import {
   type AccountGroup,
 } from "../format";
 import { useMe, useOverview } from "../hooks";
+import { Icon } from "../components/Icon";
+import { SegmentedRadio } from "../components/SegmentedRadio";
 
 /** The search box only shows once there are more accounts than fit at a glance. */
 const SEARCH_FROM = 8;
@@ -83,16 +85,13 @@ export function Accounts() {
           Add account
         </button>
       </div>
-      <div className="segmented wrap" role="group" aria-label="Show">
-        <button type="button" className={!only ? "active" : ""} aria-pressed={!only} onClick={() => setType("")}>
-          All
-        </button>
-        {ACCOUNT_GROUPS.map((g) => (
-          <button key={g} type="button" className={only === g ? "active" : ""} aria-pressed={only === g} onClick={() => setType(g)}>
-            {GROUP_SHORT[g]}
-          </button>
-        ))}
-      </div>
+      <SegmentedRadio
+        label="Show"
+        className="segmented wrap"
+        value={only ?? "all"}
+        onChange={(v) => setType(v === "all" ? "" : v)}
+        options={[{ value: "all" as const, label: "All" }, ...ACCOUNT_GROUPS.map((g) => ({ value: g, label: GROUP_SHORT[g] }))]}
+      />
       {(searchable || rows.some((r) => !r.account.is_active)) && (
         <div className="filters">
           {searchable && (
@@ -158,7 +157,7 @@ export function Accounts() {
               <div className="account-group-head">
                 <div>
                   <h2>
-                    <span aria-hidden="true">{GROUP_ICON[g]}</span> {GROUP_PLURAL[g]}
+                    <Icon name={GROUP_ICON[g]} className="icon-heading" /> {GROUP_PLURAL[g]}
                   </h2>
                   <p className="muted small">
                     {count} {count === 1 ? "account" : "accounts"}
@@ -196,9 +195,7 @@ export function Accounts() {
                       ) : (
                         <span />
                       )}
-                      <span className="account-chevron" aria-hidden="true">
-                        ›
-                      </span>
+                      <Icon name="chevron-right" className="account-chevron" />
                     </li>
                   ))}
                 </ul>

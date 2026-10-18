@@ -27,6 +27,7 @@ import {
   type AccountGroup,
 } from "../format";
 import { useAccounts, useCategories, useMe } from "../hooks";
+import { Icon } from "../components/Icon";
 
 const PAGE = 100;
 const NO_FILTERS = { type: "", category_id: "" };
@@ -175,8 +176,8 @@ export function AccountDetails() {
       </nav>
       <div className="detail-head">
         <div className="detail-title">
-          <span className="detail-icon" aria-hidden="true">
-            {GROUP_ICON[group]}
+          <span className="detail-icon">
+            <Icon name={GROUP_ICON[group]} />
           </span>
           <div>
             <div className="detail-name">
