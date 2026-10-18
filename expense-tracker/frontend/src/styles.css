@@ -454,7 +454,7 @@ details.card[open] > summary { margin-bottom: var(--space-3); }
 .search-picker-icon.has-logo { background: var(--color-logo-tile); box-shadow: var(--shadow-logo-tile); }
 .search-picker-icon img { width: var(--logo-size); height: var(--logo-size); }
 .search-picker-logo { display: grid; place-items: center; width: var(--logo-tile-sm); height: var(--logo-tile-sm); flex: none; border-radius: var(--radius-xs); background: var(--color-logo-tile); box-shadow: var(--shadow-logo-tile); }
-.search-picker-logo img { width: var(--logo-size-sm); height: var(--logo-size-sm); }
+.search-picker-logo img { width: var(--logo-size-sm); height: var(--logo-size-sm); object-fit: contain; }
 .search-picker-empty { padding: var(--space-2); color: var(--color-text-secondary); }
 
 /* ---- toolbars, pickers, filters ---- */
@@ -1104,7 +1104,7 @@ html:has(.modal[open]) { overflow: hidden; }
   color: var(--color-text-secondary);
 }
 .account-mark.has-logo { background: var(--color-logo-tile); box-shadow: var(--shadow-logo-tile); }
-.account-mark img { width: var(--logo-size); height: var(--logo-size); }
+.account-mark img { width: var(--logo-size); height: var(--logo-size); object-fit: contain; }
 .account-mark.detail-mark { width: var(--logo-tile-lg); height: var(--logo-tile-lg); border-radius: var(--radius-md); font-size: var(--text-title-size); }
 .account-mark.detail-mark img { width: var(--logo-size-lg); height: var(--logo-size-lg); }
 .account-sub { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1) var(--space-2); color: var(--color-text-secondary); font-size: var(--text-footnote-size); }

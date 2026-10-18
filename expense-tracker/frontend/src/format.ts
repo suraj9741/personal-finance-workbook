@@ -99,6 +99,9 @@ export function groupOf(payType: PayType): AccountGroup {
   return payType === "cash" ? "bank" : payType;
 }
 
+/** One account's icon: its group's, except cash, which gets the rupee sign. */
+export const accountIcon = (payType: PayType): IconName => (payType === "cash" ? "rupee" : GROUP_ICON[groupOf(payType)]);
+
 export const TX_TYPE_LABEL: Record<TxType, string> = {
   expense: "Expense",
   income: "Income",

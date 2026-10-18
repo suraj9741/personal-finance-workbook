@@ -1,5 +1,5 @@
 import type { Account } from "../api";
-import { ACCOUNT_GROUPS, GROUP_ICON, GROUP_PLURAL, groupOf } from "../format";
+import { ACCOUNT_GROUPS, GROUP_PLURAL, accountIcon, groupOf } from "../format";
 import { bankLogo } from "./bank-logos";
 import type { PickerItem } from "./SearchPicker";
 
@@ -18,7 +18,7 @@ export function accountItems(accounts: Account[]): PickerItem[] {
       id: a.id,
       label: a.name,
       group: GROUP_PLURAL[group],
-      icon: GROUP_ICON[group],
+      icon: accountIcon(a.pay_type),
       logo: bankLogo(a),
       hint: a.visibility === "private" ? `${KIND[a.pay_type]} · private` : KIND[a.pay_type],
     }));

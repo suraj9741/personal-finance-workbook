@@ -1,9 +1,10 @@
 import type { Account } from "../api";
 
-// Every SVG in assets/banks, by file name: dropping in sbi.svg is all it takes to add a logo.
-const FILES = import.meta.glob<string>("../assets/banks/*.svg", { eager: true, query: "?url", import: "default" });
+// Every logo in assets/banks (SVG, or PNG when no vector exists), by file name: dropping in
+// sbi.svg is all it takes to add a logo.
+const FILES = import.meta.glob<string>("../assets/banks/*.{svg,png}", { eager: true, query: "?url", import: "default" });
 const LOGOS: Record<string, string> = Object.fromEntries(
-  Object.entries(FILES).map(([path, url]) => [path.slice(path.lastIndexOf("/") + 1, -".svg".length), url]),
+  Object.entries(FILES).map(([path, url]) => [path.slice(path.lastIndexOf("/") + 1, path.lastIndexOf(".")), url]),
 );
 
 // Words in an account's institution or name that point at a logo file. Longest first, so
@@ -12,11 +13,15 @@ const ALIASES: [string, string][] = [
   ["state bank of india", "sbi"],
   ["bank of india", "boi"],
   ["amazon pay", "amazon-pay"],
+  ["angel one", "angel-one"],
+  ["angelone", "angel-one"],
+  ["angel", "angel-one"],
   ["yes bank", "yes-bank"],
   ["indusind", "indusind"],
   ["indusland", "indusind"],
   ["zerodha", "zerodha"],
   ["paytm", "paytm"],
+  ["dhan", "dhan"],
   ["icici", "icici"],
   ["hdfc", "hdfc"],
   ["sbi", "sbi"],
