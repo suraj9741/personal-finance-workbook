@@ -12,6 +12,11 @@ it("finds the logo from the institution first, then the name", () => {
   expect(logoTitle(acct("Salary", "ICICI Bank"))).toBe("ICICI Bank");
   expect(logoTitle(acct("FI"))).toBe("Fi");
   expect(logoTitle(acct("Zerodha", null, "share_broker"))).toBe("Zerodha");
+  expect(logoTitle(acct("SBI", null, "credit_card"))).toBe("State Bank of India");
+  // Big SVGs stay files instead of being inlined.
+  expect(bankLogo(acct("BOI"))).toMatch(/boi\.svg$/);
+  expect(bankLogo(acct("Indusland", null, "credit_card"))).toMatch(/indusind\.svg$/);
+  expect(logoTitle(acct("Yes Bank", null, "credit_card"))).toBe("Yes Bank");
 });
 
 it("matches whole words only, and gives none for cash or banks without a logo yet", () => {
