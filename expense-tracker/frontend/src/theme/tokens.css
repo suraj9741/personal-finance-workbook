@@ -162,6 +162,18 @@
   --thumb-y: 0px;
   --thumb-w: 0px;
   --thumb-h: 0px;
+
+  /* ---- fields and the search picker (SearchPicker.tsx) ---- */
+  /* One mid grey that reads on both themes; an image can't follow light-dark(). */
+  --select-chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238e8e93' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  --select-chevron-size: 1rem;
+  --picker-icon-box: 1.75rem;
+  --color-picker-icon-active: rgb(255 255 255 / 0.2);
+  /* Where the open list sits; SearchPicker sets these from the button's position. */
+  --pop-x: 0px;
+  --pop-y: 0px;
+  --pop-w: 0px;
+  --pop-max-h: 0px;
   /* The faint underline on links inside sentences. */
   --link-underline: color-mix(in srgb, var(--color-accent) 40%, transparent);
   /* A bar with no budget behind it: present, but quiet. */

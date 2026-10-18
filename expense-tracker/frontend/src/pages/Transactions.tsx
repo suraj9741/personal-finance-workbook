@@ -2,9 +2,11 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tansta
 import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { api, patch, post, type Transaction } from "../api";
+import { accountItems } from "../components/account-items";
 import { CategoryPicker } from "../components/CategoryPicker";
 import { Modal } from "../components/Modal";
 import { MonthPicker } from "../components/MonthPicker";
+import { SearchPicker } from "../components/SearchPicker";
 import { useToasts } from "../components/toast-context";
 import { TransactionForm } from "../components/TransactionForm";
 import { TX_TYPE_LABEL, accountLabel, categoryKind, currentMonth, dayHeading, dayLabel, dayTotals, money, monthLabel, txSign } from "../format";
@@ -149,22 +151,26 @@ export function Transactions() {
             </option>
           ))}
         </select>
-        <select aria-label="Category filter" value={params.get("category_id") ?? ""} onChange={(e) => setFilter("category_id", e.target.value)}>
-          <option value="">All categories</option>
-          {categories.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.parent_name} › {c.sub_name}
-            </option>
-          ))}
-        </select>
-        <select aria-label="Account filter" value={params.get("account_id") ?? ""} onChange={(e) => setFilter("account_id", e.target.value)}>
-          <option value="">All accounts</option>
-          {accounts.map((a) => (
-            <option key={a.id} value={a.id}>
-              {accountLabel(a, accounts)}
-            </option>
-          ))}
-        </select>
+        <SearchPicker
+          label="Category filter"
+          none="All categories"
+          showGroup
+          items={categories.map((c) => ({
+            id: c.id,
+            label: c.sub_name,
+            // Income and transfer groups can share a name with an expense group (Gotu), so say which.
+            group: c.kind === "expense" ? c.parent_name : `${TX_TYPE_LABEL[c.kind]} · ${c.parent_name}`,
+          }))}
+          value={params.get("category_id") || null}
+          onChange={(id) => setFilter("category_id", id ?? "")}
+        />
+        <SearchPicker
+          label="Account filter"
+          none="All accounts"
+          items={accountItems(accounts)}
+          value={params.get("account_id") || null}
+          onChange={(id) => setFilter("account_id", id ?? "")}
+        />
         {showAddedBy && (
           <select aria-label="Added by" value={params.get("created_by") ?? ""} onChange={(e) => setFilter("created_by", e.target.value)}>
             <option value="">Anyone</option>

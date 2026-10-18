@@ -163,16 +163,24 @@ it("picks the account type first, then only accounts of that type", async () => 
   const dialog = await screen.findByRole("dialog");
   const types = within(dialog).getByRole("radiogroup", { name: "Account type" });
   fireEvent.click(within(types).getByRole("radio", { name: /Credit Card/ }));
-  const options = () => within(within(dialog).getByRole("combobox", { name: "Account" })).getAllByRole("option").map((o) => o.textContent);
-  expect(options()).toEqual(["HDFC CC"]);
+  // Opens the account list and reads its rows (name, then what kind of account it is).
+  const options = () => {
+    fireEvent.click(within(dialog).getByRole("button", { name: /^Account / }));
+    const names = within(screen.getByRole("listbox", { name: "Account" }))
+      .getAllByRole("option")
+      .map((o) => o.querySelector(".search-picker-name")!.textContent + " " + o.querySelector("small")!.textContent);
+    fireEvent.keyDown(screen.getByRole("combobox", { name: "Search account" }), { key: "Escape" });
+    return names;
+  };
+  expect(options()).toEqual(["HDFC CC card"]);
   fireEvent.click(within(types).getByRole("radio", { name: /Bank/ }));
-  expect(options()).toEqual(["HDFC", "SBI", "Cash (cash)"]);
+  expect(options()).toEqual(["HDFC bank", "SBI bank", "Cash cash"]);
   // Buying shares only offers brokers.
   fireEvent.click(within(dialog).getByRole("radio", { name: "Buy" }));
   expect(within(dialog).getAllByRole("radio", { name: /Share Market Broker/ })).toHaveLength(1);
   expect(within(dialog).queryByRole("radio", { name: /Bank/ })).toBeNull();
-  expect(options()).toEqual(["Zerodha"]);
-  expect(within(dialog).queryByRole("combobox", { name: "Category group" })).toBeNull();
+  expect(options()).toEqual(["Zerodha broker"]);
+  expect(within(dialog).queryByRole("button", { name: /^Category / })).toBeNull();
 });
 
 it("shows a bank total below zero in red", async () => {
