@@ -175,11 +175,23 @@ it("picks the account type first, then only accounts of that type", async () => 
   expect(within(dialog).queryByRole("combobox", { name: "Category group" })).toBeNull();
 });
 
+it("shows a bank total below zero in red", async () => {
+  mockApi((url) => (url.includes("/stats/overview") ? { ...OVERVIEW, totals: { ...OVERVIEW.totals, bank_balance: "-300" } } : undefined));
+  renderAt("/");
+  const overview = await screen.findByRole("region", { name: "Financial overview" });
+  const label = within(overview).getByText("Total bank balance");
+  expect(label.nextSibling?.textContent).toBe("-₹300");
+  expect(label.parentElement?.className).toContain("bad");
+});
+
 it("shows the financial overview above the monthly dashboard", async () => {
   mockApi();
   renderAt("/");
   const overview = await screen.findByRole("region", { name: "Financial overview" });
   expect(within(overview).getByText("Total bank balance").nextSibling?.textContent).toBe("₹42,000");
+  // Money held is green above zero (red below); the amount owed on cards stays plain.
+  expect(within(overview).getByText("Total bank balance").parentElement?.className).toContain("good");
+  expect(within(overview).getByText("Credit card outstanding").parentElement?.className).not.toMatch(/good|bad/);
   // Available credit is a note on the card tile now; Net cash and the month totals live in the hero.
   expect(within(overview).getByText("Credit card outstanding").parentElement?.textContent).toContain("₹75,000 of limits still available, not cash");
   expect(within(overview).queryByText("Net cash position")).toBeNull();
