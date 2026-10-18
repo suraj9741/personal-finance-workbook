@@ -1,12 +1,14 @@
 import type { Account } from "../api";
 import { ACCOUNT_GROUPS, GROUP_ICON, GROUP_PLURAL, groupOf } from "../format";
+import { bankLogo } from "./bank-logos";
 import type { PickerItem } from "./SearchPicker";
 
 const KIND: Record<Account["pay_type"], string> = { bank: "bank", cash: "cash", credit_card: "card", share_broker: "broker" };
 
 /**
  * Accounts as search-picker rows, banks first, then cards, then brokers. Each row says what the
- * account is, so "SBI" the bank and "SBI" the card can't be mixed up.
+ * account is, so "SBI" the bank and "SBI" the card can't be mixed up, and shows its bank's logo
+ * when there is one.
  */
 export function accountItems(accounts: Account[]): PickerItem[] {
   return accounts
@@ -17,6 +19,7 @@ export function accountItems(accounts: Account[]): PickerItem[] {
       label: a.name,
       group: GROUP_PLURAL[group],
       icon: GROUP_ICON[group],
+      logo: bankLogo(a),
       hint: a.visibility === "private" ? `${KIND[a.pay_type]} · private` : KIND[a.pay_type],
     }));
 }

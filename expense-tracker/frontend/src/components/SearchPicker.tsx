@@ -7,6 +7,8 @@ export interface PickerItem {
   /** Heading the item is listed under; searching matches it too ("gotu" finds every Gotu category). */
   group: string;
   icon?: IconName;
+  /** A picture to show instead of the icon, e.g. the account's bank logo. */
+  logo?: string;
   /** Small grey text at the end of the row, e.g. "card" or "private". */
   hint?: string;
 }
@@ -197,7 +199,13 @@ export function SearchPicker({ items, value, onChange, label, none, showGroup = 
           }
         }}
       >
-        {selected?.icon && <Icon name={selected.icon} />}
+        {selected?.logo ? (
+          <span className="search-picker-logo">
+            <img src={selected.logo} alt="" />
+          </span>
+        ) : (
+          selected?.icon && <Icon name={selected.icon} />
+        )}
         <span className="search-picker-text">{buttonText}</span>
         {selected?.hint && <small>{selected.hint}</small>}
         <Icon name="chevron-down" className="search-picker-chevron" />
@@ -241,10 +249,16 @@ export function SearchPicker({ items, value, onChange, label, none, showGroup = 
                   onMouseMove={() => index !== active && setActive(index)}
                   onClick={() => choose(index)}
                 >
-                  {item?.icon && (
-                    <span className="search-picker-icon">
-                      <Icon name={item.icon} />
+                  {item?.logo ? (
+                    <span className="search-picker-icon has-logo">
+                      <img src={item.logo} alt="" />
                     </span>
+                  ) : (
+                    item?.icon && (
+                      <span className="search-picker-icon">
+                        <Icon name={item.icon} />
+                      </span>
+                    )
                   )}
                   <span className="search-picker-name">{item ? <Highlight text={item.label} query={q} /> : none}</span>
                   {item?.hint && <small>{item.hint}</small>}

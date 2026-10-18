@@ -3,13 +3,13 @@ import { useState, type ReactNode } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { api, ApiError, type Account, type AccountFigures, type Transaction } from "../api";
 import { AccountForm } from "../components/AccountForm";
+import { AccountMark } from "../components/AccountMark";
 import { Meter } from "../components/Meter";
 import { Modal } from "../components/Modal";
 import { useToasts } from "../components/toast-context";
 import { MonthPicker } from "../components/MonthPicker";
 import { TransactionForm } from "../components/TransactionForm";
 import {
-  GROUP_ICON,
   GROUP_LABEL,
   GROUP_PLURAL,
   TX_TYPE_LABEL,
@@ -27,7 +27,6 @@ import {
   type AccountGroup,
 } from "../format";
 import { useAccounts, useCategories, useMe } from "../hooks";
-import { Icon } from "../components/Icon";
 
 const PAGE = 100;
 const NO_FILTERS = { type: "", category_id: "" };
@@ -176,9 +175,7 @@ export function AccountDetails() {
       </nav>
       <div className="detail-head">
         <div className="detail-title">
-          <span className="detail-icon">
-            <Icon name={GROUP_ICON[group]} />
-          </span>
+          <AccountMark account={account} className="detail-mark" />
           <div>
             <div className="detail-name">
               <h1>{account.name}</h1>
