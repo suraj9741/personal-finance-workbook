@@ -5,11 +5,16 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { ToastProvider } from "../components/Toast";
 import { Budgets } from "./Budgets";
 
-beforeEach(() => sessionStorage.clear());
+// Most tests work on every line, so they start with all categories listed.
+beforeEach(() => {
+  sessionStorage.clear();
+  localStorage.setItem("et:budgetsShowAll", "1");
+});
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
   sessionStorage.clear();
+  localStorage.clear();
 });
 
 const ME = { id: "u1", email: "s@example.com", display_name: "Suraj", is_site_admin: false, household_id: "h1", household_name: "Home", role: "owner" };
@@ -18,7 +23,7 @@ const CATEGORIES = [
   { id: "c2", kind: "expense", parent_name: "Everyday", sub_name: "Groceries", stats_group: "spend", is_active: true, sort_order: 1 },
 ];
 
-/** Budgets for October 2026: Food has ₹3,000 saved. Past months don't carry forward. */
+/** Budgets for October 2026: Food has ₹3,000 saved and ₹1,200 spent. Past months don't carry forward. */
 function setup(path = "/budgets?month=2026-10") {
   const puts: { month: string; items: { category_id: string; amount: string; this_month_only: boolean }[] }[] = [];
   vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
@@ -32,7 +37,7 @@ function setup(path = "/budgets?month=2026-10") {
     const body = url.includes("/auth/me") ? ME
       : url.includes("/budgets") ? { month, carries_forward: month >= "2026-10", items, next_changes: [] }
       : url.includes("/categories") ? CATEGORIES
-      : url.includes("/stats/month") ? { month, categories: [{ category_id: "c1", actual: "1200" }] }
+      : url.includes("/stats/month") ? { month, categories: month === "2026-10" ? [{ category_id: "c1", actual: "1200" }] : [] }
       : url.includes("/stats/attention") ? { month, uncategorized: month === "2026-10" ? 3 : 0 }
       : null;
     return new Response(JSON.stringify(body), { status: 200 });
@@ -125,4 +130,26 @@ it("says a past month saves for that month only, with no choice", async () => {
   fireEvent.change(await field("Food"), { target: { value: "100" } });
   expect(within(bar()).getByText("Past month: saves for September 2025 only")).toBeTruthy();
   expect(within(bar()).queryByRole("group", { name: "Apply to" })).toBeNull();
+});
+
+it("lists only categories in use until Show all, and remembers the choice", async () => {
+  localStorage.clear();
+  setup();
+  await field("Food");
+  expect(screen.queryByLabelText("Everyday Groceries budget")).toBeNull();
+  // Totals are unchanged by what's hidden.
+  expect(screen.getByText("₹1,800 left of ₹3,000")).toBeTruthy();
+  const more = screen.getByRole("button", { name: "Show all categories (1 more)" });
+  expect(more.getAttribute("aria-expanded")).toBe("false");
+  fireEvent.click(more);
+  expect(await field("Groceries")).toBeTruthy();
+  expect(localStorage.getItem("et:budgetsShowAll")).toBe("1");
+  // A line being typed in stays listed after going back.
+  fireEvent.change(await field("Groceries"), { target: { value: "2000" } });
+  fireEvent.click(screen.getByRole("button", { name: "Show only categories in use" }));
+  expect(await field("Groceries")).toBeTruthy();
+  expect(localStorage.getItem("et:budgetsShowAll")).toBeNull();
+  // A month with nothing in use says so.
+  fireEvent.click(screen.getByRole("button", { name: "Next month" }));
+  expect(await screen.findByText("No spending budgets or entries for November 2026 yet.")).toBeTruthy();
 });

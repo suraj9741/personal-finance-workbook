@@ -581,6 +581,7 @@ html:has(.modal[open]) { overflow: hidden; }
 .budget-intro { margin: 0 0 var(--space-4); }
 .budget-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(var(--budget-card-min), 100%), 1fr)); gap: var(--stack-gap); }
 .budget-grid .card { margin: 0; }
+.budget-more { margin-top: var(--space-3); }
 .budget-skeleton { display: grid; gap: var(--space-4); }
 .budget-state { display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-3); }
 .budget-state p { margin: 0; }

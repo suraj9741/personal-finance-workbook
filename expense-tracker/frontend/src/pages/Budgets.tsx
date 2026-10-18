@@ -23,6 +23,16 @@ type Tone = "bad" | "good" | "muted";
 
 // Per tab, so edits survive switching month or page but not closing the tab (which warns first).
 const DRAFTS_KEY = "et:budgetDrafts";
+// Per browser: whether categories with no budget and no money this month are listed too.
+const SHOW_ALL_KEY = "et:budgetsShowAll";
+
+function readShowAll() {
+  try {
+    return localStorage.getItem(SHOW_ALL_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
 
 function readDrafts(): Drafts {
   try {
@@ -73,6 +83,7 @@ export function Budgets() {
   // Typing the saved amount back removes the edit, so every key left is a real change.
   const [drafts, setDrafts] = useState<Drafts>(readDrafts);
   const [forward, setForward] = useState(true);
+  const [showAll, setShowAll] = useState(readShowAll);
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
   const lastEdited = useRef<string | null>(null);
@@ -127,6 +138,17 @@ export function Budgets() {
     window.addEventListener("beforeunload", warn);
     return () => window.removeEventListener("beforeunload", warn);
   }, [hasDrafts]);
+
+  function toggleShowAll() {
+    const next = !showAll;
+    setShowAll(next);
+    try {
+      if (next) localStorage.setItem(SHOW_ALL_KEY, "1");
+      else localStorage.removeItem(SHOW_ALL_KEY);
+    } catch {
+      /* storage unavailable: the choice lasts until reload */
+    }
+  }
 
   const nextChange = useMemo(() => new Map((budgets.data?.next_changes ?? []).map((n) => [n.category_id, n])), [budgets.data]);
   const actual = useMemo(() => new Map((stats.data?.categories ?? []).map((l) => [l.category_id, Number(l.actual)])), [stats.data]);
@@ -265,6 +287,8 @@ export function Budgets() {
             note={note}
             fieldId={fieldId}
             pending={pending}
+            showAll={showAll}
+            onToggleShowAll={toggleShowAll}
             onChange={isOwner ? setDraft : undefined}
             onRevert={revert}
           />
@@ -332,6 +356,8 @@ function BudgetSection({
   note,
   fieldId,
   pending,
+  showAll,
+  onToggleShowAll,
   onChange,
   onRevert,
 }: {
@@ -343,6 +369,8 @@ function BudgetSection({
   note: (id: string) => string | null;
   fieldId: (id: string) => string;
   pending: Record<string, string>;
+  showAll: boolean;
+  onToggleShowAll: () => void;
   onChange?: (id: string, v: string) => void;
   onRevert: (id: string) => void;
 }) {
@@ -358,6 +386,11 @@ function BudgetSection({
   const actualOf = (c: Category) => actual.get(c.id) ?? 0;
   const spentLabel = kind === "expense" ? "Spent" : "Earned";
   const title = kind === "expense" ? "Spending" : "Income";
+  // A line is in use with a budget, money this month, or an unsaved edit (so it never vanishes mid-typing).
+  // The rest only add zeros, so hiding them leaves every total as it was.
+  const inUse = (c: Category) => pending[c.id] !== undefined || budgetOf(c) > 0 || actualOf(c) !== 0;
+  const unused = categories.filter((c) => !inUse(c)).length;
+  const shown = grouped.map(([parent, subs]) => [parent, showAll ? subs : subs.filter(inUse)] as const).filter(([, subs]) => subs.length > 0);
 
   return (
     <section className="budget-section" aria-labelledby={headingId}>
@@ -371,8 +404,15 @@ function BudgetSection({
       ) : (
         <>
           <BudgetSummary kind={kind} budget={sum(categories, budgetOf)} actual={sum(categories, actualOf)} />
+          {shown.length === 0 && (
+            <div className="card">
+              <p className="muted">
+                No {kind === "expense" ? "spending" : "income"} budgets or entries for {monthLabel(month)} yet.
+              </p>
+            </div>
+          )}
           <div className="budget-grid">
-            {grouped.map(([parent, subs]) => {
+            {shown.map(([parent, subs]) => {
               const group = status(kind, sum(subs, budgetOf), sum(subs, actualOf));
               return (
                 <div className="card" key={parent}>
@@ -467,6 +507,11 @@ function BudgetSection({
               );
             })}
           </div>
+          {(unused > 0 || showAll) && (
+            <button type="button" className="ghost small budget-more" aria-expanded={showAll} onClick={onToggleShowAll}>
+              {showAll ? "Show only categories in use" : `Show all categories (${unused} more)`}
+            </button>
+          )}
         </>
       )}
     </section>
