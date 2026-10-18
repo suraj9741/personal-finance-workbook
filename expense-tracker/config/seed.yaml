@@ -18,7 +18,7 @@ admin_household:
   accounts:
     bank: [HDFC, SBI, BOI, Paytm, FI, Amazon Pay]
     credit_card: [HDFC CC, Amazon Pay, ICICI, Indusland, SBI, Yes Bank]
-    share_broker: [Zerodha, Angel Broker, Dhan]
+    share_broker: [Zerodha, Angel Broker, Dhan, Coin]
     cash: [Cash]
   categories:
     expense:

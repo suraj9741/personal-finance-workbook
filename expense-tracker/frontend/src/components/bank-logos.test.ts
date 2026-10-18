@@ -2,6 +2,7 @@ import { expect, it } from "vitest";
 import type { Account } from "../api";
 import amazonPay from "../assets/banks/amazon-pay.png";
 import angelOne from "../assets/banks/angel-one.png";
+import coin from "../assets/banks/coin.png";
 import dhan from "../assets/banks/dhan.png";
 import { accountIcon } from "../format";
 import { bankLogo } from "./bank-logos";
@@ -26,6 +27,8 @@ it("finds the logo from the institution first, then the name", () => {
   expect(bankLogo(acct("Angel One", null, "share_broker"))).toBe(angelOne);
   expect(bankLogo(acct("Demat", "AngelOne", "share_broker"))).toBe(angelOne);
   expect(bankLogo(acct("Dhan", null, "share_broker"))).toBe(dhan);
+  expect(bankLogo(acct("Coin", null, "share_broker"))).toBe(coin);
+  expect(bankLogo(acct("Mutual funds", "Zerodha Coin", "share_broker"))).toBe(coin);
 });
 
 it("matches whole words only, and gives none for cash or banks without a logo yet", () => {

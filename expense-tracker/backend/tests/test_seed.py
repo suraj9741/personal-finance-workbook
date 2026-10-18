@@ -38,7 +38,8 @@ def test_config_matches_the_finance_sheet_starter_list() -> None:
     cfg = config()
     categories = seed.flat_categories(cfg.admin_household.categories)
     assert len(categories) == 154
-    assert len(config_accounts()) == 16
+    # The 16 sheet accounts plus Coin, added in the app.
+    assert len(config_accounts()) == 17
     assert {("SBI", "bank"), ("SBI", "credit_card")} <= config_accounts()
     groups = {(kind, parent, sub): group for kind, parent, sub, group in categories}
     assert groups[("expense", "Savings", "PPF")] == "saving"
@@ -160,7 +161,7 @@ def test_existing_household_gets_only_the_missing_accounts(admin: Api, db: Sessi
     db.commit()
     add_tx(admin)
 
-    assert seed.apply(db, config())["accounts"] == 13
+    assert seed.apply(db, config())["accounts"] == 14
     accounts = admin.get("/api/v1/accounts").json()
     assert pairs(accounts) == config_accounts()
     assert next(a for a in accounts if a["name"] == "Cash")["opening_balance"] == "1234.50"

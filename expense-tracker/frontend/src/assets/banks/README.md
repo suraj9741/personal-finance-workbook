@@ -20,6 +20,7 @@ Sources:
   (public domain as a simple text logo), resized to 128px wide.
 - Dhan: [Logowik](https://logowik.com/dhan-logo-vector-77039.html), the round mark only, resized to
   128px wide. Logowik states no licence.
+- Coin (Zerodha): the Coin app's Google Play icon, trimmed and resized to 128px.
 - Amazon Pay is stacked onto two lines ("amazon" over "pay") so it stays readable in the small tile.
 
 The logos are trademarks of their banks and are used here only to label the user's own accounts.

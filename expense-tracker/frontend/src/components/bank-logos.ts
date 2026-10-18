@@ -19,6 +19,8 @@ const ALIASES: [string, string][] = [
   ["yes bank", "yes-bank"],
   ["indusind", "indusind"],
   ["indusland", "indusind"],
+  // Before zerodha, so "Zerodha Coin" gets the Coin logo.
+  ["coin", "coin"],
   ["zerodha", "zerodha"],
   ["paytm", "paytm"],
   ["dhan", "dhan"],
