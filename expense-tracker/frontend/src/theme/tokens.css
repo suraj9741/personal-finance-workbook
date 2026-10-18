@@ -168,7 +168,14 @@
   --select-chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238e8e93' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
   --select-chevron-size: 1rem;
   --picker-icon-box: 1.75rem;
-  --color-picker-icon-active: rgb(255 255 255 / 0.2);
+  /* The icon block at the picker button's left ("labeled" button). */
+  --picker-lead-w: 2.5rem;
+  --color-picker-lead: light-dark(rgb(0 0 0 / 0.04), rgb(255 255 255 / 0.05));
+  /* The list grows from 96% height and 4px off as it opens. */
+  --picker-enter-scale: 0.96;
+  --picker-shift: var(--space-1);
+  /* Opening down it starts a little above its place; .up flips this to below. */
+  --picker-enter-y: calc(-1 * var(--picker-shift));
   /* Where the open list sits; SearchPicker sets these from the button's position. */
   --pop-x: 0px;
   --pop-y: 0px;
@@ -266,6 +273,8 @@
     --motion-spring-duration: 200ms;
     --motion-slow: 200ms;
     --modal-enter-scale: 1;
+    --picker-enter-scale: 1;
+    --picker-shift: 0px;
     --sheet-enter-y: 0;
     --toast-enter-y: 0;
   }

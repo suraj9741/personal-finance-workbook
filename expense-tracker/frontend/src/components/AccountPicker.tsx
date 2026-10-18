@@ -59,6 +59,7 @@ export function AccountPicker({ accounts, value, onChange, label, groups = ACCOU
       ) : (
         <SearchPicker
           label={accountLabelText}
+          icon={variant === "buttons" ? GROUP_ICON[group] : "bank"}
           items={accountItems(options)}
           value={selected && options.includes(selected) ? value : null}
           onChange={(id) => onChange(id ?? "")}

@@ -326,8 +326,8 @@ details.card[open] > summary { margin-bottom: var(--space-3); }
 .suggestions [role="option"][aria-selected="true"] { background: var(--color-fill-hover); }
 .suggestions small { color: var(--color-text-secondary); }
 
-/* ---- search picker: a field-like button, and a list with a search box (SearchPicker.tsx) ---- */
-.search-picker { display: inline-flex; min-width: 0; }
+/* ---- search picker: a field-like button you type into, and a floating list (SearchPicker.tsx) ---- */
+.search-picker { position: relative; display: inline-flex; min-width: 0; }
 .search-picker-button {
   display: inline-flex;
   align-items: center;
@@ -336,14 +336,51 @@ details.card[open] > summary { margin-bottom: var(--space-3); }
   min-width: var(--field-sm);
   padding: 0 var(--space-3);
   border: 1px solid transparent;
+  overflow: hidden;
   font-weight: 400;
   text-align: left;
+  transition:
+    background-color var(--motion-fast) var(--motion-ease),
+    border-color var(--motion-fast) var(--motion-ease),
+    box-shadow var(--motion-fast) var(--motion-ease);
 }
 .search-picker-button:active:not(:disabled) { transform: none; }
 .search-picker-button[aria-expanded="true"] { border-color: var(--color-accent); box-shadow: 0 0 0 3px var(--color-focus-ring); }
+/* "Labeled" button: the icon sits in its own block at the left edge. */
+.search-picker.has-lead .search-picker-button { padding-left: 0; }
+.search-picker-lead {
+  display: grid;
+  place-items: center;
+  align-self: stretch;
+  width: var(--picker-lead-w);
+  flex: none;
+  background: var(--color-picker-lead);
+  box-shadow: inset -1px 0 0 var(--color-separator);
+  color: var(--color-text-secondary);
+}
 .search-picker-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.search-picker-text.placeholder { color: var(--color-text-secondary); }
 .search-picker-button small, .search-picker-pop small { color: var(--color-text-secondary); font-size: var(--text-footnote-size); }
-.search-picker-chevron { color: var(--color-text-tertiary); }
+.search-picker-chevron { color: var(--color-text-tertiary); transition: rotate var(--motion-fast) var(--motion-ease); }
+.search-picker.open .search-picker-chevron { rotate: 180deg; }
+/* While open, the search box lies over the button's text: you type where the choice was. */
+.search-picker.open .search-picker-text, .search-picker.open .search-picker-button small { visibility: hidden; }
+.search-picker .search-picker-input,
+.search-picker .search-picker-input:hover,
+.search-picker .search-picker-input:focus {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  padding: 0 calc(2 * var(--space-3) + 1em) 0 calc(var(--space-3) + 1px);
+  background-color: transparent;
+  border-color: transparent;
+  box-shadow: none;
+}
+.search-picker.has-lead .search-picker-input { padding-left: calc(var(--picker-lead-w) + var(--space-2) + 1px); }
+.search-picker-input::placeholder { color: var(--color-text-secondary); }
 .search-picker-pop {
   position: fixed;
   z-index: 20;
@@ -353,7 +390,6 @@ details.card[open] > summary { margin-bottom: var(--space-3); }
   max-height: var(--pop-max-h);
   display: flex;
   flex-direction: column;
-  gap: var(--space-1);
   padding: var(--space-1);
   background: var(--color-surface-raised);
   --color-fill: var(--color-fill-elevated);
@@ -362,9 +398,23 @@ details.card[open] > summary { margin-bottom: var(--space-3); }
   box-shadow: var(--shadow-popover);
   color: var(--color-text);
   font-size: var(--text-callout-size);
+  /* Slides open from the button and back into it; reopening mid-close turns it around smoothly. */
+  transform-origin: top;
+  transition:
+    opacity var(--motion-base) var(--motion-ease-out),
+    transform var(--motion-base) var(--motion-ease-out);
 }
-.search-picker-pop.up { transform: translateY(-100%); }
-.search-picker-pop input { width: 100%; min-height: var(--control-h-sm); flex: none; }
+@starting-style {
+  .search-picker-pop { opacity: 0; transform: translateY(var(--picker-enter-y)) scaleY(var(--picker-enter-scale)); }
+}
+.search-picker-pop.up { translate: 0 -100%; transform-origin: bottom; --picker-enter-y: var(--picker-shift); }
+.search-picker-pop.leaving {
+  opacity: 0;
+  transform: translateY(var(--picker-enter-y)) scaleY(var(--picker-enter-scale));
+  transition-duration: var(--motion-fast);
+  transition-timing-function: var(--motion-ease);
+  pointer-events: none;
+}
 .search-picker-pop ul { margin: 0; padding: 0; list-style: none; overflow-y: auto; overscroll-behavior: contain; }
 .search-picker-group {
   padding: var(--space-2) var(--space-2) var(--space-1);
@@ -381,6 +431,7 @@ details.card[open] > summary { margin-bottom: var(--space-3); }
   min-height: var(--control-h);
   border-radius: var(--radius-sm);
   cursor: pointer;
+  transition: background-color var(--motion-instant) var(--motion-ease);
 }
 .search-picker-name { flex: 1; min-width: 0; }
 .search-picker-name mark { background: none; color: inherit; font-weight: 700; }
@@ -396,12 +447,11 @@ details.card[open] > summary { margin-bottom: var(--space-3); }
 }
 .search-picker-check { color: var(--color-accent); visibility: hidden; }
 .search-picker-pop [aria-selected="true"] .search-picker-check { visibility: visible; }
-/* The keyboard-active row and the hovered one are the same thing: hover moves it. */
-.search-picker-pop [data-active] { background: var(--color-accent-fill); color: var(--color-on-accent); }
-.search-picker-pop [data-active] :is(small, .search-picker-check, .search-picker-icon) { color: var(--color-on-accent); }
-.search-picker-pop [data-active] .search-picker-icon { background: var(--color-picker-icon-active); }
+.search-picker-pop [aria-selected="true"] .search-picker-name { font-weight: 600; }
+/* The keyboard-active row and the hovered one are the same thing: hover moves it. A soft grey, not a solid colour. */
+.search-picker-pop [data-active] { background: var(--color-fill-hover); }
 /* Bank logos sit on a white tile in both themes: they are drawn for a light background. */
-.search-picker-icon.has-logo, .search-picker-pop [data-active] .search-picker-icon.has-logo { background: var(--color-logo-tile); box-shadow: var(--shadow-logo-tile); }
+.search-picker-icon.has-logo { background: var(--color-logo-tile); box-shadow: var(--shadow-logo-tile); }
 .search-picker-icon img { width: var(--logo-size); height: var(--logo-size); }
 .search-picker-logo { display: grid; place-items: center; width: var(--logo-tile-sm); height: var(--logo-tile-sm); flex: none; border-radius: var(--radius-xs); background: var(--color-logo-tile); box-shadow: var(--shadow-logo-tile); }
 .search-picker-logo img { width: var(--logo-size-sm); height: var(--logo-size-sm); }

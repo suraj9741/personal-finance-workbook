@@ -8,6 +8,7 @@ const PATHS = {
   "chevron-left": "M15 5l-7 7 7 7",
   "chevron-right": "M9 5l7 7-7 7",
   "chevron-down": "M6 9l6 6 6-6",
+  tag: "M3.5 12.6V4.5a1 1 0 0 1 1-1h8.1l7.9 7.9a1.4 1.4 0 0 1 0 2l-7.1 7.1a1.4 1.4 0 0 1-2 0zM8.5 8.5h.01",
   close: "M6 6l12 12M18 6L6 18",
   check: "M5 12.5l4.5 4.5L19 7",
   "arrow-right": "M4 12h16M14 6l6 6-6 6",

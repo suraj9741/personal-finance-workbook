@@ -155,6 +155,7 @@ export function Transactions() {
           label="Category filter"
           none="All categories"
           showGroup
+          icon="tag"
           items={categories.map((c) => ({
             id: c.id,
             label: c.sub_name,
@@ -167,6 +168,7 @@ export function Transactions() {
         <SearchPicker
           label="Account filter"
           none="All accounts"
+          icon="bank"
           items={accountItems(accounts)}
           value={params.get("account_id") || null}
           onChange={(id) => setFilter("account_id", id ?? "")}
@@ -283,7 +285,7 @@ export function Transactions() {
                         <td>
                           <span className="cat-cell">
                             {categoryKind(t.type) ? (
-                              <CategoryPicker categories={categories.filter((c) => c.is_active || c.id === t.category_id)} kind={categoryKind(t.type)!} value={t.category_id} onChange={(id) => recategorize.mutate({ id: t.id, category_id: id })} />
+                              <CategoryPicker plain categories={categories.filter((c) => c.is_active || c.id === t.category_id)} kind={categoryKind(t.type)!} value={t.category_id} onChange={(id) => recategorize.mutate({ id: t.id, category_id: id })} />
                             ) : (
                               <span className="muted">{TX_TYPE_LABEL[t.type]}</span>
                             )}

@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { useState } from "react";
 import { afterEach, expect, it, vi } from "vitest";
 import { SearchPicker, type PickerItem } from "./SearchPicker";
@@ -77,4 +77,19 @@ it("offers the none choice first and closes on Esc without choosing", () => {
   fireEvent.click(screen.getByRole("option", { name: "Uncategorized" }));
   expect(onChange).toHaveBeenCalledWith(null);
   expect(screen.getByRole("button", { name: "Category Uncategorized" })).toBeTruthy();
+});
+
+it("searches in the field itself, then fades the list out before removing it", async () => {
+  const { container } = render(<Picker />);
+  fireEvent.click(screen.getByRole("button", { name: /^Category/ }));
+  // The search box takes the button's place and shows the current choice until you type.
+  expect(search().closest(".search-picker")).toBe(container.querySelector(".search-picker"));
+  expect(search().getAttribute("placeholder")).toBe("Everyday › Food");
+  expect(container.querySelector(".search-picker-pop input")).toBeNull();
+  fireEvent.keyDown(search(), { key: "Escape" });
+  // Still drawn while it fades, but hidden from screen readers and not clickable.
+  const pop = container.querySelector(".search-picker-pop");
+  expect(pop?.classList.contains("leaving")).toBe(true);
+  expect(pop?.getAttribute("aria-hidden")).toBe("true");
+  await waitFor(() => expect(container.querySelector(".search-picker-pop")).toBeNull());
 });
