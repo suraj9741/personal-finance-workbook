@@ -6,7 +6,7 @@ import { BusyLabel } from "../components/FormBits";
 import { Meter } from "../components/Meter";
 import { MonthPicker } from "../components/MonthPicker";
 import { useToasts } from "../components/toast-context";
-import { budgetDiff, currentMonth, money, monthLabel, monthShort } from "../format";
+import { budgetDiff, currentMonth, money, monthLabel, monthShort, paise } from "../format";
 import { useCategories, useMe, useRefreshMoney } from "../hooks";
 import { Icon } from "../components/Icon";
 import { SegmentedRadio } from "../components/SegmentedRadio";
@@ -386,7 +386,7 @@ function BudgetSection({
     return [...map.entries()];
   }, [categories]);
   const headingId = useId();
-  const sum = (list: Category[], f: (c: Category) => number) => list.reduce((t, c) => t + f(c), 0);
+  const sum = (list: Category[], f: (c: Category) => number) => paise(list.reduce((t, c) => t + f(c), 0));
   // An amount still being fixed counts as nothing until it's a number.
   const budgetOf = (c: Category) => Number(value(c.id)) || 0;
   const actualOf = (c: Category) => actual.get(c.id) ?? 0;

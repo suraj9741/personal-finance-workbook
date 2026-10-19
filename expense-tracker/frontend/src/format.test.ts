@@ -1,6 +1,22 @@
 import { describe, expect, it } from "vitest";
 import type { Account } from "./api";
-import { accountLabel, budgetDiff, categoryKind, dayHeading, dayLabel, dayTotals, groupOf, money, percent, shiftMonth, txSign } from "./format";
+import {
+  accountLabel,
+  budgetDiff,
+  budgetSplit,
+  categoryKind,
+  dayHeading,
+  dayLabel,
+  dayTotals,
+  groupOf,
+  minusMoney,
+  money,
+  percent,
+  shiftMonth,
+  signedMoney,
+  tooManyDecimals,
+  txSign,
+} from "./format";
 
 describe("format", () => {
   it("makes a positive budget diff mean good news", () => {
@@ -9,8 +25,35 @@ describe("format", () => {
     expect(budgetDiff("income", 50000, 52000)).toBe(2000);
   });
   it("uses Indian digit grouping", () => {
-    expect(money("108811")).toBe("₹1,08,811");
+    expect(money("108811")).toBe("₹1,08,811.00");
     expect(money(null)).toBe("—");
+  });
+  it("shows paise on every amount", () => {
+    expect(money("1551.1")).toBe("₹1,551.10");
+    expect(money(9147.18)).toBe("₹9,147.18");
+    expect(money("500")).toBe("₹500.00");
+    expect(signedMoney("-343.5")).toBe("−₹343.50");
+    expect(minusMoney(-0.5)).toBe("−₹0.50");
+  });
+  it("rounds browser sums to paise, so leftovers never read as below zero", () => {
+    // 0.1 + 0.2 - 0.3 is 5.5e-17 in JavaScript, not 0.
+    expect(money(0.1 + 0.2 - 0.3)).toBe("₹0.00");
+    expect(signedMoney(0.3 - 0.1 - 0.2)).toBe("₹0.00");
+    expect(minusMoney(0.3 - 0.1 - 0.2)).toBe("₹0.00");
+    const day = dayTotals([
+      { type: "expense", amount: "0.10" },
+      { type: "expense", amount: "0.20" },
+      { type: "income", amount: "0.30" },
+    ]);
+    expect(day).toEqual({ spent: 0.3, earned: 0.3, net: 0 });
+    expect(budgetDiff("expense", 0.3, 0.1 + 0.2)).toBe(0);
+    expect(budgetSplit([{ kind: "expense", stats_group: "spend", budget: "0.10" }, { kind: "expense", stats_group: "spend", budget: "0.20" }]).spend).toBe(0.3);
+  });
+  it("spots amounts with more than 2 decimals", () => {
+    expect(tooManyDecimals("10.555")).toBe(true);
+    expect(tooManyDecimals("10.55")).toBe(false);
+    expect(tooManyDecimals("10")).toBe(false);
+    expect(tooManyDecimals(null)).toBe(false);
   });
   it("shifts months across years", () => {
     expect(shiftMonth("2026-01", -1)).toBe("2025-12");

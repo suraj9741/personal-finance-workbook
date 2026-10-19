@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 import type { AccountFigures, Overview } from "../api";
-import { GROUP_ICON, groupOf, money } from "../format";
+import { GROUP_ICON, groupOf, money, paise } from "../format";
 import { useOverview } from "../hooks";
 import { Kpi } from "./Kpi";
 import { Icon } from "./Icon";
@@ -9,7 +9,7 @@ import { Icon } from "./Icon";
 const balanceTone = (value: string) => (Number(value) > 0 ? "good" : Number(value) < 0 ? "bad" : undefined);
 
 const sum = (rows: AccountFigures[], pick: (r: AccountFigures) => string | null) =>
-  rows.reduce((total, r) => total + Number(pick(r) ?? 0), 0);
+  paise(rows.reduce((total, r) => total + Number(pick(r) ?? 0), 0));
 
 /** Active accounts, plus inactive ones that had activity this month (history stays visible). */
 function shown(overview: Overview, group: "bank" | "credit_card" | "share_broker") {

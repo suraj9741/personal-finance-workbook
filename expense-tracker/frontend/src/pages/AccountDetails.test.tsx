@@ -60,12 +60,12 @@ it("shows where you are, the card's one large number and its month, signed", asy
   const crumbs = screen.getByRole("navigation", { name: "Breadcrumb" });
   expect(within(crumbs).getByRole("link", { name: "Credit cards" }).getAttribute("href")).toBe("/accounts?type=credit_card");
   expect(screen.getByText(/^Credit card · HDFC Bank · opened 1 Apr 2025$/)).toBeTruthy();
-  expect(screen.getByText("₹5,000 available of ₹1,00,000 · not cash")).toBeTruthy();
+  expect(screen.getByText("₹5,000.00 available of ₹1,00,000.00 · not cash")).toBeTruthy();
   // 95% of the limit used: the bar turns orange.
   expect(document.querySelector(".acct-hero .meter-fill")!.className).toContain("warn");
   expect(screen.getByText("Statement").nextSibling?.textContent).toBe("On the 5th");
-  expect(screen.getByText("Purchases").nextSibling?.textContent).toBe("−₹3,000");
-  expect(screen.getByText("Payments").nextSibling?.textContent).toBe("+₹21,000");
+  expect(screen.getByText("Purchases").nextSibling?.textContent).toBe("−₹3,000.00");
+  expect(screen.getByText("Payments").nextSibling?.textContent).toBe("+₹21,000.00");
   // A card bill paid from the bank is money in here, but grey, not green.
   const bill = (await screen.findByRole("button", { name: /^Edit Card bill/ })).closest("tr")!;
   expect(within(bill).getByText("+₹21,000.00").className).toContain("transfer");

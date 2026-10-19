@@ -50,19 +50,19 @@ it("groups rows by day and colours each day's net", async () => {
   await screen.findByRole("rowheader", { name: "Today" });
 
   // Spending only: red and minus. The transfer isn't counted.
-  const todayTotal = within(dayRow("Today")).getByText(/₹400/);
+  const todayTotal = within(dayRow("Today")).getByText(/₹400.00/);
   expect(todayTotal.className).toContain("neg-text");
-  expect(todayTotal.textContent).toMatch(/^−₹400/);
+  expect(todayTotal.textContent).toMatch(/^−₹400.00/);
 
   // Income beat spending: green net, with the breakdown underneath.
-  const mixed = within(dayRow("Yesterday")).getByText(/₹700/);
+  const mixed = within(dayRow("Yesterday")).getByText(/₹700.00/);
   expect(mixed.className).toContain("pos-text");
-  expect(mixed.textContent).toContain("Spent ₹300 · Income ₹1,000");
+  expect(mixed.textContent).toContain("Spent ₹300.00 · Income ₹1,000.00");
 
   // Came out even: neither red nor green.
   const even = dayRow(screen.getAllByRole("rowheader")[3].textContent!).querySelector(".day-total")!;
   expect(even.className).toContain("muted");
-  expect(even.textContent).toMatch(/^₹0/);
+  expect(even.textContent).toMatch(/^₹0.00/);
 });
 
 it("marks the last day 'so far' when more rows are still to load", async () => {

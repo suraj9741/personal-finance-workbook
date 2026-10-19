@@ -305,7 +305,7 @@ export function Transactions() {
                         </td>
                         <td className={`num ${t.type}`}>
                           {txSign(t.type)}
-                          {money(t.amount, true)}
+                          {money(t.amount)}
                         </td>
                         {showAddedBy && <td className="muted">{t.created_by_name}</td>}
                         <td className="actions">

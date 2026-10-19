@@ -340,7 +340,7 @@ export function AccountDetails() {
                       </td>
                       <td className={`num ${t.type}`}>
                         {sign(t)}
-                        {money(t.amount, true)}
+                        {money(t.amount)}
                       </td>
                       <td className="actions">
                         <button
