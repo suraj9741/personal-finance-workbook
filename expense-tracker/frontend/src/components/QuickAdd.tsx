@@ -1,8 +1,9 @@
+import { Amounts } from "./Amounts";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useEffect, useId, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import { Link } from "react-router-dom";
 import { api, post, type Suggestion, type Transaction, type TransactionInput } from "../api";
-import { categoryLabel, money, shiftDay, today } from "../format";
+import { DECIMALS_HINT, categoryLabel, money, shiftDay, today, tooManyDecimals } from "../format";
 import { useAccounts, useCategories, useRefreshMoney } from "../hooks";
 import { stillToRepeat } from "../repeat";
 import { AccountPicker } from "./AccountPicker";
@@ -74,7 +75,7 @@ export function QuickAdd() {
     mutationFn: (body: TransactionInput) => post<Transaction>("/transactions", body),
     onSuccess: (tx) => {
       const category = categories.find((c) => c.id === tx.category_id);
-      setMessage({ text: `Saved ${money(tx.amount, true)} · ${categoryLabel(category)}`, done: true });
+      setMessage({ text: `Saved ${money(tx.amount)} · ${categoryLabel(category)}`, done: true });
       setAmount("");
       setDescription("");
       setPicked(null);
@@ -140,6 +141,10 @@ export function QuickAdd() {
     event.preventDefault();
     // Enter pressed twice while the first save is in flight must not add it twice.
     if (saving.current || !amount || !account) return;
+    if (tooManyDecimals(amount)) {
+      setMessage({ text: DECIMALS_HINT, error: true });
+      return;
+    }
     saving.current = true;
     const body: TransactionInput = {
       date,
@@ -244,7 +249,7 @@ export function QuickAdd() {
             >
               <span>{s.description}</span>
               <small>
-                {categoryLabel(categories.find((c) => c.id === s.category_id))} · {money(s.amount)}
+                {categoryLabel(categories.find((c) => c.id === s.category_id))} · <Amounts>{money(s.amount)}</Amounts>
               </small>
             </li>
           ))}

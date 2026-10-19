@@ -1,3 +1,4 @@
+import { Amounts } from "../components/Amounts";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useEffect, useId, useMemo, useRef, useState, type FormEvent } from "react";
 import { Link, useSearchParams } from "react-router-dom";
@@ -6,7 +7,7 @@ import { BusyLabel } from "../components/FormBits";
 import { Meter } from "../components/Meter";
 import { MonthPicker } from "../components/MonthPicker";
 import { useToasts } from "../components/toast-context";
-import { budgetDiff, currentMonth, money, monthLabel, monthShort } from "../format";
+import { budgetDiff, currentMonth, money, monthLabel, monthShort, paise } from "../format";
 import { useCategories, useMe, useRefreshMoney } from "../hooks";
 import { Icon } from "../components/Icon";
 import { SegmentedRadio } from "../components/SegmentedRadio";
@@ -386,7 +387,7 @@ function BudgetSection({
     return [...map.entries()];
   }, [categories]);
   const headingId = useId();
-  const sum = (list: Category[], f: (c: Category) => number) => list.reduce((t, c) => t + f(c), 0);
+  const sum = (list: Category[], f: (c: Category) => number) => paise(list.reduce((t, c) => t + f(c), 0));
   // An amount still being fixed counts as nothing until it's a number.
   const budgetOf = (c: Category) => Number(value(c.id)) || 0;
   const actualOf = (c: Category) => actual.get(c.id) ?? 0;
@@ -424,7 +425,7 @@ function BudgetSection({
                     <Icon name="chevron-right" className="disclosure" />
                     <h3>{parent}</h3>
                     <span className={`budget-status ${group.tone}`}>
-                      {group.ratio === null ? `${money(total)} ${spentLabel.toLowerCase()}` : group.text}
+                      <Amounts>{group.ratio === null ? `${money(total)} ${spentLabel.toLowerCase()}` : group.text}</Amounts>
                     </span>
                     {group.ratio !== null && (
                       <span className="budget-group-meter">
@@ -482,12 +483,12 @@ function BudgetSection({
                         ) : (
                           <span className="num budget-amount">
                             <span className="sr-only">Budget </span>
-                            {budget ? money(budget) : "—"}
+                            <Amounts>{budget ? money(budget) : "—"}</Amounts>
                           </span>
                         )}
                         <span id={`${id}-spent`} className="num budget-spent">
                           <span className="sr-only">{spentLabel} </span>
-                          {money(spent)}
+                          <Amounts>{money(spent)}</Amounts>
                         </span>
                         <span id={`${id}-status`} className={`num budget-status ${s.tone}`}>
                           {s.ratio === null ? (
@@ -496,7 +497,7 @@ function BudgetSection({
                               <span className="sr-only">No budget</span>
                             </>
                           ) : (
-                            s.text
+                            <Amounts>{s.text}</Amounts>
                           )}
                         </span>
                         {s.ratio === null ? (
@@ -506,7 +507,9 @@ function BudgetSection({
                             <Meter ratio={s.ratio} tone={kind === "income" ? "income" : undefined} />
                           </span>
                         )}
-                        <small className="budget-caption muted">{caption}</small>
+                        <small className="budget-caption muted">
+                          <Amounts>{caption}</Amounts>
+                        </small>
                         {bad && (
                           <p id={`${id}-error`} className="field-error budget-error">
                             Enter a number, like 5000.
@@ -532,7 +535,7 @@ function BudgetSummary({ kind, budget, actual }: { kind: Kind; budget: number; a
     return (
       <div className="budget-summary">
         <p className="budget-summary-figure">
-          {kind === "expense" ? "Spent" : "Earned"} {money(actual)}
+          {kind === "expense" ? "Spent" : "Earned"} <Amounts>{money(actual)}</Amounts>
         </p>
         <p className="muted small">No budget set for this month yet.</p>
       </div>
@@ -542,13 +545,17 @@ function BudgetSummary({ kind, budget, actual }: { kind: Kind; budget: number; a
   return (
     <div className="budget-summary">
       <p className={`budget-summary-figure ${s.tone === "bad" ? "bad" : ""}`}>
-        {kind === "income"
-          ? `Earned ${money(actual)} of ${money(budget)} planned`
-          : d < 0
-            ? `${money(-d)} over ${money(budget)}`
-            : `${money(d)} left of ${money(budget)}`}
+        <Amounts>
+          {kind === "income"
+            ? `Earned ${money(actual)} of ${money(budget)} planned`
+            : d < 0
+              ? `${money(-d)} over ${money(budget)}`
+              : `${money(d)} left of ${money(budget)}`}
+        </Amounts>
       </p>
-      <p className="muted small">{kind === "income" ? `${s.text} · ${share}` : `Spent ${money(actual)} · ${share}`}</p>
+      <p className="muted small">
+        <Amounts>{kind === "income" ? `${s.text} · ${share}` : `Spent ${money(actual)} · ${share}`}</Amounts>
+      </p>
       <Meter ratio={s.ratio} tone={kind === "income" ? "income" : undefined} size="lg" />
     </div>
   );

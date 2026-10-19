@@ -3,6 +3,7 @@ import { cleanup, fireEvent, render, screen, within } from "@testing-library/rea
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, expect, it, vi } from "vitest";
 import { App } from "./App";
+import { amountText } from "./test-utils";
 
 afterEach(() => {
   cleanup();
@@ -49,9 +50,9 @@ it("shows the dashboard and quick-add bar when logged in", async () => {
     return new Response(JSON.stringify(body), { status: 200 });
   });
   renderAt("/");
-  expect(await screen.findByText("₹60,000")).toBeTruthy();
+  expect(await screen.findByText(amountText("₹60,000.00"))).toBeTruthy();
   expect(screen.getByRole("heading", { level: 1, name: "Dashboard" })).toBeTruthy();
-  expect(screen.getByText("Spent this month").nextSibling?.textContent).toBe("₹40,000");
+  expect(screen.getByText("Spent this month").nextSibling?.textContent).toBe("₹40,000.00");
   expect(screen.getByRole("form", { name: "Quick add" })).toBeTruthy();
   expect(await screen.findByText("2 entries have no category")).toBeTruthy();
   expect(screen.getByRole("link", { name: "Admin" })).toBeTruthy();
@@ -93,12 +94,12 @@ it("shows budget, spent and what's left for expense and income", async () => {
   renderAt("/budgets");
   const left = (name: string) => screen.getByLabelText(`${name} budget`).closest(".budget-line")!.querySelector(".budget-status")!.textContent;
   await screen.findByLabelText("Everyday Food budget");
-  expect(left("Everyday Food")).toBe("₹1,800 left");
+  expect(left("Everyday Food")).toBe("₹1,800.00 left");
   expect(left("Debt Tax")).toBe("—No budget");
-  expect(left("Wages Paycheck")).toBe("₹2,000 above");
-  expect(screen.getByText("Set in Sept 2026 · ₹1,000 from Dec 2026")).toBeTruthy();
-  expect(screen.getByText("₹1,800 left of ₹3,000")).toBeTruthy();
-  expect(screen.getByText("Earned ₹52,000 of ₹50,000 planned")).toBeTruthy();
+  expect(left("Wages Paycheck")).toBe("₹2,000.00 above");
+  expect(screen.getByText(amountText("Set in Sept 2026 · ₹1,000.00 from Dec 2026"))).toBeTruthy();
+  expect(screen.getByText(amountText("₹1,800.00 left of ₹3,000.00"))).toBeTruthy();
+  expect(screen.getByText(amountText("Earned ₹52,000.00 of ₹50,000.00 planned"))).toBeTruthy();
 });
 
 const ACCOUNTS = [
@@ -147,11 +148,11 @@ it("lists accounts grouped by type with counts and figures", async () => {
   const banks = (await screen.findByText("Bank accounts", { selector: "h2" })).closest(".card") as HTMLElement;
   expect(within(banks).getByText("3 accounts")).toBeTruthy();
   // The group total and HDFC, the one bank with money in it.
-  expect(within(banks).getAllByText("₹42,000")).toHaveLength(2);
+  expect(within(banks).getAllByText(amountText("₹42,000.00"))).toHaveLength(2);
   expect(within(banks).queryByText("Old SBI")).toBeNull();
   const cards = screen.getByText("Credit cards", { selector: "h2" }).closest(".card") as HTMLElement;
-  expect(within(cards).getByText("owed · ₹75,000 available")).toBeTruthy();
-  expect(within(cards).getByText("₹25,000 owed")).toBeTruthy();
+  expect(within(cards).getByText(amountText("owed · ₹75,000.00 available"))).toBeTruthy();
+  expect(within(cards).getByText(amountText("₹25,000.00 owed"))).toBeTruthy();
   const brokers = screen.getByText("Share market brokers", { selector: "h2" }).closest(".card") as HTMLElement;
   expect(within(brokers).getByText("invested · no value entered")).toBeTruthy();
 });
@@ -188,7 +189,7 @@ it("shows a bank total below zero in red", async () => {
   renderAt("/");
   const overview = await screen.findByRole("region", { name: "Financial overview" });
   const label = within(overview).getByText("Total bank balance");
-  expect(label.nextSibling?.textContent).toBe("-₹300");
+  expect(label.nextSibling?.textContent).toBe("-₹300.00");
   expect(label.parentElement?.className).toContain("bad");
 });
 
@@ -196,16 +197,16 @@ it("shows the financial overview above the monthly dashboard", async () => {
   mockApi();
   renderAt("/");
   const overview = await screen.findByRole("region", { name: "Financial overview" });
-  expect(within(overview).getByText("Total bank balance").nextSibling?.textContent).toBe("₹42,000");
+  expect(within(overview).getByText("Total bank balance").nextSibling?.textContent).toBe("₹42,000.00");
   // Money held is green above zero (red below); the amount owed on cards stays plain.
   expect(within(overview).getByText("Total bank balance").parentElement?.className).toContain("good");
   expect(within(overview).getByText("Credit card outstanding").parentElement?.className).not.toMatch(/good|bad/);
   // Available credit is a note on the card tile now; Net cash and the month totals live in the hero.
-  expect(within(overview).getByText("Credit card outstanding").parentElement?.textContent).toContain("₹75,000 of limits still available, not cash");
+  expect(within(overview).getByText("Credit card outstanding").parentElement?.textContent).toContain("₹75,000.00 of limits still available, not cash");
   expect(within(overview).queryByText("Net cash position")).toBeNull();
   expect(within(overview).queryByText("Expenses this month")).toBeNull();
   expect(within(overview).getByRole("columnheader", { name: "All expenses (month)" })).toBeTruthy();
-  expect(screen.getByText("Net cash").nextSibling?.textContent).toBe("₹17,000");
+  expect(screen.getByText("Net cash").nextSibling?.textContent).toBe("₹17,000.00");
   expect(within(overview).getByText("Portfolio value").nextSibling?.textContent).toBe("Not valued");
   expect(within(overview).getByText("0 of 1 brokers have a value entered")).toBeTruthy();
   expect(within(overview).getByRole("link", { name: "HDFC CC" }).getAttribute("href")).toBe("/accounts/a4");
@@ -222,11 +223,12 @@ it("shows an account's figures and history on its page", async () => {
   );
   renderAt("/accounts/a4");
   expect(await screen.findByRole("heading", { name: /HDFC CC/ })).toBeTruthy();
-  expect(screen.getByText("Outstanding").nextSibling?.textContent).toBe("₹25,000");
+  expect(screen.getByText("Outstanding").nextSibling?.textContent).toBe("₹25,000.00");
   expect(screen.getByText("Next due").nextSibling?.textContent).toMatch(/^5 Nov/);
-  expect(screen.getByText("Payments").nextSibling?.textContent).toBe("+₹1,000");
+  expect(screen.getByText("Payments").nextSibling?.textContent).toBe("+₹1,000.00");
   expect((await screen.findByRole("link", { name: "HDFC" })).getAttribute("href")).toBe("/accounts/a1");
-  expect(screen.getByText("+₹1,000.00")).toBeTruthy();
+  // The history row, now that the Payments figure also shows paise.
+  expect(screen.getAllByText(amountText("+₹1,000.00")).some((e) => e.className.includes("transfer"))).toBe(true);
   expect(screen.getByRole("button", { name: "Edit account" })).toBeTruthy();
 });
 

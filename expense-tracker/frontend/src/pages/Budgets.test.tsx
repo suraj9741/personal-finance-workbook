@@ -4,6 +4,7 @@ import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { ToastProvider } from "../components/Toast";
 import { Budgets } from "./Budgets";
+import { amountText } from "../test-utils";
 
 beforeEach(() => sessionStorage.clear());
 afterEach(() => {
@@ -57,11 +58,11 @@ const bar = () => screen.getByRole("region", { name: "Unsaved budgets" });
 it("shows each line in words, with a link to its entries and a note about uncounted entries", async () => {
   setup();
   const food = (await field("Food")).closest(".budget-line")!;
-  expect(food.querySelector(".budget-status")!.textContent).toBe("₹1,800 left");
-  expect(food.querySelector(".budget-caption")!.textContent).toBe("₹1,200 spent · ₹1,800 left");
+  expect(food.querySelector(".budget-status")!.textContent).toBe("₹1,800.00 left");
+  expect(food.querySelector(".budget-caption")!.textContent).toBe("₹1,200.00 spent · ₹1,800.00 left");
   expect(within(food as HTMLElement).getByRole("link", { name: "Food" }).getAttribute("href")).toBe("/transactions?month=2026-10&category_id=c1");
   expect((await field("Groceries")).closest(".budget-line")!.textContent).toContain("No budget");
-  expect(screen.getByText("₹1,800 left of ₹3,000")).toBeTruthy();
+  expect(screen.getByText(amountText("₹1,800.00 left of ₹3,000.00"))).toBeTruthy();
   expect((await screen.findByRole("link", { name: "Categorize them" })).getAttribute("href")).toBe("/transactions?month=2026-10&uncategorized=true");
 });
 
@@ -134,7 +135,7 @@ it("starts every group card closed with its status showing, and remembers the on
   expect(card.open).toBe(false);
   const head = card.querySelector("summary")!;
   expect(head.textContent).toContain("Everyday");
-  expect(head.querySelector(".budget-status")!.textContent).toBe("₹1,800 left");
+  expect(head.querySelector(".budget-status")!.textContent).toBe("₹1,800.00 left");
   fireEvent.click(head);
   await waitFor(() => expect(card.open).toBe(true));
   expect(localStorage.getItem("et:budgetsOpen")).toBe('["expense:Everyday"]');

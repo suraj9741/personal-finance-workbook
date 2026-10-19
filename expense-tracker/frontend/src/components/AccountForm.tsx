@@ -1,7 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 import { api, del, patch, post, type Account, type PayType } from "../api";
-import { ACCOUNT_GROUPS, GROUP_ICON, GROUP_LABEL, groupOf, type AccountGroup } from "../format";
+import { ACCOUNT_GROUPS, DECIMALS_HINT, GROUP_ICON, GROUP_LABEL, groupOf, tooManyDecimals, type AccountGroup } from "../format";
 import { forgetDraft, useDraft, useKeepDraft } from "../draft";
 import { focusFirstInvalid, invalidProps, splitServerError, type FieldErrors } from "../forms";
 import { useMe } from "../hooks";
@@ -103,14 +103,18 @@ export function AccountForm({ existing, group: initialGroup = "bank", onDone, on
     const found: FieldErrors = {};
     if (!form.name.trim()) found.name = "Give the account a name.";
     if (!isAmount(form.opening_balance)) found.opening_balance = "Enter a number, like 25000.";
+    else if (tooManyDecimals(form.opening_balance)) found.opening_balance = DECIMALS_HINT;
     if (group === "credit_card") {
       if (!isAmount(form.credit_limit)) found.credit_limit = "Enter a number, like 200000.";
+      else if (tooManyDecimals(form.credit_limit)) found.credit_limit = DECIMALS_HINT;
       if (!isDay(form.statement_day)) found.statement_day = "Use a day from 1 to 31.";
       if (!isDay(form.due_day)) found.due_day = "Use a day from 1 to 31.";
     }
     if (group === "share_broker") {
       if (!isAmount(form.opening_invested)) found.opening_invested = "Enter a number.";
+      else if (tooManyDecimals(form.opening_invested)) found.opening_invested = DECIMALS_HINT;
       if (!isAmount(form.current_value)) found.current_value = "Enter a number.";
+      else if (tooManyDecimals(form.current_value)) found.current_value = DECIMALS_HINT;
     }
     return found;
   }

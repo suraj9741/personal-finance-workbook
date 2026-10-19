@@ -1,7 +1,7 @@
 import { useMutation } from "@tanstack/react-query";
 import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 import { del, patch, post, type Transaction, type TransactionInput, type TxType } from "../api";
-import { TX_TYPE_LABEL, categoryKind, groupOf, money, today } from "../format";
+import { DECIMALS_HINT, TX_TYPE_LABEL, categoryKind, groupOf, money, today, tooManyDecimals } from "../format";
 import { forgetDraft, useDraft, useKeepDraft } from "../draft";
 import { focusFirstInvalid, invalidProps, splitServerError, type FieldErrors } from "../forms";
 import { useAccounts, useCategories, useRefreshMoney } from "../hooks";
@@ -31,6 +31,8 @@ function validate(form: TransactionInput): FieldErrors {
     else if (form.to_account_id === form.account_id) errors.to_account_id = "Pick a different account from the one it comes from.";
   }
   if (!(Number(form.amount) > 0)) errors.amount = "Enter an amount more than 0.";
+  else if (tooManyDecimals(form.amount)) errors.amount = DECIMALS_HINT;
+  if (form.type === "sell" && tooManyDecimals(form.cost_basis)) errors.cost_basis = DECIMALS_HINT;
   if (!form.date) errors.date = "Pick a date.";
   return errors;
 }

@@ -1,6 +1,7 @@
+import { Amounts } from "./Amounts";
 import { Link } from "react-router-dom";
 import type { AccountFigures, Overview } from "../api";
-import { GROUP_ICON, groupOf, money } from "../format";
+import { GROUP_ICON, groupOf, money, paise } from "../format";
 import { useOverview } from "../hooks";
 import { Kpi } from "./Kpi";
 import { Icon } from "./Icon";
@@ -9,7 +10,7 @@ import { Icon } from "./Icon";
 const balanceTone = (value: string) => (Number(value) > 0 ? "good" : Number(value) < 0 ? "bad" : undefined);
 
 const sum = (rows: AccountFigures[], pick: (r: AccountFigures) => string | null) =>
-  rows.reduce((total, r) => total + Number(pick(r) ?? 0), 0);
+  paise(rows.reduce((total, r) => total + Number(pick(r) ?? 0), 0));
 
 /** Active accounts, plus inactive ones that had activity this month (history stays visible). */
 function shown(overview: Overview, group: "bank" | "credit_card" | "share_broker") {
@@ -46,7 +47,7 @@ const Chevron = () => (
 function Signed({ value }: { value: string | number | null }) {
   if (value === null) return <span className="muted">—</span>;
   const n = Number(value);
-  return <span className={n < 0 ? "neg-text" : n > 0 ? "pos-text" : ""}>{n > 0 ? "+" : ""}{money(n)}</span>;
+  return <span className={n < 0 ? "neg-text" : n > 0 ? "pos-text" : ""}>{n > 0 ? "+" : ""}<Amounts>{money(n)}</Amounts></span>;
 }
 
 /** Where all the money is: cards for totals, then a table per account type. */
@@ -121,10 +122,10 @@ export function FinancialOverview({ month }: { month: string }) {
                 {banks.map((r) => (
                   <tr key={r.account.id} className="link-row">
                     <td><AccountLink row={r} /></td>
-                    <td data-label="Opening balance" className="num">{money(r.account.opening_balance)}</td>
-                    <td data-label="Current balance" className={`num ${Number(r.balance) < 0 ? "expense" : ""}`}>{money(r.balance)}</td>
-                    <td data-label="All income (month)" className="num">{money(r.month_income)}</td>
-                    <td data-label="All expenses (month)" className="num">{money(r.month_expenses)}</td>
+                    <td data-label="Opening balance" className="num"><Amounts>{money(r.account.opening_balance)}</Amounts></td>
+                    <td data-label="Current balance" className={`num ${Number(r.balance) < 0 ? "expense" : ""}`}><Amounts>{money(r.balance)}</Amounts></td>
+                    <td data-label="All income (month)" className="num"><Amounts>{money(r.month_income)}</Amounts></td>
+                    <td data-label="All expenses (month)" className="num"><Amounts>{money(r.month_expenses)}</Amounts></td>
                     <Chevron />
                   </tr>
                 ))}
@@ -133,9 +134,9 @@ export function FinancialOverview({ month }: { month: string }) {
                 <tr>
                   <th>Total</th>
                   <th />
-                  <th data-label="Current balance" className="num">{money(t.bank_balance)}</th>
-                  <th data-label="All income (month)" className="num">{money(sum(banks, (r) => r.month_income))}</th>
-                  <th data-label="All expenses (month)" className="num">{money(sum(banks, (r) => r.month_expenses))}</th>
+                  <th data-label="Current balance" className="num"><Amounts>{money(t.bank_balance)}</Amounts></th>
+                  <th data-label="All income (month)" className="num"><Amounts>{money(sum(banks, (r) => r.month_income))}</Amounts></th>
+                  <th data-label="All expenses (month)" className="num"><Amounts>{money(sum(banks, (r) => r.month_expenses))}</Amounts></th>
                   <th className="row-chevron" />
                 </tr>
               </tfoot>
@@ -173,11 +174,11 @@ export function FinancialOverview({ month }: { month: string }) {
                   {cards.map((r) => (
                     <tr key={r.account.id} className="link-row">
                       <td><AccountLink row={r} /></td>
-                      <td data-label="Credit limit" className="num">{money(r.account.credit_limit)}</td>
-                      <td data-label="Outstanding" className="num">{money(r.outstanding)}</td>
-                      <td data-label="Available credit" className="num">{money(r.available_credit)}</td>
-                      <td data-label="Purchases (month)" className="num">{money(r.month_expenses)}</td>
-                      <td data-label="Payments (month)" className="num">{money(r.month_transfers_in)}</td>
+                      <td data-label="Credit limit" className="num"><Amounts>{money(r.account.credit_limit)}</Amounts></td>
+                      <td data-label="Outstanding" className="num"><Amounts>{money(r.outstanding)}</Amounts></td>
+                      <td data-label="Available credit" className="num"><Amounts>{money(r.available_credit)}</Amounts></td>
+                      <td data-label="Purchases (month)" className="num"><Amounts>{money(r.month_expenses)}</Amounts></td>
+                      <td data-label="Payments (month)" className="num"><Amounts>{money(r.month_transfers_in)}</Amounts></td>
                       <td data-label="Due date">
                         {r.next_due_date ?? <span className="muted">Not set</span>}
                         {r.account.statement_day && <small className="muted"> · statement on day {r.account.statement_day}</small>}
@@ -190,10 +191,10 @@ export function FinancialOverview({ month }: { month: string }) {
                   <tr>
                     <th>Total</th>
                     <th />
-                    <th data-label="Outstanding" className="num">{money(t.card_outstanding)}</th>
-                    <th data-label="Available credit" className="num">{money(t.available_credit)}</th>
-                    <th data-label="Purchases (month)" className="num">{money(sum(cards, (r) => r.month_expenses))}</th>
-                    <th data-label="Payments (month)" className="num">{money(sum(cards, (r) => r.month_transfers_in))}</th>
+                    <th data-label="Outstanding" className="num"><Amounts>{money(t.card_outstanding)}</Amounts></th>
+                    <th data-label="Available credit" className="num"><Amounts>{money(t.available_credit)}</Amounts></th>
+                    <th data-label="Purchases (month)" className="num"><Amounts>{money(sum(cards, (r) => r.month_expenses))}</Amounts></th>
+                    <th data-label="Payments (month)" className="num"><Amounts>{money(sum(cards, (r) => r.month_transfers_in))}</Amounts></th>
                     <th />
                     <th className="row-chevron" />
                   </tr>
@@ -235,12 +236,12 @@ export function FinancialOverview({ month }: { month: string }) {
                   {brokers.map((r) => (
                     <tr key={r.account.id} className="link-row">
                       <td><AccountLink row={r} /></td>
-                      <td data-label="Deposited" className="num">{money(r.deposited)}</td>
-                      <td data-label="Withdrawn" className="num">{money(r.withdrawn)}</td>
-                      <td data-label="Cash in account" className="num">{money(r.balance)}</td>
-                      <td data-label="Invested (cost)" className="num">{money(r.invested)}</td>
+                      <td data-label="Deposited" className="num"><Amounts>{money(r.deposited)}</Amounts></td>
+                      <td data-label="Withdrawn" className="num"><Amounts>{money(r.withdrawn)}</Amounts></td>
+                      <td data-label="Cash in account" className="num"><Amounts>{money(r.balance)}</Amounts></td>
+                      <td data-label="Invested (cost)" className="num"><Amounts>{money(r.invested)}</Amounts></td>
                       <td data-label="Current value" className="num">
-                        {r.current_value === null ? <span className="muted">Not entered</span> : money(r.current_value)}
+                        {r.current_value === null ? <span className="muted">Not entered</span> : <Amounts>{money(r.current_value)}</Amounts>}
                         {r.account.valued_on && <small className="muted"> · {r.account.valued_on}</small>}
                       </td>
                       <td data-label="Unrealized P/L" className="num"><Signed value={r.unrealized_pl} /></td>
@@ -257,9 +258,9 @@ export function FinancialOverview({ month }: { month: string }) {
                     <th>Total</th>
                     <th />
                     <th />
-                    <th data-label="Cash in account" className="num">{money(t.broker_cash)}</th>
-                    <th data-label="Invested (cost)" className="num">{money(t.invested)}</th>
-                    <th data-label="Current value" className="num">{t.portfolio_value === null ? "—" : money(t.portfolio_value)}</th>
+                    <th data-label="Cash in account" className="num"><Amounts>{money(t.broker_cash)}</Amounts></th>
+                    <th data-label="Invested (cost)" className="num"><Amounts>{money(t.invested)}</Amounts></th>
+                    <th data-label="Current value" className="num"><Amounts>{t.portfolio_value === null ? "—" : money(t.portfolio_value)}</Amounts></th>
                     <th data-label="Unrealized P/L" className="num">
                       {t.portfolio_value === null ? "—" : <Signed value={Number(t.portfolio_value) - Number(t.invested)} />}
                     </th>

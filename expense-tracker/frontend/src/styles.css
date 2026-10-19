@@ -732,6 +732,12 @@ th {
   background: transparent;
 }
 .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+/* Paise: same size so columns line up, just quieter. On the big numbers they shrink instead. */
+.amt-frac { opacity: var(--money-frac-opacity); }
+.hero-value .amt-frac,
+.kpi-value .amt-frac,
+.acct-hero-figure .amt-frac,
+.budget-summary-figure .amt-frac { font-size: var(--money-frac-size); opacity: 1; }
 td.income { color: var(--color-income); }
 td.expense { color: var(--color-expense); }
 td.refund, td.sell { color: var(--color-income); }

@@ -1,19 +1,27 @@
 import type { Account, Category, PayType, TxType } from "./api";
 import type { IconName } from "./components/Icon";
 
-const inr = new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 });
-const inrExact = new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", minimumFractionDigits: 2 });
+const inr = new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-/** ₹1,08,811 (Indian digit grouping). */
-export function money(value: string | number | null | undefined, exact = false): string {
+/**
+ * A sum the browser worked out, rounded to paise. Adding decimals in JavaScript leaves tiny
+ * leftovers (0.1 + 0.2), and a leftover like −0.0000001 would otherwise read as below zero.
+ */
+export const paise = (n: number): number => Math.round(n * 100) / 100 || 0;
+
+/** ₹1,08,811.50 (Indian digit grouping, always with paise). */
+export function money(value: string | number | null | undefined): string {
   if (value === null || value === undefined || value === "") return "—";
-  const n = typeof value === "number" ? value : Number(value);
-  return (exact ? inrExact : inr).format(n);
+  return inr.format(paise(typeof value === "number" ? value : Number(value)));
 }
+
+/** Text typed into an amount field that has more than the 2 decimals money can have. */
+export const tooManyDecimals = (v: string | null | undefined): boolean => /\.\d{3,}/.test((v ?? "").trim());
+export const DECIMALS_HINT = "Use up to 2 decimals, like 149.50.";
 
 /** Budget minus spent for an expense, earned minus budget for income: positive is good. */
 export function budgetDiff(kind: "expense" | "income", budget: number, actual: number): number {
-  return kind === "expense" ? budget - actual : actual - budget;
+  return paise(kind === "expense" ? budget - actual : actual - budget);
 }
 
 export function percent(rate: number | null): string {
@@ -41,9 +49,9 @@ export function monthLabel(month: string): string {
 }
 
 /** "+₹1,800" or "−₹1,800" with a real minus sign (money() prints a hyphen); zero has no sign. */
-export function signedMoney(value: string | number, exact = false): string {
-  const n = Number(value);
-  return `${n > 0 ? "+" : n < 0 ? "−" : ""}${money(Math.abs(n), exact)}`;
+export function signedMoney(value: string | number): string {
+  const n = paise(Number(value));
+  return `${n > 0 ? "+" : n < 0 ? "−" : ""}${money(Math.abs(n))}`;
 }
 
 /** "+10%" or "−2%" for a change as a share of what it's measured on (0.1 → "+10%"). */
@@ -155,7 +163,7 @@ export function dayTotals(rows: { type: TxType; amount: string }[]): { spent: nu
     else if (r.type === "refund") spent -= n;
     else if (r.type === "income") earned += n;
   }
-  return { spent, earned, net: earned - spent };
+  return { spent: paise(spent), earned: paise(earned), net: paise(earned - spent) };
 }
 
 /** The ISO date `delta` days from `iso`. */
@@ -168,7 +176,7 @@ export function shiftDay(iso: string, delta: number): string {
 /** money() with a real minus sign, so a negative reads −₹5,000 rather than -₹5,000. */
 export function minusMoney(value: string | number | null | undefined): string {
   if (value === null || value === undefined || value === "") return "—";
-  const n = Number(value);
+  const n = paise(Number(value));
   return n < 0 ? `−${money(-n)}` : money(n);
 }
 
@@ -184,7 +192,7 @@ export function budgetSplit(lines: { kind: string; stats_group: string; budget: 
     if (line.stats_group === "spend") spend += Number(line.budget);
     else if (line.stats_group === "saving") saving += Number(line.budget);
   }
-  return { spend, saving };
+  return { spend: paise(spend), saving: paise(saving) };
 }
 
 /** A budget bar's state: under budget (""), close to it from 90% ("warn"), or past it ("over"). */
