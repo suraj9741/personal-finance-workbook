@@ -1,3 +1,4 @@
+import { Amounts } from "../components/Amounts";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
@@ -305,7 +306,7 @@ export function Transactions() {
                         </td>
                         <td className={`num ${t.type}`}>
                           {txSign(t.type)}
-                          {money(t.amount)}
+                          <Amounts>{money(t.amount)}</Amounts>
                         </td>
                         {showAddedBy && <td className="muted">{t.created_by_name}</td>}
                         <td className="actions">
@@ -362,9 +363,11 @@ function DayTotal({ net, spent, earned, partial }: { net: number; spent: number;
   return (
     <span className={`day-total ${tone}`} title={detail || undefined}>
       {net < 0 ? "−" : net > 0 ? "+" : ""}
-      {money(Math.abs(net))}
+      <Amounts>{money(Math.abs(net))}</Amounts>
       {partial && <span className="muted"> so far</span>}
-      {detail && <small className="day-detail">{detail}</small>}
+      {detail && <small className="day-detail">
+          <Amounts>{detail}</Amounts>
+        </small>}
     </span>
   );
 }

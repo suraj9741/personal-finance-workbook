@@ -96,6 +96,10 @@
 
   --text-kpi-size: 1.5rem;
 
+  /* Paise read quieter than rupees: faded in lists, smaller on the big numbers. */
+  --money-frac-opacity: 0.6;
+  --money-frac-size: 0.6em;
+
   /* ---- dashboard ---- */
   /* The three big numbers; one step smaller under 1024px. */
   --text-hero-size: var(--text-display-size);

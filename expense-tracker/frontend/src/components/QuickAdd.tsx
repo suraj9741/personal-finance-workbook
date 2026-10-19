@@ -1,3 +1,4 @@
+import { Amounts } from "./Amounts";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useEffect, useId, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import { Link } from "react-router-dom";
@@ -248,7 +249,7 @@ export function QuickAdd() {
             >
               <span>{s.description}</span>
               <small>
-                {categoryLabel(categories.find((c) => c.id === s.category_id))} · {money(s.amount)}
+                {categoryLabel(categories.find((c) => c.id === s.category_id))} · <Amounts>{money(s.amount)}</Amounts>
               </small>
             </li>
           ))}

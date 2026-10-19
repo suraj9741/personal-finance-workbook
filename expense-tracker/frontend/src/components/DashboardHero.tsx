@@ -1,3 +1,4 @@
+import { Amounts } from "./Amounts";
 import { keepPreviousData, useQuery, type UseQueryResult } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { api, type MonthStats, type Overview } from "../api";
@@ -50,7 +51,7 @@ export function DashboardHero({ month, stats }: { month: string; stats: UseQuery
       <dl className="hero">
         <div className={`hero-item ${o && !noAccounts && netCash < 0 ? "bad" : ""}`}>
           <dt className="hero-label">Net cash</dt>
-          <dd className="hero-value">{overview.isPending ? <Skeleton /> : !o || noAccounts ? "—" : minusMoney(netCash)}</dd>
+          <dd className="hero-value">{overview.isPending ? <Skeleton /> : !o || noAccounts ? "—" : <Amounts>{minusMoney(netCash)}</Amounts>}</dd>
           {noAccounts ? (
             <dd className="hero-detail">
               <Link to="/accounts">Add accounts</Link>
@@ -60,8 +61,8 @@ export function DashboardHero({ month, stats }: { month: string; stats: UseQuery
               <>
                 {netCash < 0 && <dd className="hero-detail neg-text">Cards owe more than the bank holds</dd>}
                 <dd className="hero-detail">
-                  Bank &amp; cash {money(o.totals.bank_balance)}{" "}
-                  {cardDues >= 0 ? `− card dues ${money(cardDues)}` : `+ card credit ${money(-cardDues)}`} · household, today
+                  Bank &amp; cash <Amounts>{money(o.totals.bank_balance)}</Amounts>{" "}
+                  <Amounts>{cardDues >= 0 ? `− card dues ${money(cardDues)}` : `+ card credit ${money(-cardDues)}`}</Amounts> · household, today
                   {month !== currentMonth() && `, not end of ${monthLabel(month)}`}
                 </dd>
               </>
@@ -71,15 +72,15 @@ export function DashboardHero({ month, stats }: { month: string; stats: UseQuery
 
         <div className="hero-item expense">
           <dt className="hero-label">Spent this month</dt>
-          <dd className="hero-value">{stats.isPending ? <Skeleton /> : minusMoney(s?.spend)}</dd>
+          <dd className="hero-value">{stats.isPending ? <Skeleton /> : <Amounts>{minusMoney(s?.spend)}</Amounts>}</dd>
           {s &&
             (me ? (
               <dd className="hero-detail">Budgets are household-wide</dd>
             ) : budget > 0 ? (
               <>
                 <dd className="hero-detail">
-                  of {money(budget)} budget ·{" "}
-                  {tone === "over" ? <span className="neg-text">{money(spent - budget)} over budget</span> : `${money(budget - spent)} left`}
+                  of <Amounts>{money(budget)}</Amounts> budget ·{" "}
+                  {tone === "over" ? <span className="neg-text"><Amounts>{money(spent - budget)}</Amounts> over budget</span> : <Amounts>{`${money(budget - spent)} left`}</Amounts>}
                 </dd>
                 {/* The words above say the same thing, so the meter is hidden from screen readers. */}
                 <dd className="hero-meter" aria-hidden="true">
@@ -95,16 +96,16 @@ export function DashboardHero({ month, stats }: { month: string; stats: UseQuery
 
         <div className={`hero-item ${s ? (saved < 0 ? "bad" : "good") : ""}`}>
           <dt className="hero-label">Saved this month</dt>
-          <dd className="hero-value">{stats.isPending ? <Skeleton /> : minusMoney(s?.saved)}</dd>
-          {s && saved < 0 && <dd className="hero-detail neg-text">Spent {money(-saved)} more than came in</dd>}
-          {s && <dd className="hero-detail">{income > 0 ? `${percent(s.savings_rate)} of income ${money(income)}` : "No income recorded"}</dd>}
+          <dd className="hero-value">{stats.isPending ? <Skeleton /> : <Amounts>{minusMoney(s?.saved)}</Amounts>}</dd>
+          {s && saved < 0 && <dd className="hero-detail neg-text">Spent <Amounts>{money(-saved)}</Amounts> more than came in</dd>}
+          {s && <dd className="hero-detail"><Amounts>{income > 0 ? `${percent(s.savings_rate)} of income ${money(income)}` : "No income recorded"}</Amounts></dd>}
         </div>
       </dl>
 
       <dl className="figures">
         <div>
           <dt>Income</dt>
-          <dd className="pos-text">{money(s?.income)}</dd>
+          <dd className="pos-text"><Amounts>{money(s?.income)}</Amounts></dd>
         </div>
         <div>
           <dt>Savings rate</dt>
@@ -112,15 +113,15 @@ export function DashboardHero({ month, stats }: { month: string; stats: UseQuery
         </div>
         <div>
           <dt>Invested</dt>
-          <dd>{money(s?.invested)}</dd>
+          <dd><Amounts>{money(s?.invested)}</Amounts></dd>
         </div>
         <div>
           <dt>Lent</dt>
-          <dd>{money(s?.lent)}</dd>
+          <dd><Amounts>{money(s?.lent)}</Amounts></dd>
         </div>
         <div>
           <dt>Repaid to you</dt>
-          <dd>{money(s?.repaid)}</dd>
+          <dd><Amounts>{money(s?.repaid)}</Amounts></dd>
         </div>
       </dl>
       {/* The account tables count every entry by type and are household-wide; these sums say how that relates. */}
@@ -129,8 +130,8 @@ export function DashboardHero({ month, stats }: { month: string; stats: UseQuery
         {s && o && !me && (
           <>
             {" "}
-            All expense entries: {money(o.totals.month_expenses)} = spent + invested + lent. All income entries:{" "}
-            {money(o.totals.month_income)} = income + repaid.
+            All expense entries: <Amounts>{money(o.totals.month_expenses)}</Amounts> = spent + invested + lent. All income entries:{" "}
+            <Amounts>{money(o.totals.month_income)}</Amounts> = income + repaid.
           </>
         )}
         {me && " The account figures below are for the whole household."}

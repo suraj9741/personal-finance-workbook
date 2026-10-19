@@ -1,3 +1,4 @@
+import { Amounts } from "../components/Amounts";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { Link } from "react-router-dom";
@@ -101,11 +102,14 @@ export function Dashboard() {
               <li key={item.text}>
                 {item.to ? (
                   <Link className="attention-link" to={item.to}>
-                    {item.text}
+                    {/* One flex item, so the paise spans don't spread across the row. */}
+                    <span>
+                      <Amounts>{item.text}</Amounts>
+                    </span>
                     <Icon name="chevron-right" />
                   </Link>
                 ) : (
-                  item.text
+                  <Amounts>{item.text}</Amounts>
                 )}
               </li>
             ))}
@@ -127,8 +131,8 @@ export function Dashboard() {
               Budget vs actual{" "}
               {s && !me && (
                 <small className="muted">
-                  {split.spend > 0 ? `spending budget ${money(split.spend)}` : "no spending budget"}
-                  {split.saving > 0 && ` + ${money(split.saving)} planned savings`}
+                  <Amounts>{split.spend > 0 ? `spending budget ${money(split.spend)}` : "no spending budget"}</Amounts>
+                  {split.saving > 0 && <Amounts>{` + ${money(split.saving)} planned savings`}</Amounts>}
                 </small>
               )}
             </h3>
@@ -156,9 +160,9 @@ export function Dashboard() {
                       <Meter ratio={1} tone="muted" />
                     )}
                     <span className="bar-value">
-                      {money(actual)}
-                      {budget !== null && <small> / {money(budget)}</small>}
-                      {budget !== null && tone === "over" && <small className="bar-over">over by {money(actual - budget)}</small>}
+                      <Amounts>{money(actual)}</Amounts>
+                      {budget !== null && <small> / <Amounts>{money(budget)}</Amounts></small>}
+                      {budget !== null && tone === "over" && <small className="bar-over">over by <Amounts>{money(actual - budget)}</Amounts></small>}
                     </span>
                   </li>
                 );

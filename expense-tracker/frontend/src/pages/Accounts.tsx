@@ -1,3 +1,4 @@
+import { Amounts } from "../components/Amounts";
 import { useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import type { Account, AccountFigures, Overview } from "../api";
@@ -164,7 +165,7 @@ export function Accounts() {
                     {count} {count === 1 ? "account" : "accounts"}
                   </p>
                 </div>
-                {count > 0 && <span className="num account-group-total">{groupTotal(g, overview.data.totals)}</span>}
+                {count > 0 && <span className="num account-group-total"><Amounts>{groupTotal(g, overview.data.totals)}</Amounts></span>}
               </div>
               {items.length === 0 ? (
                 <p className="muted account-empty">
@@ -247,8 +248,14 @@ export function KeyFigure({ row }: { row: AccountFigures }) {
 function Figure({ value, caption, valueTone, captionTone }: { value: string; caption?: string; valueTone?: string; captionTone?: string }) {
   return (
     <span className="account-figure">
-      <span className={valueTone ? `num ${valueTone}` : "num"}>{value}</span>
-      {caption && <small className={captionTone ?? "muted"}>{caption}</small>}
+      <span className={valueTone ? `num ${valueTone}` : "num"}>
+        <Amounts>{value}</Amounts>
+      </span>
+      {caption && (
+        <small className={captionTone ?? "muted"}>
+          <Amounts>{caption}</Amounts>
+        </small>
+      )}
     </span>
   );
 }

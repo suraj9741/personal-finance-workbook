@@ -1,3 +1,4 @@
+import { Amounts } from "../components/Amounts";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { useState, type ReactNode } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
@@ -340,7 +341,7 @@ export function AccountDetails() {
                       </td>
                       <td className={`num ${t.type}`}>
                         {sign(t)}
-                        {money(t.amount)}
+                        <Amounts>{money(t.amount)}</Amounts>
                       </td>
                       <td className="actions">
                         <button
@@ -394,12 +395,12 @@ function Hero({ s, group, onUpdateValue }: { s: AccountFigures; group: AccountGr
     return (
       <div className="acct-hero">
         <p className="acct-hero-label">{owed < 0 ? "In credit" : "Outstanding"}</p>
-        <p className="acct-hero-figure">{money(Math.abs(owed))}</p>
+        <p className="acct-hero-figure"><Amounts>{money(Math.abs(owed))}</Amounts></p>
         {limit ? (
           <>
             <Meter ratio={Math.max(owed, 0) / limit} size="lg" />
             <p className={available < 0 ? "small neg-text" : "muted small"}>
-              {available < 0 ? `${money(-available)} over the limit of ${money(limit)}` : `${money(available)} available of ${money(limit)} · not cash`}
+              <Amounts>{available < 0 ? `${money(-available)} over the limit of ${money(limit)}` : `${money(available)} available of ${money(limit)} · not cash`}</Amounts>
             </p>
           </>
         ) : (
@@ -414,7 +415,7 @@ function Hero({ s, group, onUpdateValue }: { s: AccountFigures; group: AccountGr
         <div className="acct-hero">
           <p className="acct-hero-label">Current value</p>
           <p className="acct-hero-figure muted">No value entered</p>
-          <p className="muted small">{money(s.invested ?? 0)} invested. The app has no live prices.</p>
+          <p className="muted small"><Amounts>{money(s.invested ?? 0)}</Amounts> invested. The app has no live prices.</p>
           {onUpdateValue && (
             <button type="button" className="tinted small" onClick={onUpdateValue}>
               Update value
@@ -427,13 +428,13 @@ function Hero({ s, group, onUpdateValue }: { s: AccountFigures; group: AccountGr
     return (
       <div className="acct-hero">
         <p className="acct-hero-label">Current value</p>
-        <p className="acct-hero-figure">{money(s.current_value)}</p>
+        <p className="acct-hero-figure"><Amounts>{money(s.current_value)}</Amounts></p>
         <p className="muted small">
           <span className={gain > 0 ? "pos-text" : gain < 0 ? "neg-text" : undefined}>
-            {signedMoney(gain)}
+            <Amounts>{signedMoney(gain)}</Amounts>
             {base ? ` (${signedPercent(gain / base)})` : ""}
           </span>{" "}
-          on {money(base)} invested
+          on <Amounts>{money(base)}</Amounts> invested
         </p>
       </div>
     );
@@ -442,7 +443,7 @@ function Hero({ s, group, onUpdateValue }: { s: AccountFigures; group: AccountGr
   return (
     <div className="acct-hero">
       <p className="acct-hero-label">Balance</p>
-      <p className={balance < 0 ? "acct-hero-figure neg-text" : "acct-hero-figure"}>{balance < 0 ? signedMoney(balance) : money(balance)}</p>
+      <p className={balance < 0 ? "acct-hero-figure neg-text" : "acct-hero-figure"}><Amounts>{balance < 0 ? signedMoney(balance) : money(balance)}</Amounts></p>
     </div>
   );
 }
@@ -465,7 +466,7 @@ function Facts({ s, group }: { s: AccountFigures; group: AccountGroup }) {
               "Realized P/L",
               <>
                 <span className={Number(s.realized_pl) > 0 ? "pos-text" : Number(s.realized_pl) < 0 ? "neg-text" : undefined}>
-                  {s.realized_pl === null ? "—" : signedMoney(s.realized_pl)}
+                  <Amounts>{s.realized_pl === null ? "—" : signedMoney(s.realized_pl)}</Amounts>
                 </span>
                 {!s.realized_complete && <small className="muted"> Partial: some sells have no cost</small>}
               </>,
@@ -483,7 +484,7 @@ function Facts({ s, group }: { s: AccountFigures; group: AccountGroup }) {
       {facts.map(([label, value]) => (
         <div key={label}>
           <dt>{label}</dt>
-          <dd>{value}</dd>
+          <dd>{typeof value === "string" ? <Amounts>{value}</Amounts> : value}</dd>
         </div>
       ))}
     </dl>
@@ -524,8 +525,8 @@ function MonthFigures({ s, group }: { s: AccountFigures; group: AccountGroup }) 
         return (
           <div key={f.label}>
             <dt>{f.label}</dt>
-            <dd className={`num ${tone}`}>{signedMoney(f.out ? -n : n)}</dd>
-            {f.note && <dd className="acct-month-note">{f.note}</dd>}
+            <dd className={`num ${tone}`}><Amounts>{signedMoney(f.out ? -n : n)}</Amounts></dd>
+            {f.note && <dd className="acct-month-note"><Amounts>{f.note}</Amounts></dd>}
           </div>
         );
       })}

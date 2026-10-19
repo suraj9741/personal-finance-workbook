@@ -4,6 +4,7 @@ import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { ToastProvider } from "../components/Toast";
 import { Budgets } from "./Budgets";
+import { amountText } from "../test-utils";
 
 beforeEach(() => sessionStorage.clear());
 afterEach(() => {
@@ -61,7 +62,7 @@ it("shows each line in words, with a link to its entries and a note about uncoun
   expect(food.querySelector(".budget-caption")!.textContent).toBe("₹1,200.00 spent · ₹1,800.00 left");
   expect(within(food as HTMLElement).getByRole("link", { name: "Food" }).getAttribute("href")).toBe("/transactions?month=2026-10&category_id=c1");
   expect((await field("Groceries")).closest(".budget-line")!.textContent).toContain("No budget");
-  expect(screen.getByText("₹1,800.00 left of ₹3,000.00")).toBeTruthy();
+  expect(screen.getByText(amountText("₹1,800.00 left of ₹3,000.00"))).toBeTruthy();
   expect((await screen.findByRole("link", { name: "Categorize them" })).getAttribute("href")).toBe("/transactions?month=2026-10&uncategorized=true");
 });
 

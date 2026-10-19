@@ -3,6 +3,7 @@ import { cleanup, fireEvent, render, screen, within } from "@testing-library/rea
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, expect, it, vi } from "vitest";
 import { App } from "./App";
+import { amountText } from "./test-utils";
 
 afterEach(() => {
   cleanup();
@@ -49,7 +50,7 @@ it("shows the dashboard and quick-add bar when logged in", async () => {
     return new Response(JSON.stringify(body), { status: 200 });
   });
   renderAt("/");
-  expect(await screen.findByText("₹60,000.00")).toBeTruthy();
+  expect(await screen.findByText(amountText("₹60,000.00"))).toBeTruthy();
   expect(screen.getByRole("heading", { level: 1, name: "Dashboard" })).toBeTruthy();
   expect(screen.getByText("Spent this month").nextSibling?.textContent).toBe("₹40,000.00");
   expect(screen.getByRole("form", { name: "Quick add" })).toBeTruthy();
@@ -96,9 +97,9 @@ it("shows budget, spent and what's left for expense and income", async () => {
   expect(left("Everyday Food")).toBe("₹1,800.00 left");
   expect(left("Debt Tax")).toBe("—No budget");
   expect(left("Wages Paycheck")).toBe("₹2,000.00 above");
-  expect(screen.getByText("Set in Sept 2026 · ₹1,000.00 from Dec 2026")).toBeTruthy();
-  expect(screen.getByText("₹1,800.00 left of ₹3,000.00")).toBeTruthy();
-  expect(screen.getByText("Earned ₹52,000.00 of ₹50,000.00 planned")).toBeTruthy();
+  expect(screen.getByText(amountText("Set in Sept 2026 · ₹1,000.00 from Dec 2026"))).toBeTruthy();
+  expect(screen.getByText(amountText("₹1,800.00 left of ₹3,000.00"))).toBeTruthy();
+  expect(screen.getByText(amountText("Earned ₹52,000.00 of ₹50,000.00 planned"))).toBeTruthy();
 });
 
 const ACCOUNTS = [
@@ -147,11 +148,11 @@ it("lists accounts grouped by type with counts and figures", async () => {
   const banks = (await screen.findByText("Bank accounts", { selector: "h2" })).closest(".card") as HTMLElement;
   expect(within(banks).getByText("3 accounts")).toBeTruthy();
   // The group total and HDFC, the one bank with money in it.
-  expect(within(banks).getAllByText("₹42,000.00")).toHaveLength(2);
+  expect(within(banks).getAllByText(amountText("₹42,000.00"))).toHaveLength(2);
   expect(within(banks).queryByText("Old SBI")).toBeNull();
   const cards = screen.getByText("Credit cards", { selector: "h2" }).closest(".card") as HTMLElement;
-  expect(within(cards).getByText("owed · ₹75,000.00 available")).toBeTruthy();
-  expect(within(cards).getByText("₹25,000.00 owed")).toBeTruthy();
+  expect(within(cards).getByText(amountText("owed · ₹75,000.00 available"))).toBeTruthy();
+  expect(within(cards).getByText(amountText("₹25,000.00 owed"))).toBeTruthy();
   const brokers = screen.getByText("Share market brokers", { selector: "h2" }).closest(".card") as HTMLElement;
   expect(within(brokers).getByText("invested · no value entered")).toBeTruthy();
 });
@@ -227,7 +228,7 @@ it("shows an account's figures and history on its page", async () => {
   expect(screen.getByText("Payments").nextSibling?.textContent).toBe("+₹1,000.00");
   expect((await screen.findByRole("link", { name: "HDFC" })).getAttribute("href")).toBe("/accounts/a1");
   // The history row, now that the Payments figure also shows paise.
-  expect(screen.getAllByText("+₹1,000.00").some((e) => e.className.includes("transfer"))).toBe(true);
+  expect(screen.getAllByText(amountText("+₹1,000.00")).some((e) => e.className.includes("transfer"))).toBe(true);
   expect(screen.getByRole("button", { name: "Edit account" })).toBeTruthy();
 });
 
