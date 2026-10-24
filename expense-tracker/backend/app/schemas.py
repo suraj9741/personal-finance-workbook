@@ -171,6 +171,7 @@ class CategoryOut(Orm):
     stats_group: StatsGroup
     is_active: bool
     sort_order: int
+    is_family: bool
 
 
 class CategoryIn(Strict):
@@ -187,6 +188,13 @@ class CategoryPatchIn(Strict):
     stats_group: StatsGroup | None = None
     is_active: bool | None = None
     sort_order: int | None = None
+
+
+class FamilyGroupIn(Strict):
+    """Tick or untick one group (by name, expense and income alike) as family."""
+
+    parent_name: Name
+    is_family: bool
 
 
 class TemplateOut(Orm):
@@ -215,6 +223,11 @@ class AccountOut(Orm):
     visibility: Visibility
     owner_user_id: uuid.UUID | None
     is_active: bool
+
+
+class ValuationOut(Orm):
+    valued_on: date
+    value: Decimal
 
 
 class AccountFields(Strict):
@@ -431,6 +444,85 @@ class TrendPoint(BaseModel):
     spend: Decimal
     saved: Decimal
     savings_rate: float | None
+
+
+MonthStatus = Literal["untracked", "partial", "tracked", "future"]
+
+
+class YearMonth(BaseModel):
+    month: str
+    # untracked: before the first entry; partial: holds the first entry, not from the 1st;
+    # future: not started yet. Averages and "over N months" count partial and tracked only.
+    status: MonthStatus
+    income: Decimal
+    spend: Decimal
+    saved: Decimal
+    invested: Decimal
+    lent: Decimal
+    repaid: Decimal
+    # The spending budget in force that month (expense categories that count as spend).
+    budget: Decimal | None
+
+
+class YearGroup(BaseModel):
+    """One expense group's spending, with a figure per month (12, January first)."""
+
+    parent_name: str | None  # None: entries with no category
+    total: Decimal
+    months: list[Decimal]
+
+
+class YearBudgetCell(BaseModel):
+    budget: Decimal | None
+    actual: Decimal
+
+
+class YearBudgetRow(BaseModel):
+    parent_name: str
+    months: list[YearBudgetCell]
+
+
+class YearExpense(BaseModel):
+    id: uuid.UUID
+    date: dt.date
+    description: str | None
+    amount: Decimal
+    parent_name: str | None
+    sub_name: str | None
+    account_name: str | None
+
+
+class YearFamily(BaseModel):
+    parent_name: str
+    # Spent under the group (less refunds), and income entries under the same group name.
+    given: Decimal
+    received: Decimal
+
+
+class YearStats(BaseModel):
+    year: int
+    scope: Literal["household", "me"]
+    first_entry: date | None
+    income: Decimal
+    spend: Decimal
+    saved: Decimal
+    savings_rate: float | None
+    invested: Decimal
+    lent: Decimal
+    repaid: Decimal
+    # Budgets of the months so far (partial and tracked), to set Spent against.
+    budget_to_date: Decimal | None
+    months: list[YearMonth]
+    groups: list[YearGroup]
+    budget_grid: list[YearBudgetRow]
+    biggest: list[YearExpense]
+    big_count: int
+    big_total: Decimal
+    big_threshold: Decimal
+    family: list[YearFamily]
+    # Entries under Debt > Credit cards: counted as spend, but they likely double count.
+    card_bills_count: int
+    card_bills_total: Decimal
 
 
 class LoanOut(BaseModel):

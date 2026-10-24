@@ -5,7 +5,7 @@ from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import ColumnElement, and_, case, func, select
+from sqlalchemy import ColumnElement, and_, case, func, or_, select
 from sqlalchemy.orm import Session
 
 from app import balances
@@ -29,6 +29,13 @@ from app.schemas import (
     NextChange,
     OverviewOut,
     TrendPoint,
+    YearBudgetCell,
+    YearBudgetRow,
+    YearExpense,
+    YearFamily,
+    YearGroup,
+    YearMonth,
+    YearStats,
 )
 from app.services import add_months
 
@@ -36,6 +43,9 @@ router = APIRouter(tags=["stats"])
 
 ZERO = Decimal("0")
 OLD_LOAN_DAYS = 60
+# The year view lists this many of the largest expenses, and counts those of at least BIG_EXPENSE.
+TOP_EXPENSES = 10
+BIG_EXPENSE = Decimal("10000")
 
 
 def this_month() -> str:
@@ -349,6 +359,208 @@ def trend(
             )
         )
     return points
+
+
+# ---- year -----------------------------------------------------------------------------
+
+# Spending as the month figures count it: spend categories, plus expenses and refunds with none.
+IS_SPEND = or_(
+    Category.stats_group == "spend",
+    and_(Transaction.category_id.is_(None), Transaction.type.in_(("expense", "refund"))),
+)
+IS_CARD_BILL = and_(Category.parent_name == "Debt", Category.sub_name == "Credit cards")
+
+
+def month_status(start: date, end: date, first_entry: date | None, now: date) -> str:
+    if start > now:
+        return "future"
+    if first_entry is None or first_entry >= end:
+        return "untracked"
+    return "partial" if first_entry > start else "tracked"
+
+
+def spend_by_group_and_month(
+    db: Session, conditions: list[ColumnElement[bool]], start: date, end: date
+) -> dict[str | None, list[Decimal]]:
+    month = func.extract("month", Transaction.date)
+    rows = db.execute(
+        select(Category.parent_name, month, func.sum(SIGNED_AMOUNT))
+        .select_from(Transaction)
+        .outerjoin(Category, Category.id == Transaction.category_id)
+        .where(*conditions, IS_SPEND, Transaction.date >= start, Transaction.date < end)
+        .group_by(Category.parent_name, month)
+    )
+    groups: dict[str | None, list[Decimal]] = {}
+    for parent, index, total in rows:
+        groups.setdefault(parent, [ZERO] * 12)[int(index) - 1] = total or ZERO
+    return groups
+
+
+@router.get("/stats/year", response_model=YearStats)
+def year_stats(
+    year: int = Query(default_factory=lambda: today().year, ge=2000, le=2100),
+    scope: str = Query("household", pattern="^(household|me)$"),
+    ctx: Ctx = Depends(get_ctx),
+    db: Session = Depends(get_db),
+) -> YearStats:
+    """January to December: each month counted as /stats/month counts it, and the year as their sum.
+
+    Months before the first entry are "untracked", so a year that started in October doesn't read
+    as nine months of zero.
+    """
+    conditions = scoped(ctx, scope)
+    start, end = date(year, 1, 1), date(year + 1, 1, 1)
+    now = today()
+    first_entry = db.scalar(select(func.min(Transaction.date)).where(*conditions))
+    spend_categories: dict[uuid.UUID, str] = dict(
+        db.execute(
+            select(Category.id, Category.parent_name).where(
+                Category.household_id == ctx.household_id,
+                Category.kind == "expense",
+                Category.stats_group == "spend",
+            )
+        ).all()
+    )
+
+    months: list[YearMonth] = []
+    # Each group's budget per month; a group with no budgeted category has None that month.
+    group_budgets: dict[str, list[Decimal | None]] = {}
+    for index in range(12):
+        m_start = add_months(start, index)
+        m_end = add_months(m_start, 1)
+        totals = group_totals(db, conditions, m_start, m_end)
+        budget: Decimal | None = None
+        for category, amount in budgets_for(db, ctx, m_start).items():
+            parent = spend_categories.get(category)
+            if parent is None:
+                continue
+            budget = (budget or ZERO) + amount
+            row = group_budgets.setdefault(parent, [None] * 12)
+            row[index] = (row[index] or ZERO) + amount
+        income, spend = totals.get("earned", ZERO), totals.get("spend", ZERO)
+        months.append(
+            YearMonth(
+                month=month_key(m_start),
+                status=month_status(m_start, m_end, first_entry, now),
+                income=income,
+                spend=spend,
+                saved=income - spend,
+                invested=totals.get("saving", ZERO),
+                lent=totals.get("lent", ZERO),
+                repaid=totals.get("repaid", ZERO),
+                budget=budget,
+            )
+        )
+
+    spent = spend_by_group_and_month(db, conditions, start, end)
+    groups = sorted(
+        (YearGroup(parent_name=p, total=sum(m, ZERO), months=m) for p, m in spent.items()),
+        key=lambda g: (-g.total, g.parent_name or ""),
+    )
+    order = {g.parent_name: i for i, g in enumerate(groups)}
+    budget_grid = [
+        YearBudgetRow(
+            parent_name=parent,
+            months=[
+                YearBudgetCell(budget=b, actual=spent.get(parent, [ZERO] * 12)[i])
+                for i, b in enumerate(row)
+            ],
+        )
+        for parent, row in sorted(
+            group_budgets.items(), key=lambda item: (order.get(item[0], len(order)), item[0])
+        )
+    ]
+
+    in_year = [*conditions, Transaction.date >= start, Transaction.date < end]
+    big_rows = db.execute(
+        select(Transaction, Category.parent_name, Category.sub_name, Account.name)
+        .outerjoin(Category, Category.id == Transaction.category_id)
+        .outerjoin(Account, Account.id == Transaction.account_id)
+        .where(*in_year, IS_SPEND, Transaction.type == "expense")
+        .order_by(Transaction.amount.desc(), Transaction.date.desc())
+        .limit(TOP_EXPENSES)
+    ).all()
+    big_count, big_total = db.execute(
+        select(func.count(), func.sum(Transaction.amount))
+        .select_from(Transaction)
+        .outerjoin(Category, Category.id == Transaction.category_id)
+        .where(*in_year, IS_SPEND, Transaction.type == "expense", Transaction.amount >= BIG_EXPENSE)
+    ).one()
+
+    family_rows = db.execute(
+        select(Category.parent_name, Category.kind, func.sum(SIGNED_AMOUNT))
+        .select_from(Transaction)
+        .join(Category, Category.id == Transaction.category_id)
+        .where(*in_year, Category.is_family.is_(True))
+        .group_by(Category.parent_name, Category.kind)
+    ).all()
+    family_groups = db.scalars(
+        select(Category.parent_name)
+        .where(
+            Category.household_id == ctx.household_id,
+            Category.is_family.is_(True),
+            Category.kind == "expense",
+        )
+        .distinct()
+    ).all()
+    given = {p: t or ZERO for p, kind, t in family_rows if kind == "expense"}
+    received = {p: t or ZERO for p, kind, t in family_rows if kind == "income"}
+    family = sorted(
+        (
+            YearFamily(parent_name=p, given=given.get(p, ZERO), received=received.get(p, ZERO))
+            for p in family_groups
+        ),
+        key=lambda f: (-f.given, f.parent_name),
+    )
+
+    card_count, card_total = db.execute(
+        select(func.count(), func.sum(SIGNED_AMOUNT))
+        .select_from(Transaction)
+        .join(Category, Category.id == Transaction.category_id)
+        .where(*in_year, IS_CARD_BILL)
+    ).one()
+
+    def total(field: str) -> Decimal:
+        return sum((getattr(m, field) for m in months), ZERO)
+
+    income, spend = total("income"), total("spend")
+    so_far = [m.budget for m in months if m.status in ("partial", "tracked")]
+    return YearStats(
+        year=year,
+        scope=scope,
+        first_entry=first_entry,
+        income=income,
+        spend=spend,
+        saved=income - spend,
+        savings_rate=rate(income, income - spend),
+        invested=total("invested"),
+        lent=total("lent"),
+        repaid=total("repaid"),
+        budget_to_date=sum((b for b in so_far if b is not None), ZERO)
+        if any(b is not None for b in so_far)
+        else None,
+        months=months,
+        groups=groups,
+        budget_grid=budget_grid,
+        biggest=[
+            YearExpense(
+                id=tx.id,
+                date=tx.date,
+                description=tx.description,
+                amount=tx.amount,
+                parent_name=parent,
+                sub_name=sub,
+                account_name=account,
+            )
+            for tx, parent, sub, account in big_rows
+        ],
+        big_count=big_count or 0,
+        big_total=big_total or ZERO,
+        big_threshold=BIG_EXPENSE,
+        family=family,
+        card_bills_count=card_count or 0,
+        card_bills_total=card_total or ZERO,
+    )
 
 
 def outstanding_loans(db: Session, ctx: Ctx) -> list[LoanOut]:

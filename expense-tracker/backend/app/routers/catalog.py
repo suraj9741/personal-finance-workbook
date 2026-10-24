@@ -1,15 +1,17 @@
 """Categories, accounts and auto-categorization rules for the current household."""
 
 import uuid
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import exists, or_, select
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.db import get_db
 from app.deps import Ctx, get_ctx, not_found, require_owner
-from app.models import Account, Category, CategoryRule, Transaction
+from app.models import Account, AccountValuation, Category, CategoryRule, Transaction
 from app.schemas import (
     AccountIn,
     AccountOut,
@@ -17,9 +19,11 @@ from app.schemas import (
     CategoryIn,
     CategoryOut,
     CategoryPatchIn,
+    FamilyGroupIn,
     RuleIn,
     RuleOut,
     RulePatchIn,
+    ValuationOut,
 )
 
 router = APIRouter(tags=["catalog"])
@@ -96,6 +100,28 @@ def patch_category(
     return category
 
 
+@router.put("/categories/family", response_model=list[CategoryOut])
+def set_family_group(
+    body: FamilyGroupIn, ctx: Ctx = Depends(require_owner), db: Session = Depends(get_db)
+) -> list[Category]:
+    """Tick or untick a whole group as family: its expense and its income categories alike."""
+    categories = list(
+        db.scalars(
+            select(Category).where(
+                Category.household_id == ctx.household_id,
+                Category.parent_name == body.parent_name,
+                Category.kind != "transfer",
+            )
+        )
+    )
+    if not categories:
+        raise not_found("Category group not found")
+    for category in categories:
+        category.is_family = body.is_family
+    db.commit()
+    return categories
+
+
 @router.delete("/categories/{category_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_category(
     category_id: uuid.UUID, ctx: Ctx = Depends(require_owner), db: Session = Depends(get_db)
@@ -141,6 +167,22 @@ def check_type_fields(pay_type: str, values: dict[str, object]) -> None:
                 raise HTTPException(422, f"{', '.join(used)} only apply to {label}")
 
 
+def record_valuation(db: Session, account: Account) -> None:
+    """Keep the broker value just entered in the history, dated valued_on (today when empty).
+    A second value on the same date replaces the first."""
+    if account.current_value is None:
+        return
+    on = account.valued_on or datetime.now(UTC).date()
+    row = {"account_id": account.id, "valued_on": on, "value": account.current_value}
+    db.execute(
+        insert(AccountValuation)
+        .values(**row)
+        .on_conflict_do_update(
+            constraint="uq_account_valuations_date", set_={"value": row["value"]}
+        )
+    )
+
+
 @router.get("/accounts", response_model=list[AccountOut])
 def list_accounts(
     include_inactive: bool = False, ctx: Ctx = Depends(get_ctx), db: Session = Depends(get_db)
@@ -158,6 +200,16 @@ def read_account(
     return get_account(db, ctx, account_id)
 
 
+@router.get("/accounts/{account_id}/valuations", response_model=list[ValuationOut])
+def list_valuations(
+    account_id: uuid.UUID, ctx: Ctx = Depends(get_ctx), db: Session = Depends(get_db)
+) -> list[AccountValuation]:
+    """Every value entered for a broker, newest first."""
+    account = get_account(db, ctx, account_id)
+    query = select(AccountValuation).where(AccountValuation.account_id == account.id)
+    return list(db.scalars(query.order_by(AccountValuation.valued_on.desc())))
+
+
 @router.post("/accounts", response_model=AccountOut, status_code=status.HTTP_201_CREATED)
 def create_account(
     body: AccountIn, ctx: Ctx = Depends(get_ctx), db: Session = Depends(get_db)
@@ -172,6 +224,12 @@ def create_account(
     values["opening_invested"] = values["opening_invested"] or 0
     account = Account(household_id=ctx.household_id, owner_user_id=ctx.user.id, **values)
     db.add(account)
+    try:
+        db.flush()
+    except IntegrityError as exc:
+        db.rollback()
+        raise conflict("An account with that name and type already exists") from exc
+    record_valuation(db, account)
     commit_or_conflict(db, "An account with that name and type already exists")
     return account
 
@@ -188,12 +246,16 @@ def patch_account(
         raise HTTPException(status.HTTP_403_FORBIDDEN, "You can't change this account")
     changes = body.model_dump(exclude_unset=True)
     check_type_fields(account.pay_type, changes)
+    # The form sends every field on each save, so only a changed value or date is new history.
+    before = (account.current_value, account.valued_on)
     for field, value in changes.items():
         if value is None and field in REQUIRED_FIELDS:
             continue
         if value is None and field == "opening_invested":
             value = 0
         setattr(account, field, value)
+    if (account.current_value, account.valued_on) != before:
+        record_valuation(db, account)
     commit_or_conflict(db, "An account with that name and type already exists")
     return account
 

@@ -16,6 +16,7 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    false,
     func,
     true,
 )
@@ -172,6 +173,9 @@ class Category(Base):
     stats_group: Mapped[str] = mapped_column(String(10))
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     sort_order: Mapped[int] = mapped_column(Integer, default=0)
+    # Set per group (all its categories, expense and income) from Settings; the year view
+    # shows these groups as family.
+    is_family: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
 
 
 class Account(Base):
@@ -229,6 +233,25 @@ class Account(Base):
         ForeignKey("users.id", ondelete="SET NULL")
     )
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = created_at()
+
+
+class AccountValuation(Base):
+    """Every broker value the user enters, one per date, so past month ends keep their value
+    after current_value moves on. Written by the account routes; nothing here is estimated."""
+
+    __tablename__ = "account_valuations"
+    __table_args__ = (
+        UniqueConstraint("account_id", "valued_on", name="uq_account_valuations_date"),
+        CheckConstraint("value >= 0", name="value_valid"),
+    )
+
+    id: Mapped[uuid.UUID] = uuid_pk()
+    account_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("accounts.id", ondelete="CASCADE"), index=True
+    )
+    valued_on: Mapped[date] = mapped_column(Date)
+    value: Mapped[Decimal] = mapped_column(Numeric(14, 2))
     created_at: Mapped[datetime] = created_at()
 
 
