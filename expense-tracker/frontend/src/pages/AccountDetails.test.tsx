@@ -8,6 +8,7 @@ import { amountText } from "../test-utils";
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
+  vi.useRealTimers();
 });
 
 const ME = { id: "u1", email: "s@example.com", display_name: "Suraj", is_site_admin: false, household_id: "h1", household_name: "Home", role: "owner" };
@@ -29,16 +30,23 @@ const tx = (id: string, date: string, type: string, amount: string, extra: objec
   cost_basis: null, counterparty: null, notes: null, created_by: null, created_by_name: null, ...extra,
 });
 
-function setup(path: string) {
+const ITEMS = [tx("Card bill", "2026-10-05", "transfer", "21000.00", { account_id: "a1", to_account_id: "a4" }), tx("Swiggy", "2026-10-05", "expense", "300.00")];
+
+function setup(path: string, { summary = figures as object, items = ITEMS as object[], accounts = [BANK, CARD] as object[] } = {}) {
   const lists: URLSearchParams[] = [];
-  vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+  const patches: { url: string; body: unknown }[] = [];
+  vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
     const url = String(input);
     const search = new URL(url, "http://x").searchParams;
+    if (init?.method === "PATCH") {
+      patches.push({ url, body: JSON.parse(String(init.body)) });
+      return new Response(JSON.stringify(items[0]), { status: 200 });
+    }
     if (url.includes("/transactions")) lists.push(search);
     const body = url.includes("/auth/me") ? ME
-      : url.includes("/summary") ? figures
-      : url.includes("/transactions") ? { items: [tx("Card bill", "2026-10-05", "transfer", "21000.00", { account_id: "a1", to_account_id: "a4" }), tx("Swiggy", "2026-10-05", "expense", "300.00")], total: 2 }
-      : url.includes("/accounts") ? [BANK, CARD]
+      : url.includes("/summary") ? summary
+      : url.includes("/transactions") ? { items, total: items.length }
+      : url.includes("/accounts") ? accounts
       : [];
     return new Response(JSON.stringify(body), { status: 200 });
   });
@@ -52,7 +60,8 @@ function setup(path: string) {
       </MemoryRouter>
     </QueryClientProvider>,
   );
-  return () => lists[lists.length - 1];
+  const lastList = () => lists[lists.length - 1];
+  return Object.assign(lastList, { patches });
 }
 
 it("shows where you are, the card's one large number and its month, signed", async () => {
@@ -108,4 +117,42 @@ it("says plainly when the account doesn't exist", async () => {
   );
   expect(await screen.findByText("This account doesn't exist or isn't shared with you.")).toBeTruthy();
   expect(screen.getByRole("button", { name: "Back to accounts" })).toBeTruthy();
+});
+
+it("shows a card's statement, where each bill closes, and moves a late entry to the next bill", async () => {
+  vi.useFakeTimers({ toFake: ["Date"] });
+  vi.setSystemTime(new Date(2026, 9, 24, 12));
+  const card = account("a5", "Amazon Pay", "credit_card", { credit_limit: "100000.00", statement_day: 20 });
+  const summary = {
+    ...figures, account: card, statement_start: "2026-09-21", statement_end: "2026-10-20", statement_purchases: "450.00",
+    statement_refunds: "50.00", statement_payments: "900.00", statement_credits: "25.00", unbilled_since: "2026-10-21", unbilled: "470.00",
+  };
+  const items = [
+    tx("Swiggy", "2026-10-22", "expense", "70.00", { account_id: "a5" }),
+    tx("Amazon order", "2026-10-20", "expense", "300.00", { account_id: "a5" }),
+    tx("Petrol", "2026-10-18", "expense", "400.00", { account_id: "a5", posted_on: "2026-10-21" }),
+  ];
+  const { patches } = setup("/accounts/a5?month=2026-10", { summary, items, accounts: [BANK, card] });
+  expect(await screen.findByRole("heading", { level: 1, name: "Amazon Pay" })).toBeTruthy();
+  expect(screen.getByText("October statement").nextSibling?.textContent).toBe("−₹450.00");
+  expect(screen.getByText(amountText(/^21 Sept? – 20 Oct · after ₹50.00 refunds$/))).toBeTruthy();
+  expect(screen.getByText("Payments").nextSibling?.textContent).toBe("+₹900.00");
+  expect(screen.getByText("Unbilled").nextSibling?.textContent).toBe("−₹470.00");
+  expect(screen.getByText("21 Oct – today")).toBeTruthy();
+  // The line sits between the 22nd (next bill) and the 20th (October's bill).
+  expect(await screen.findByText("October bill closed on 20 Oct · newer entries go on the November bill")).toBeTruthy();
+  // Bought on the statement day: offered a move. Bought after it: nothing to move.
+  const swiggy = screen.getByRole("button", { name: /^Edit Swiggy/ }).closest("tr")!;
+  expect(within(swiggy).queryByRole("button", { name: "Move to next statement" })).toBeNull();
+  const order = screen.getByRole("button", { name: /^Edit Amazon order/ }).closest("tr")!;
+  fireEvent.click(within(order).getByRole("button", { name: "Move to next statement" }));
+  await waitFor(() => expect(patches).toHaveLength(1));
+  expect(patches[0].body).toEqual({ posted_on: "2026-10-21" });
+  // Already moved: it says where it went, and Undo clears the posted date.
+  const petrol = screen.getByRole("button", { name: /^Edit Petrol/ }).closest("tr")!;
+  expect(within(petrol).getByText("November bill")).toBeTruthy();
+  expect(within(petrol).getByText("Posted 21 Oct, so it counts on the November bill.")).toBeTruthy();
+  fireEvent.click(within(petrol).getByRole("button", { name: "Undo" }));
+  await waitFor(() => expect(patches).toHaveLength(2));
+  expect(patches[1].body).toEqual({ posted_on: null });
 });

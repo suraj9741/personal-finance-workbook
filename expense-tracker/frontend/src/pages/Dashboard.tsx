@@ -102,10 +102,7 @@ export function Dashboard() {
               <li key={item.text}>
                 {item.to ? (
                   <Link className="attention-link" to={item.to}>
-                    {/* One flex item, so the paise spans don't spread across the row. */}
-                    <span>
-                      <Amounts>{item.text}</Amounts>
-                    </span>
+                    <Amounts>{item.text}</Amounts>
                     <Icon name="chevron-right" />
                   </Link>
                 ) : (

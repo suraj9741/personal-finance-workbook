@@ -7,13 +7,16 @@ import {
   categoryKind,
   dayHeading,
   dayLabel,
+  dayRange,
   dayTotals,
   groupOf,
   minusMoney,
   money,
   percent,
+  monthName,
   shiftMonth,
   signedMoney,
+  statementFor,
   tooManyDecimals,
   txSign,
 } from "./format";
@@ -103,5 +106,15 @@ describe("format", () => {
       { type: "buy" as const, amount: "5000" },
     ];
     expect(dayTotals(rows)).toEqual({ spent: 400, earned: 1000, net: 600 });
+  });
+  it("finds the card statement a day lands on, with the statement day itself still counting", () => {
+    expect(statementFor("2026-10-20", 20)).toBe("2026-10-20");
+    expect(statementFor("2026-10-21", 20)).toBe("2026-11-20");
+    expect(statementFor("2026-09-21", 20)).toBe("2026-10-20");
+    // Day 31 is the month's last day in a short month, and December rolls into January.
+    expect(statementFor("2026-02-10", 31)).toBe("2026-02-28");
+    expect(statementFor("2026-12-06", 5)).toBe("2027-01-05");
+    expect(monthName("2026-10")).toBe("October");
+    expect(dayRange("2026-09-21", "2026-10-20", "2026-10-24")).toMatch(/^21 Sept? – 20 Oct$/);
   });
 });

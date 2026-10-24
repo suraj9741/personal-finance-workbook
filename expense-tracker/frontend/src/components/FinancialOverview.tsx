@@ -1,7 +1,7 @@
 import { Amounts } from "./Amounts";
 import { Link } from "react-router-dom";
 import type { AccountFigures, Overview } from "../api";
-import { GROUP_ICON, groupOf, money, paise } from "../format";
+import { GROUP_ICON, currentMonth, dayLabel, dayRange, groupOf, money, monthName, paise, today } from "../format";
 import { useOverview } from "../hooks";
 import { Kpi } from "./Kpi";
 import { Icon } from "./Icon";
@@ -21,6 +21,22 @@ function shown(overview: Overview, group: "bank" | "credit_card" | "share_broker
         [r.month_income, r.month_expenses, r.month_transfers_in, r.month_transfers_out, r.month_buys, r.month_sells].some(
           (v) => Number(v) !== 0,
         )),
+  );
+}
+
+/** A card's bill for the month: its statement when it has a statement day, else the calendar month. */
+const statementOf = (r: AccountFigures) => r.statement_purchases ?? r.month_expenses;
+const paymentsOf = (r: AccountFigures) => r.statement_payments ?? r.month_transfers_in;
+
+/** The dates under a card's statement figure, so it's clear which bill it is. */
+function StatementDates({ row }: { row: AccountFigures }) {
+  const now = today();
+  if (!row.statement_start || !row.statement_end) return <small className="cell-note">Calendar month · no statement day</small>;
+  return (
+    <small className="cell-note">
+      {dayRange(row.statement_start, row.statement_end, now)}
+      {row.statement_end >= now && " · so far"}
+    </small>
   );
 }
 
@@ -69,6 +85,7 @@ export function FinancialOverview({ month }: { month: string }) {
   const banks = shown(data, "bank");
   const cards = shown(data, "credit_card");
   const brokers = shown(data, "share_broker");
+  const current = month === currentMonth();
 
   return (
     <section className="overview" aria-label="Financial overview">
@@ -164,8 +181,15 @@ export function FinancialOverview({ month }: { month: string }) {
                     <th className="num">Credit limit</th>
                     <th className="num">Outstanding</th>
                     <th className="num">Available credit</th>
-                    <th className="num">Purchases (month)</th>
-                    <th className="num">Payments (month)</th>
+                    <th className="num">{monthName(month)} statement</th>
+                    <th className="num">
+                      Payments<small className="cell-note">same dates</small>
+                    </th>
+                    {current && (
+                      <th className="num">
+                        Unbilled<small className="cell-note">since statement</small>
+                      </th>
+                    )}
                     <th>Due date</th>
                     <th className="row-chevron" />
                   </tr>
@@ -177,11 +201,19 @@ export function FinancialOverview({ month }: { month: string }) {
                       <td data-label="Credit limit" className="num"><Amounts>{money(r.account.credit_limit)}</Amounts></td>
                       <td data-label="Outstanding" className="num"><Amounts>{money(r.outstanding)}</Amounts></td>
                       <td data-label="Available credit" className="num"><Amounts>{money(r.available_credit)}</Amounts></td>
-                      <td data-label="Purchases (month)" className="num"><Amounts>{money(r.month_expenses)}</Amounts></td>
-                      <td data-label="Payments (month)" className="num"><Amounts>{money(r.month_transfers_in)}</Amounts></td>
+                      <td data-label={`${monthName(month)} statement`} className="num">
+                        <Amounts>{money(statementOf(r))}</Amounts>
+                        <StatementDates row={r} />
+                      </td>
+                      <td data-label="Payments" className="num"><Amounts>{money(paymentsOf(r))}</Amounts></td>
+                      {current && (
+                        <td data-label="Unbilled" className="num">
+                          <Amounts>{money(r.unbilled)}</Amounts>
+                          {r.unbilled_since && <small className="cell-note">{dayLabel(r.unbilled_since)} – today</small>}
+                        </td>
+                      )}
                       <td data-label="Due date">
                         {r.next_due_date ?? <span className="muted">Not set</span>}
-                        {r.account.statement_day && <small className="muted"> · statement on day {r.account.statement_day}</small>}
                       </td>
                       <Chevron />
                     </tr>
@@ -193,8 +225,9 @@ export function FinancialOverview({ month }: { month: string }) {
                     <th />
                     <th data-label="Outstanding" className="num"><Amounts>{money(t.card_outstanding)}</Amounts></th>
                     <th data-label="Available credit" className="num"><Amounts>{money(t.available_credit)}</Amounts></th>
-                    <th data-label="Purchases (month)" className="num"><Amounts>{money(sum(cards, (r) => r.month_expenses))}</Amounts></th>
-                    <th data-label="Payments (month)" className="num"><Amounts>{money(sum(cards, (r) => r.month_transfers_in))}</Amounts></th>
+                    <th data-label={`${monthName(month)} statement`} className="num"><Amounts>{money(sum(cards, statementOf))}</Amounts></th>
+                    <th data-label="Payments" className="num"><Amounts>{money(sum(cards, paymentsOf))}</Amounts></th>
+                    {current && <th data-label="Unbilled" className="num"><Amounts>{money(sum(cards, (r) => r.unbilled))}</Amounts></th>}
                     <th />
                     <th className="row-chevron" />
                   </tr>
@@ -202,8 +235,10 @@ export function FinancialOverview({ month }: { month: string }) {
               </table>
             </div>
             <p className="muted small">
-              Available credit is what you can still borrow, not money you have. Purchases are less refunds; payments are
-              transfers into the card.
+              Available credit is what you can still borrow, not money you have. Each statement runs to the card's own
+              statement day, so the totals cover different dates per card; an entry the bank posted later counts on the bill
+              it was posted to. Statements are purchases less refunds; payments are transfers into the card.
+              {current && " Unbilled is what's on the next bill so far."}
             </p>
           </>
         )}

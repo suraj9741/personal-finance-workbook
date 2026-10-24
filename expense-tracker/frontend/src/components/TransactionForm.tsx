@@ -1,6 +1,6 @@
 import { useMutation } from "@tanstack/react-query";
 import { useEffect, useId, useRef, useState, type FormEvent } from "react";
-import { del, patch, post, type Transaction, type TransactionInput, type TxType } from "../api";
+import { del, patch, post, type Account, type Transaction, type TransactionInput, type TxType } from "../api";
 import { DECIMALS_HINT, TX_TYPE_LABEL, categoryKind, groupOf, money, today, tooManyDecimals } from "../format";
 import { forgetDraft, useDraft, useKeepDraft } from "../draft";
 import { focusFirstInvalid, invalidProps, splitServerError, type FieldErrors } from "../forms";
@@ -20,10 +20,14 @@ const TYPE_HINT: Partial<Record<TxType, string>> = {
   sell: "Shares or funds sold. Not income. Add what they cost to track realized profit.",
 };
 
-const FIELDS = ["amount", "date", "account_id", "to_account_id", "category_id", "description", "cost_basis", "counterparty", "notes"];
+const FIELDS = ["amount", "date", "posted_on", "account_id", "to_account_id", "category_id", "description", "cost_basis", "counterparty", "notes"];
+
+/** A card purchase or refund can carry the day the bank posted it, which picks its statement. */
+const takesPostedOn = (type: TxType, account: Account | undefined) =>
+  (type === "expense" || type === "refund") && account?.pay_type === "credit_card";
 
 /** What can be checked before sending; the server checks the rest. */
-function validate(form: TransactionInput): FieldErrors {
+function validate(form: TransactionInput, postedOn: boolean): FieldErrors {
   const errors: FieldErrors = {};
   if (!form.account_id) errors.account_id = "Choose an account.";
   if (form.type === "transfer") {
@@ -34,6 +38,7 @@ function validate(form: TransactionInput): FieldErrors {
   else if (tooManyDecimals(form.amount)) errors.amount = DECIMALS_HINT;
   if (form.type === "sell" && tooManyDecimals(form.cost_basis)) errors.cost_basis = DECIMALS_HINT;
   if (!form.date) errors.date = "Pick a date.";
+  else if (postedOn && form.posted_on && form.posted_on < form.date) errors.posted_on = "The bank can't post it before the day you bought it.";
   return errors;
 }
 
@@ -64,6 +69,7 @@ export function TransactionForm({ existing, accountId, onDone }: Props) {
     category_id: existing?.category_id ?? null,
     description: existing?.description ?? "",
     cost_basis: existing?.cost_basis ?? "",
+    posted_on: existing?.posted_on ?? "",
     counterparty: existing?.counterparty ?? "",
     notes: existing?.notes ?? "",
   }, !!existing);
@@ -98,6 +104,7 @@ export function TransactionForm({ existing, accountId, onDone }: Props) {
   }, [attempt]);
   const category = categories.find((c) => c.id === form.category_id);
   const needsPerson = category?.stats_group === "lent" || category?.stats_group === "repaid";
+  const postedOn = takesPostedOn(form.type, accounts.find((a) => a.id === (form.account_id || accounts[0]?.id)));
 
   const save = useMutation({
     mutationFn: () => {
@@ -107,6 +114,7 @@ export function TransactionForm({ existing, accountId, onDone }: Props) {
         to_account_id: form.type === "transfer" ? form.to_account_id : null,
         category_id: categoryKind(form.type) ? form.category_id : null,
         cost_basis: form.type === "sell" && form.cost_basis ? form.cost_basis : null,
+        posted_on: postedOn && form.posted_on ? form.posted_on : null,
         counterparty: form.counterparty || null,
         notes: form.notes || null,
       };
@@ -130,7 +138,7 @@ export function TransactionForm({ existing, accountId, onDone }: Props) {
     if (save.isPending) return;
     setError("");
     // Same fallback as the save: accounts can arrive after the form opened with none chosen.
-    const found = validate({ ...form, account_id: form.account_id || accounts[0]?.id || "" });
+    const found = validate({ ...form, account_id: form.account_id || accounts[0]?.id || "" }, postedOn);
     setErrors(found);
     if (Object.keys(found).length === 0) save.mutate();
     else setAttempt((n) => n + 1);
@@ -211,6 +219,23 @@ export function TransactionForm({ existing, accountId, onDone }: Props) {
         <input type="date" required value={form.date} onChange={(e) => set({ date: e.target.value })} {...field("date")} />
         <FieldError errors={errors} name="date" formId={formId} />
       </label>
+      {postedOn && (
+        <label>
+          Posted on (optional)
+          <input
+            type="date"
+            value={form.posted_on ?? ""}
+            min={form.date}
+            onChange={(e) => set({ posted_on: e.target.value })}
+            aria-describedby={`${formId}-posted-hint`}
+            {...field("posted_on")}
+          />
+          <small id={`${formId}-posted-hint`} className="muted">
+            Only if the bank posted it later. It decides which statement it lands on.
+          </small>
+          <FieldError errors={errors} name="posted_on" formId={formId} />
+        </label>
+      )}
       {categoryKind(form.type) && (
         <label>
           Category
