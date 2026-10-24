@@ -2,12 +2,12 @@ import { Amounts } from "../components/Amounts";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { api, patch, post, type Transaction } from "../api";
+import { api, patch, post, type Category, type Transaction } from "../api";
 import { accountItems } from "../components/account-items";
 import { CategoryPicker } from "../components/CategoryPicker";
 import { Modal } from "../components/Modal";
 import { MonthPicker } from "../components/MonthPicker";
-import { SearchPicker } from "../components/SearchPicker";
+import { SearchPicker, type PickerItem } from "../components/SearchPicker";
 import { useToasts } from "../components/toast-context";
 import { TransactionForm } from "../components/TransactionForm";
 import { TX_TYPE_LABEL, accountLabel, categoryKind, currentMonth, dayHeading, dayLabel, dayTotals, money, monthLabel, txSign } from "../format";
@@ -15,7 +15,30 @@ import { useAccounts, useCategories, useMembers, useRefreshMoney } from "../hook
 import { Icon } from "../components/Icon";
 
 const PAGE = 100;
-const FILTERS = ["q", "type", "category_id", "account_id", "created_by", "uncategorized"];
+const FILTERS = ["q", "type", "category_id", "category_group", "category_kind", "account_id", "created_by", "uncategorized"];
+
+// A whole group in the category filter: "group:expense:Everyday".
+const GROUP_PREFIX = "group:";
+
+/**
+ * The category filter's list: each group starts with an "All" row that picks the whole group,
+ * then its categories.
+ */
+function categoryFilterItems(categories: Category[]): PickerItem[] {
+  const groups = new Map<string, Category[]>();
+  for (const c of categories) {
+    const key = `${c.kind}:${c.parent_name}`;
+    groups.set(key, [...(groups.get(key) ?? []), c]);
+  }
+  return [...groups].flatMap(([key, members]) => {
+    const { kind, parent_name } = members[0];
+    // Income and transfer groups can share a name with an expense group (Gotu), so say which.
+    const group = kind === "expense" ? parent_name : `${TX_TYPE_LABEL[kind]} · ${parent_name}`;
+    const rows = members.map((c) => ({ id: c.id, label: c.sub_name, group }));
+    // A group of one is the same as its only category, so it needs no "All" row.
+    return members.length > 1 ? [{ id: GROUP_PREFIX + key, label: "All", group, hint: `${members.length} categories` }, ...rows] : rows;
+  });
+}
 
 type Page = { items: Transaction[]; total: number };
 type RowState = { kind: "category" | "rule"; status: "saving" | "saved" | "error"; message?: string; categoryId?: string | null };
@@ -69,9 +92,16 @@ export function Transactions() {
   }
 
   function setFilter(name: string, value: string) {
+    setFilters({ [name]: value });
+  }
+
+  /** Several filters at once; an empty value removes that filter. */
+  function setFilters(values: Record<string, string>) {
     const next = new URLSearchParams(params);
-    if (value) next.set(name, value);
-    else next.delete(name);
+    for (const [name, value] of Object.entries(values)) {
+      if (value) next.set(name, value);
+      else next.delete(name);
+    }
     setParams(next, { replace: true });
     setLimit(PAGE);
   }
@@ -157,14 +187,20 @@ export function Transactions() {
           none="All categories"
           showGroup
           icon="tag"
-          items={categories.map((c) => ({
-            id: c.id,
-            label: c.sub_name,
-            // Income and transfer groups can share a name with an expense group (Gotu), so say which.
-            group: c.kind === "expense" ? c.parent_name : `${TX_TYPE_LABEL[c.kind]} · ${c.parent_name}`,
-          }))}
-          value={params.get("category_id") || null}
-          onChange={(id) => setFilter("category_id", id ?? "")}
+          items={categoryFilterItems(categories)}
+          value={
+            params.get("category_group")
+              ? `${GROUP_PREFIX}${params.get("category_kind") ?? "expense"}:${params.get("category_group")}`
+              : params.get("category_id") || null
+          }
+          onChange={(id) => {
+            const [kind, ...name] = id?.startsWith(GROUP_PREFIX) ? id.slice(GROUP_PREFIX.length).split(":") : [];
+            setFilters({
+              category_id: id && !kind ? id : "",
+              category_group: name.join(":"),
+              category_kind: kind && kind !== "expense" ? kind : "",
+            });
+          }}
         />
         <SearchPicker
           label="Account filter"

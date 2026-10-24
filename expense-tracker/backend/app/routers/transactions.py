@@ -12,6 +12,7 @@ from app.deps import Ctx, get_ctx, not_found
 from app.models import Account, Category, CategoryRule, Transaction, User
 from app.routers.catalog import ensure_unique_pattern, get_account, get_category
 from app.schemas import (
+    Kind,
     Month,
     RuleOut,
     SuggestionOut,
@@ -106,6 +107,9 @@ def list_transactions(
     date_to: date | None = None,
     type: TxType | None = None,
     category_id: uuid.UUID | None = None,
+    # A whole group ("Everyday" of the expense categories): every category under it.
+    category_group: str | None = Query(None, max_length=60),
+    category_kind: Kind = "expense",
     account_id: uuid.UUID | None = None,
     created_by: uuid.UUID | None = None,
     uncategorized: bool = False,
@@ -130,6 +134,16 @@ def list_transactions(
         conditions.append(Transaction.type == type)
     if category_id:
         conditions.append(Transaction.category_id == category_id)
+    if category_group:
+        conditions.append(
+            Transaction.category_id.in_(
+                select(Category.id).where(
+                    Category.household_id == ctx.household_id,
+                    Category.kind == category_kind,
+                    Category.parent_name == category_group,
+                )
+            )
+        )
     if uncategorized:
         conditions += [
             Transaction.category_id.is_(None),
