@@ -282,7 +282,11 @@ export function SearchPicker({ items, value, onChange, label, none, showGroup = 
                   // Keep focus in the search box so the click doesn't blur it first.
                   onMouseDown={(e) => e.preventDefault()}
                   onMouseMove={() => index !== active && setActive(index)}
-                  onClick={() => choose(index)}
+                  onClick={(e) => {
+                    // Inside a <label> the click would also press the button again and reopen the list.
+                    e.preventDefault();
+                    choose(index);
+                  }}
                 >
                   {item?.logo ? (
                     <span className="search-picker-icon has-logo">

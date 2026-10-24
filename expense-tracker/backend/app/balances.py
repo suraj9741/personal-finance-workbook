@@ -15,6 +15,10 @@ When an account has an opening_date, only transactions on or after it count towa
 balance: the opening balance already covers what happened before. Month figures always use
 every transaction in the month.
 
+Balances "now" count entries dated up to today; one dated later (rent entered ahead for the
+31st) waits for its day. A bank's start and end of month balances count everything dated
+before the month and up to its last day, so start + the month's flows = end.
+
 A card with a statement day also gets statement figures: the statement that closes in the
 month runs from the day after the previous statement day to the statement day itself, and an
 entry lands on it by its posted date when it has one, else its purchase date.
@@ -200,7 +204,9 @@ def figures(
     db: Session, accounts: list[Account], month_start: date, month_end: date, today: date
 ) -> list[AccountFigures]:
     ids = [a.id for a in accounts]
-    all_time = _flows(db, ids, since_opening=True)
+    all_time = _flows(db, ids, Transaction.date <= today, since_opening=True)
+    before_month = _flows(db, ids, Transaction.date < month_start, since_opening=True)
+    to_month_end = _flows(db, ids, Transaction.date < month_end, since_opening=True)
     month = _flows(
         db,
         ids,
@@ -216,6 +222,7 @@ def figures(
         kind = account.pay_type
         net = f.net()
         balance = outstanding = available = invested = None
+        month_start_balance = month_end_balance = None
         deposited = withdrawn = value = unrealized = realized = None
         realized_complete = True
         if kind == "credit_card":
@@ -224,6 +231,8 @@ def figures(
                 available = max(account.credit_limit - outstanding, ZERO)
         else:
             balance = account.opening_balance + net
+            month_start_balance = account.opening_balance + before_month[account.id].net()
+            month_end_balance = account.opening_balance + to_month_end[account.id].net()
         if kind == "share_broker":
             sells = f.by_type["sell"]
             # Sells without a cost basis come off at their proceeds: the best that is known.
@@ -240,6 +249,8 @@ def figures(
             AccountFigures(
                 account=AccountOut.model_validate(account),
                 balance=balance,
+                balance_month_start=month_start_balance,
+                balance_month_end=month_end_balance,
                 outstanding=outstanding,
                 available_credit=available,
                 next_due_date=next_due_date(account.due_day, today)
@@ -278,6 +289,10 @@ def totals(rows: list[AccountFigures]) -> OverviewTotals:
     cards = [r for r in active if r.account.pay_type == "credit_card"]
     brokers = [r for r in active if r.account.pay_type == "share_broker"]
     bank_balance = sum((r.balance or ZERO for r in banks), ZERO)
+
+    def bank_sum(values: list[Decimal | None]) -> Decimal:
+        return sum((v or ZERO for v in values), ZERO)
+
     card_outstanding = sum((r.outstanding or ZERO for r in cards), ZERO)
     limits = [r.available_credit for r in cards if r.available_credit is not None]
     valued = [r.current_value for r in brokers if r.current_value is not None]
@@ -285,6 +300,8 @@ def totals(rows: list[AccountFigures]) -> OverviewTotals:
     # never in income or expenses, so summing the accounts can't double-count it.
     return OverviewTotals(
         bank_balance=bank_balance,
+        bank_balance_month_start=bank_sum([r.balance_month_start for r in banks]),
+        bank_balance_month_end=bank_sum([r.balance_month_end for r in banks]),
         card_outstanding=card_outstanding,
         available_credit=sum(limits, ZERO) if limits else None,
         broker_cash=sum((r.balance or ZERO for r in brokers), ZERO),

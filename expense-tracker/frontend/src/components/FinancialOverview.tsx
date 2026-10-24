@@ -1,7 +1,7 @@
 import { Amounts } from "./Amounts";
 import { Link } from "react-router-dom";
 import type { AccountFigures, Overview } from "../api";
-import { GROUP_ICON, currentMonth, dayLabel, dayRange, groupOf, money, monthName, paise, today } from "../format";
+import { GROUP_ICON, currentMonth, dayLabel, dayRange, groupOf, money, monthName, paise, signedMoney, today } from "../format";
 import { useOverview } from "../hooks";
 import { Kpi } from "./Kpi";
 import { Icon } from "./Icon";
@@ -60,6 +60,12 @@ const Chevron = () => (
   </td>
 );
 
+/** Money moved in from your other accounts less money moved out to them. */
+const transfersOf = (r: AccountFigures) => paise(Number(r.month_transfers_in) - Number(r.month_transfers_out));
+
+/** "₹-…" in red when an account has gone below zero. */
+const belowZero = (value: string | number | null) => (Number(value) < 0 ? "expense" : "");
+
 function Signed({ value }: { value: string | number | null }) {
   if (value === null) return <span className="muted">—</span>;
   const n = Number(value);
@@ -86,6 +92,9 @@ export function FinancialOverview({ month }: { month: string }) {
   const cards = shown(data, "credit_card");
   const brokers = shown(data, "share_broker");
   const current = month === currentMonth();
+  const short = monthName(month).slice(0, 3);
+  const [year, monthNumber] = month.split("-").map(Number);
+  const lastDay = `${month}-${new Date(year, monthNumber, 0).getDate()}`;
 
   return (
     <section className="overview" aria-label="Financial overview">
@@ -128,10 +137,20 @@ export function FinancialOverview({ month }: { month: string }) {
               <thead>
                 <tr>
                   <th>Bank account</th>
-                  <th className="num">Opening balance</th>
-                  <th className="num">Current balance</th>
-                  <th className="num">All income (month)</th>
-                  <th className="num">All expenses (month)</th>
+                  <th className="num">
+                    Start of {short}<small className="cell-note">{dayLabel(`${month}-01`)}</small>
+                  </th>
+                  <th className="num">Income</th>
+                  <th className="num">Expenses</th>
+                  <th className="num">
+                    Transfers<small className="cell-note">in − out</small>
+                  </th>
+                  <th className="num">
+                    End of {short}<small className="cell-note">{dayLabel(lastDay)}</small>
+                  </th>
+                  <th className="num today-col">
+                    Current balance<small className="cell-note">today, {dayLabel(today())}</small>
+                  </th>
                   <th className="row-chevron" />
                 </tr>
               </thead>
@@ -139,10 +158,12 @@ export function FinancialOverview({ month }: { month: string }) {
                 {banks.map((r) => (
                   <tr key={r.account.id} className="link-row">
                     <td><AccountLink row={r} /></td>
-                    <td data-label="Opening balance" className="num"><Amounts>{money(r.account.opening_balance)}</Amounts></td>
-                    <td data-label="Current balance" className={`num ${Number(r.balance) < 0 ? "expense" : ""}`}><Amounts>{money(r.balance)}</Amounts></td>
-                    <td data-label="All income (month)" className="num"><Amounts>{money(r.month_income)}</Amounts></td>
-                    <td data-label="All expenses (month)" className="num"><Amounts>{money(r.month_expenses)}</Amounts></td>
+                    <td data-label={`Start of ${short}`} className={`num ${belowZero(r.balance_month_start)}`}><Amounts>{money(r.balance_month_start)}</Amounts></td>
+                    <td data-label="Income" className="num"><Amounts>{money(r.month_income)}</Amounts></td>
+                    <td data-label="Expenses" className="num"><Amounts>{money(r.month_expenses)}</Amounts></td>
+                    <td data-label="Transfers" className="num"><Amounts>{signedMoney(transfersOf(r))}</Amounts></td>
+                    <td data-label={`End of ${short}`} className={`num ${belowZero(r.balance_month_end)}`}><Amounts>{money(r.balance_month_end)}</Amounts></td>
+                    <td data-label="Current balance" className={`num today-col ${belowZero(r.balance)}`}><Amounts>{money(r.balance)}</Amounts></td>
                     <Chevron />
                   </tr>
                 ))}
@@ -150,10 +171,12 @@ export function FinancialOverview({ month }: { month: string }) {
               <tfoot>
                 <tr>
                   <th>Total</th>
-                  <th />
-                  <th data-label="Current balance" className="num"><Amounts>{money(t.bank_balance)}</Amounts></th>
-                  <th data-label="All income (month)" className="num"><Amounts>{money(sum(banks, (r) => r.month_income))}</Amounts></th>
-                  <th data-label="All expenses (month)" className="num"><Amounts>{money(sum(banks, (r) => r.month_expenses))}</Amounts></th>
+                  <th data-label={`Start of ${short}`} className="num"><Amounts>{money(t.bank_balance_month_start)}</Amounts></th>
+                  <th data-label="Income" className="num"><Amounts>{money(sum(banks, (r) => r.month_income))}</Amounts></th>
+                  <th data-label="Expenses" className="num"><Amounts>{money(sum(banks, (r) => r.month_expenses))}</Amounts></th>
+                  <th data-label="Transfers" className="num"><Amounts>{signedMoney(sum(banks, (r) => String(transfersOf(r))))}</Amounts></th>
+                  <th data-label={`End of ${short}`} className="num"><Amounts>{money(t.bank_balance_month_end)}</Amounts></th>
+                  <th data-label="Current balance" className="num today-col"><Amounts>{money(t.bank_balance)}</Amounts></th>
                   <th className="row-chevron" />
                 </tr>
               </tfoot>
@@ -161,7 +184,12 @@ export function FinancialOverview({ month }: { month: string }) {
           </div>
         )}
         {banks.length > 0 && (
-          <p className="muted small">All income and all expenses count every entry on the account, including savings and lending.</p>
+          <p className="muted small">
+            Each row adds up: start + income − expenses ± transfers = end of {monthName(month)}, counting entries already
+            dated later in the month. Current balance counts entries up to today. Income and expenses count every entry on
+            the account, including savings and lending; transfers between your own banks cancel out in the total. Each
+            account's fixed opening balance is on its own page.
+          </p>
         )}
       </div>
 

@@ -93,3 +93,18 @@ it("searches in the field itself, then fades the list out before removing it", a
   expect(pop?.getAttribute("aria-hidden")).toBe("true");
   await waitFor(() => expect(container.querySelector(".search-picker-pop")).toBeNull());
 });
+
+it("closes after a pick when it sits inside a label, as in the full form", () => {
+  render(
+    <label>
+      Category <Picker />
+    </label>,
+  );
+  const button = screen.getByRole("button", { name: /^Category/ });
+  fireEvent.click(button);
+  // A browser would pass a click the picker didn't cancel on to the label's button, reopening the list.
+  const passedOn = fireEvent.click(within(screen.getByRole("listbox")).getByText("Fuel"));
+  expect(passedOn).toBe(false);
+  expect(button.getAttribute("aria-expanded")).toBe("false");
+  expect(button.textContent).toContain("Gotu › Fuel");
+});

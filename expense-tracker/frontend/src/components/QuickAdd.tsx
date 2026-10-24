@@ -7,6 +7,7 @@ import { DECIMALS_HINT, categoryLabel, money, shiftDay, today, tooManyDecimals }
 import { useAccounts, useCategories, useRefreshMoney } from "../hooks";
 import { stillToRepeat } from "../repeat";
 import { AccountPicker } from "./AccountPicker";
+import { DateInput } from "./DateInput";
 import { Icon } from "./Icon";
 
 const LAST_ACCOUNT = "et:lastAccount";
@@ -256,7 +257,7 @@ export function QuickAdd() {
         </ul>
       </span>
       <AccountPicker accounts={accounts} value={account} onChange={setAccountId} variant="compact" />
-      <input type="date" aria-label="Date" value={date} onChange={(e) => setDate(e.target.value)} />
+      <DateInput aria-label="Date" required value={date} onChange={setDate} />
       <button type="submit" className="primary" disabled={save.isPending}>
         {/* Both labels share one grid cell, so the button keeps the wider one's width. */}
         <span className="label-swap">
