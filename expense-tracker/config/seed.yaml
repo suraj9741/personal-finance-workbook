@@ -57,6 +57,8 @@ admin_household:
       Other: [Other]
     transfer:
       Self Transfer: [Bank to Bank, Bank to Credit, Credit to Bank, Cash to Bank, Bank to Cash, Broker to Bank, Bank to Broker, Credit to Cash]
+  # Groups the year view shows as family. Ticked once; untick or tick groups in Settings > Categories.
+  family: [Gotu, Mom, Baba, Pratiksha, Farm]
 
 # Households created from an invite start with no accounts and get these categories
 # (the list above without the family groups). Empty it ({}) to give new people

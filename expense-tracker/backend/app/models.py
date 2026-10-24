@@ -16,6 +16,7 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    false,
     func,
     true,
 )
@@ -172,6 +173,9 @@ class Category(Base):
     stats_group: Mapped[str] = mapped_column(String(10))
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     sort_order: Mapped[int] = mapped_column(Integer, default=0)
+    # Set per group (all its categories, expense and income) from Settings; the year view
+    # shows these groups as family.
+    is_family: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
 
 
 class Account(Base):

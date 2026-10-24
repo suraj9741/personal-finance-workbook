@@ -17,6 +17,7 @@ from app.schemas import (
     CategoryIn,
     CategoryOut,
     CategoryPatchIn,
+    FamilyGroupIn,
     RuleIn,
     RuleOut,
     RulePatchIn,
@@ -94,6 +95,28 @@ def patch_category(
         raise HTTPException(422, "Transfer categories use the transfer group, and only they do")
     commit_or_conflict(db, "That category already exists")
     return category
+
+
+@router.put("/categories/family", response_model=list[CategoryOut])
+def set_family_group(
+    body: FamilyGroupIn, ctx: Ctx = Depends(require_owner), db: Session = Depends(get_db)
+) -> list[Category]:
+    """Tick or untick a whole group as family: its expense and its income categories alike."""
+    categories = list(
+        db.scalars(
+            select(Category).where(
+                Category.household_id == ctx.household_id,
+                Category.parent_name == body.parent_name,
+                Category.kind != "transfer",
+            )
+        )
+    )
+    if not categories:
+        raise not_found("Category group not found")
+    for category in categories:
+        category.is_family = body.is_family
+    db.commit()
+    return categories
 
 
 @router.delete("/categories/{category_id}", status_code=status.HTTP_204_NO_CONTENT)
