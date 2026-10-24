@@ -23,6 +23,8 @@ export interface Category {
   stats_group: StatsGroup;
   is_active: boolean;
   sort_order: number;
+  /** Shown on the year view's Family cards; ticked per group in Settings. */
+  is_family: boolean;
 }
 export interface Account {
   id: string;
@@ -116,6 +118,66 @@ export interface TrendPoint {
   spend: string;
   saved: string;
   savings_rate: number | null;
+}
+/** untracked: before the first entry; partial: holds it, not from the 1st; future: not started. */
+export type MonthStatus = "untracked" | "partial" | "tracked" | "future";
+export interface YearMonth {
+  month: string;
+  status: MonthStatus;
+  income: string;
+  spend: string;
+  saved: string;
+  invested: string;
+  lent: string;
+  repaid: string;
+  budget: string | null;
+}
+export interface YearGroup {
+  /** null: entries with no category. */
+  parent_name: string | null;
+  total: string;
+  months: string[];
+}
+export interface YearBudgetRow {
+  parent_name: string;
+  months: { budget: string | null; actual: string }[];
+}
+export interface YearExpense {
+  id: string;
+  date: string;
+  description: string | null;
+  amount: string;
+  parent_name: string | null;
+  sub_name: string | null;
+  account_name: string | null;
+}
+export interface YearFamily {
+  parent_name: string;
+  given: string;
+  received: string;
+}
+export interface YearStats {
+  year: number;
+  scope: "household" | "me";
+  first_entry: string | null;
+  income: string;
+  spend: string;
+  saved: string;
+  savings_rate: number | null;
+  invested: string;
+  lent: string;
+  repaid: string;
+  budget_to_date: string | null;
+  months: YearMonth[];
+  groups: YearGroup[];
+  budget_grid: YearBudgetRow[];
+  biggest: YearExpense[];
+  big_count: number;
+  big_total: string;
+  big_threshold: string;
+  family: YearFamily[];
+  card_bills_count: number;
+  card_bills_total: string;
 }
 export interface Attention {
   month: string;

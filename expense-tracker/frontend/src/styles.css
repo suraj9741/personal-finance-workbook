@@ -1658,3 +1658,87 @@ tfoot th { color: var(--color-text); font-weight: 600; border-top: 1px solid var
 @media (min-width: 641px) and (max-width: 1024px) {
   .kpis { grid-template-columns: repeat(2, 1fr); }
 }
+
+/* ---- dashboard: year view ---- */
+/* Month / Year sits next to the title; only the Household / Just me switch is pushed right. */
+.dashboard .toolbar .segmented.view-switch { margin: 0; }
+.year-picker .year-name { min-width: 3.5rem; text-align: center; font-weight: 600; font-variant-numeric: tabular-nums; }
+.year-view { transition: opacity var(--motion-fast) var(--motion-ease); }
+.year-view[aria-busy="true"] { opacity: var(--stale-opacity); }
+.year-banner { line-height: var(--text-callout-leading); }
+
+/* Month by month: income and spent bars per month; untracked months hatched, never zero. */
+.year-chart { margin: 0; }
+.year-chart svg { width: 100%; height: auto; display: block; }
+.year-chart .axis { stroke: var(--color-separator); }
+.year-chart .inc { fill: var(--color-income); }
+.year-chart .exp { fill: var(--color-expense); }
+.year-chart .untracked { fill: url(#year-hatch); stroke: var(--color-separator); stroke-dasharray: 3 3; }
+.year-chart .hatch-line { stroke: var(--color-separator); stroke-width: 2; }
+.year-chart .future { fill: var(--color-fill); }
+.year-chart .tick { fill: var(--color-text-secondary); font-size: var(--text-caption-size); }
+.year-chart .saved { font-size: var(--text-caption-size); font-variant-numeric: tabular-nums; }
+.year-chart .saved.pos { fill: var(--color-positive); }
+.year-chart .saved.neg { fill: var(--color-negative); }
+.year-chart .note { fill: var(--color-text-tertiary); font-size: var(--text-caption-size); }
+.legend { display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space-4); margin: var(--space-2) 0 0; padding: 0; list-style: none; color: var(--color-text-secondary); font-size: var(--text-footnote-size); }
+.legend li { display: inline-flex; align-items: center; gap: var(--space-1); }
+.swatch { width: var(--space-3); height: var(--space-3); border-radius: var(--radius-xs); display: inline-block; }
+.swatch.inc { background: var(--color-income); }
+.swatch.exp { background: var(--color-expense); }
+.swatch.untracked { background: repeating-linear-gradient(135deg, var(--color-separator) 0 2px, transparent 2px 5px); box-shadow: inset 0 0 0 1px var(--color-separator); }
+
+/* Where the money went: a row per group; the name opens its twelve months. */
+.year-groups td, .year-groups th { padding-left: var(--space-2); padding-right: var(--space-2); }
+.year-groups tr.open td { border-bottom: 0; }
+.group-toggle { display: inline-flex; align-items: center; gap: var(--space-1); min-height: 0; padding: 0; background: transparent; color: var(--color-text); font: inherit; text-align: left; }
+.group-toggle .icon { color: var(--color-text-tertiary); }
+@media (hover: hover) {
+  .group-toggle:hover:not(:disabled) { background: transparent; color: var(--color-accent); }
+}
+.spark { display: inline-flex; align-items: flex-end; gap: 2px; height: var(--space-5); vertical-align: middle; }
+.spark span { width: var(--space-1); min-height: 1px; border-radius: 1px; background: var(--color-text-secondary); }
+.spark span.none { height: 3px !important; background: var(--color-fill); }
+.group-months td { padding-top: 0; }
+.group-months-grid { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: var(--space-1) var(--space-3); padding: 0 0 var(--space-2) var(--space-5); color: var(--color-text-secondary); font-size: var(--text-footnote-size); }
+.group-months-grid b { display: block; color: var(--color-text); font-weight: 500; font-variant-numeric: tabular-nums; }
+
+/* Biggest expenses: what, then category · date · account under it; the amount on the right. */
+.big-list { margin: 0; padding: 0; list-style: none; }
+.big-list li { display: grid; grid-template-columns: 1fr auto; gap: 0 var(--space-3); padding: var(--space-2) 0; border-bottom: 1px solid var(--color-separator); }
+.big-list li:last-child { border-bottom: 0; }
+.big-what { font-weight: 500; }
+.big-meta { grid-column: 1; color: var(--color-text-secondary); font-size: var(--text-footnote-size); }
+.big-amount { grid-row: 1 / span 2; grid-column: 2; align-self: center; color: var(--color-expense); font-variant-numeric: tabular-nums; }
+.big-note, .family-note { margin: var(--space-3) 0 0; }
+
+/* Budgets, month by month: % used per group and month; red only when over. */
+.grid-wrap { overflow-x: auto; }
+.year-budgets { width: 100%; border-collapse: separate; border-spacing: 3px; font-size: var(--text-footnote-size); }
+.year-budgets th, .year-budgets td { padding: 0; border: 0; text-align: center; }
+.year-budgets thead th { padding-bottom: var(--space-1); color: var(--color-text-secondary); font-weight: 500; }
+.year-budgets tbody th { position: sticky; left: 0; padding-right: var(--space-3); background: var(--color-surface); color: var(--color-text); font-weight: 500; text-align: left; white-space: nowrap; }
+.year-budgets td.cell { height: var(--control-h-sm); min-width: var(--control-h); border-radius: var(--radius-xs); font-variant-numeric: tabular-nums; }
+.year-budgets .cell.ok { background: var(--color-fill); color: var(--color-text-secondary); }
+.year-budgets .cell.over { background: color-mix(in srgb, var(--color-negative) 20%, transparent); color: var(--color-negative); font-weight: 600; }
+.year-budgets .cell.nob { box-shadow: inset 0 0 0 1px var(--color-separator); color: var(--color-text-tertiary); }
+.year-budgets .cell.none { background: repeating-linear-gradient(135deg, var(--color-separator) 0 1.5px, transparent 1.5px 5px); }
+.year-budgets .cell.later { background: transparent; }
+.year-budgets td.over-count { padding-left: var(--space-3); color: var(--color-text-secondary); text-align: right; white-space: nowrap; }
+.year-budgets td.over-count.bad { color: var(--color-negative); font-weight: 600; }
+
+/* Family: a card per group with what was spent under it. */
+.family-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(12rem, 1fr)); gap: var(--space-3); margin: 0; padding: 0; list-style: none; }
+.family-cards li { display: flex; flex-direction: column; gap: var(--space-0); padding: var(--space-3) var(--space-4); border-radius: var(--radius-md); background: var(--color-fill); }
+.family-name { font-weight: 600; }
+.family-given { margin: var(--space-1) 0; font-size: var(--text-title-size); font-weight: 600; letter-spacing: var(--text-title-tracking); font-variant-numeric: tabular-nums; }
+.family-given.expense-text { color: var(--color-expense); }
+.family-line { display: flex; justify-content: space-between; gap: var(--space-2); color: var(--color-text-secondary); font-size: var(--text-footnote-size); font-variant-numeric: tabular-nums; }
+
+@media (max-width: 640px) {
+  .year-groups .wide-only { display: none; }
+  .group-months-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); padding-left: 0; }
+  .dashboard .toolbar .segmented.view-switch { display: inline-flex; flex-basis: auto; }
+}
+.family-tick { padding: var(--space-2) 0; color: var(--color-text-secondary); font-size: var(--text-footnote-size); }
+.cat-group > summary h3 .tag { font-weight: 500; }
