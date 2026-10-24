@@ -236,6 +236,25 @@ class Account(Base):
     created_at: Mapped[datetime] = created_at()
 
 
+class AccountValuation(Base):
+    """Every broker value the user enters, one per date, so past month ends keep their value
+    after current_value moves on. Written by the account routes; nothing here is estimated."""
+
+    __tablename__ = "account_valuations"
+    __table_args__ = (
+        UniqueConstraint("account_id", "valued_on", name="uq_account_valuations_date"),
+        CheckConstraint("value >= 0", name="value_valid"),
+    )
+
+    id: Mapped[uuid.UUID] = uuid_pk()
+    account_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("accounts.id", ondelete="CASCADE"), index=True
+    )
+    valued_on: Mapped[date] = mapped_column(Date)
+    value: Mapped[Decimal] = mapped_column(Numeric(14, 2))
+    created_at: Mapped[datetime] = created_at()
+
+
 class Transaction(Base):
     __tablename__ = "transactions"
     __table_args__ = (

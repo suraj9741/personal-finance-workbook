@@ -225,6 +225,11 @@ class AccountOut(Orm):
     is_active: bool
 
 
+class ValuationOut(Orm):
+    valued_on: date
+    value: Decimal
+
+
 class AccountFields(Strict):
     """Fields shared by create and edit. Card and broker fields only fit their own type."""
 
