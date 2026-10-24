@@ -2,10 +2,11 @@
 
 from decimal import Decimal
 
+import pytest
 from alembic import command
 from sqlalchemy import text
 
-from app.balances import next_due_date
+from app.balances import last_statement, next_due_date, statement_cycle
 from app.db import get_engine
 from tests.conftest import Api, account_id, add_tx, alembic_config, category_id
 
@@ -239,6 +240,83 @@ def test_next_due_date() -> None:
     assert next_due_date(5, date(2026, 10, 14)) == date(2026, 11, 5)
     assert next_due_date(31, date(2026, 11, 3)) == date(2026, 11, 30)
     assert next_due_date(14, date(2026, 12, 15)) == date(2027, 1, 14)
+
+
+def test_statement_cycle_and_last_statement() -> None:
+    from datetime import date
+
+    assert statement_cycle(20, date(2026, 10, 1)) == (date(2026, 9, 21), date(2026, 10, 20))
+    # Day 31 falls on the month's last day; the cycle starts the day after the previous one.
+    assert statement_cycle(31, date(2026, 3, 1)) == (date(2026, 3, 1), date(2026, 3, 31))
+    assert statement_cycle(30, date(2026, 3, 1)) == (date(2026, 3, 1), date(2026, 3, 30))
+    assert statement_cycle(5, date(2027, 1, 1)) == (date(2026, 12, 6), date(2027, 1, 5))
+    assert last_statement(20, date(2026, 10, 24)) == date(2026, 10, 20)
+    # On the statement day the bill is still open.
+    assert last_statement(20, date(2026, 10, 20)) == date(2026, 9, 20)
+    assert last_statement(31, date(2026, 3, 5)) == date(2026, 2, 28)
+
+
+def test_card_statement_follows_statement_day_and_posted_date(
+    admin: Api, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from datetime import date
+
+    monkeypatch.setattr("app.routers.stats.today", lambda: date(2026, 10, 24))
+    hdfc = account_id(admin, "HDFC", "bank")
+    card = new_account(admin, name="Amazon Pay CC", pay_type="credit_card", statement_day=20)
+    add_tx(admin, account_id=card, date="2026-09-20", amount="1000")  # September's bill
+    add_tx(admin, account_id=card, date="2026-09-21", amount="200")
+    add_tx(admin, account_id=card, date="2026-10-20", amount="300")  # the statement day counts
+    add_tx(admin, account_id=card, date="2026-10-05", type="refund", amount="50")
+    add_tx(admin, account_id=card, date="2026-10-01", type="income", amount="25")  # cashback
+    # Bought on the 18th, posted on the 21st: November's bill, not October's.
+    late = add_tx(admin, account_id=card, date="2026-10-18", posted_on="2026-10-21", amount="400")
+    assert late["posted_on"] == "2026-10-21"
+    add_tx(admin, account_id=card, date="2026-10-22", amount="70")
+    for day, amount in (("2026-10-10", "900"), ("2026-10-22", "500")):
+        add_tx(admin, account_id=hdfc, date=day, type="transfer", to_account_id=card, amount=amount)
+    f = summary(admin, card)
+    assert (f["statement_start"], f["statement_end"]) == ("2026-09-21", "2026-10-20")
+    assert money(f["statement_purchases"]) == Decimal("450")  # 200 + 300 - 50 refund
+    assert money(f["statement_refunds"]) == Decimal("50")
+    assert money(f["statement_payments"]) == Decimal("900")
+    assert money(f["statement_credits"]) == Decimal("25")
+    assert f["unbilled_since"] == "2026-10-21"
+    assert money(f["unbilled"]) == Decimal("470")  # 400 posted late + 70
+    # Month figures and the Dashboard stay on the calendar month and the purchase date.
+    assert money(f["month_expenses"]) == Decimal("720")  # 300 + 400 + 70 - 50, by purchase date
+    row = next(r for r in overview(admin)["accounts"] if r["account"]["id"] == card)
+    assert money(row["statement_purchases"]) == Decimal("450")
+    # September's bill, seen from the September view.
+    assert money(summary(admin, card, "2026-09")["statement_purchases"]) == Decimal("1000")
+    # No statement day: no statement figures.
+    plain = account_id(admin, "HDFC CC", "credit_card")
+    assert summary(admin, plain)["statement_purchases"] is None
+    assert summary(admin, hdfc)["statement_start"] is None
+
+
+def test_posted_date_only_on_card_purchases(admin: Api) -> None:
+    hdfc = account_id(admin, "HDFC", "bank")
+    card = account_id(admin, "HDFC CC", "credit_card")
+    url = f"{API}/transactions"
+    base = {"date": "2026-10-18", "amount": "100", "posted_on": "2026-10-21"}
+    assert admin.post(url, json={**base, "account_id": hdfc}).status_code == 422
+    income = {**base, "account_id": card, "type": "income"}
+    assert admin.post(url, json=income).status_code == 422
+    early = {**base, "account_id": card, "posted_on": "2026-10-17"}
+    assert admin.post(url, json=early).status_code == 422
+    tx = add_tx(admin, **{**base, "account_id": card})
+    # Moving the purchase date past the posted date drops the posted date.
+    moved = admin.patch(f"{url}/{tx['id']}", json={"date": "2026-10-25"}).json()
+    assert moved["posted_on"] is None
+    # So does moving the entry off the card.
+    admin.patch(f"{url}/{tx['id']}", json={"date": "2026-10-18", "posted_on": "2026-10-21"})
+    moved = admin.patch(f"{url}/{tx['id']}", json={"account_id": hdfc}).json()
+    assert moved["posted_on"] is None
+    # Undo: clearing it.
+    tx = add_tx(admin, **{**base, "account_id": card})
+    cleared = admin.patch(f"{url}/{tx['id']}", json={"posted_on": None}).json()
+    assert cleared["posted_on"] is None
 
 
 # ---- brokers --------------------------------------------------------------------------

@@ -285,6 +285,7 @@ class TransactionIn(Strict):
     category_id: uuid.UUID | None = None
     description: Annotated[str, StringConstraints(strip_whitespace=True, max_length=200)] = ""
     cost_basis: PositiveMoney | None = None
+    posted_on: dt.date | None = None
     counterparty: (
         Annotated[str, StringConstraints(strip_whitespace=True, max_length=100)] | None
     ) = None
@@ -302,6 +303,7 @@ class TransactionPatchIn(Strict):
         None
     )
     cost_basis: PositiveMoney | None = None
+    posted_on: dt.date | None = None
     counterparty: (
         Annotated[str, StringConstraints(strip_whitespace=True, max_length=100)] | None
     ) = None
@@ -318,6 +320,7 @@ class TransactionOut(Orm):
     category_id: uuid.UUID | None
     description: str
     cost_basis: Decimal | None
+    posted_on: dt.date | None
     counterparty: str | None
     notes: str | None
     created_by: uuid.UUID | None
@@ -480,6 +483,19 @@ class AccountFigures(BaseModel):
     month_transfers_out: Decimal
     month_buys: Decimal
     month_sells: Decimal
+    # Credit card with a statement day: the statement that closes in the month, using each
+    # entry's posted date when it has one. statement_end is the statement day itself; a cycle
+    # still open (statement_end on or after today) holds what is in it so far. All null for
+    # other accounts and for cards without a statement day.
+    statement_start: date | None = None
+    statement_end: date | None = None
+    statement_purchases: Decimal | None = None  # purchases less refunds
+    statement_refunds: Decimal | None = None
+    statement_payments: Decimal | None = None
+    statement_credits: Decimal | None = None  # cashback and other income on the card
+    # Purchases less refunds since the last statement that closed before today.
+    unbilled_since: date | None = None
+    unbilled: Decimal | None = None
 
 
 class OverviewTotals(BaseModel):

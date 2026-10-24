@@ -51,12 +51,12 @@ it("groups rows by day and colours each day's net", async () => {
   await screen.findByRole("rowheader", { name: "Today" });
 
   // Spending only: red and minus. The transfer isn't counted.
-  const todayTotal = within(dayRow("Today")).getByText(amountText(/₹400.00/));
+  const todayTotal = within(dayRow("Today")).getByText(amountText(/₹400.00/)).closest(".day-total")!;
   expect(todayTotal.className).toContain("neg-text");
   expect(todayTotal.textContent).toMatch(/^−₹400.00/);
 
   // Income beat spending: green net, with the breakdown underneath.
-  const mixed = within(dayRow("Yesterday")).getByText(amountText(/₹700.00/));
+  const mixed = within(dayRow("Yesterday")).getByText(amountText(/₹700.00/)).closest(".day-total")!;
   expect(mixed.className).toContain("pos-text");
   expect(mixed.textContent).toContain("Spent ₹300.00 · Income ₹1,000.00");
 

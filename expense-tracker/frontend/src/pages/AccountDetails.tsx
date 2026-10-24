@@ -1,8 +1,8 @@
 import { Amounts } from "../components/Amounts";
-import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import { useState, type ReactNode } from "react";
+import { keepPreviousData, useMutation, useQuery } from "@tanstack/react-query";
+import { Fragment, useState, type ReactNode } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { api, ApiError, type Account, type AccountFigures, type Transaction } from "../api";
+import { api, ApiError, patch, type Account, type AccountFigures, type Transaction } from "../api";
 import { AccountForm } from "../components/AccountForm";
 import { AccountMark } from "../components/AccountMark";
 import { Meter } from "../components/Meter";
@@ -19,15 +19,19 @@ import {
   currentMonth,
   dayHeading,
   dayLabel,
+  dayRange,
   groupOf,
   money,
   monthLabel,
+  monthName,
+  shiftDay,
   signedMoney,
   signedPercent,
+  statementFor,
   today,
   type AccountGroup,
 } from "../format";
-import { useAccounts, useCategories, useMe } from "../hooks";
+import { useAccounts, useCategories, useMe, useRefreshMoney } from "../hooks";
 
 const PAGE = 100;
 const NO_FILTERS = { type: "", category_id: "" };
@@ -38,6 +42,12 @@ function byDay(items: Transaction[]): [string, Transaction[]][] {
   for (const t of items) groups.set(t.date, [...(groups.get(t.date) ?? []), t]);
   return [...groups];
 }
+
+/** Days before a statement day when the bank may still post a purchase on the next bill. */
+const NEAR_STATEMENT_DAYS = 2;
+
+/** "October" for the statement closing on 2026-10-20. */
+const billName = (close: string) => monthName(close.slice(0, 7));
 
 /** "1st", "2nd", "23rd", "5th". */
 function ordinal(n: number): string {
@@ -161,6 +171,8 @@ export function AccountDetails() {
   const sign = (t: Transaction) =>
     t.type === "transfer" ? (t.to_account_id === account.id ? "+" : "−") : ["income", "refund", "sell"].includes(t.type) ? "+" : "−";
   const otherName = (otherId: string | null) => accountLabel(accounts.find((a) => a.id === otherId), accounts);
+  // Cards with a statement day show where each bill closes, and which entries may post on the next one.
+  const statementDay = group === "credit_card" ? account.statement_day : null;
 
   return (
     <section className="account-details">
@@ -215,7 +227,7 @@ export function AccountDetails() {
         <h2 className="section-title">{month === currentMonth() ? "This month" : "Month"}</h2>
         <MonthPicker month={month} onChange={setMonth} />
       </div>
-      <MonthFigures s={s} group={group} />
+      <MonthFigures s={s} group={group} current={month === currentMonth()} />
 
       <h2 className="section-title">Entries</h2>
       <div className="filters">
@@ -306,57 +318,63 @@ export function AccountDetails() {
                 ))}
               </tbody>
             )}
-            {days.map(([date, dayRows]) => (
-              <tbody key={date}>
-                <tr className="day-head">
-                  <th scope="row" colSpan={4}>
-                    {dayHeading(date)}
-                  </th>
-                </tr>
-                {dayRows.map((t) => {
-                  const inbound = t.to_account_id === account.id;
-                  const otherId = t.type === "transfer" ? (inbound ? t.account_id : t.to_account_id) : null;
-                  const other = otherName(otherId);
-                  return (
-                    <tr key={t.id} className={t.type}>
-                      <td>
-                        {t.description || <span className="muted">(no description)</span>}
-                        {otherId && (
-                          <small className="muted">
-                            {" "}
-                            {inbound ? "from" : "to"} {other ? <Link to={`/accounts/${otherId}`}>{other}</Link> : "another account"}
-                          </small>
-                        )}
-                        {t.counterparty && <small className="muted"> · {t.counterparty}</small>}
-                      </td>
-                      <td>
-                        {t.type === "transfer" || t.type === "buy" || t.type === "sell" ? (
-                          <span className="muted">{TX_TYPE_LABEL[t.type]}</span>
-                        ) : (
-                          <span className="cat-cell">
-                            {t.category_id ? categoryLabel(categories.find((c) => c.id === t.category_id)) : <span className="muted">Uncategorized</span>}
-                            {t.type === "refund" && <small className="tag">refund</small>}
-                          </span>
-                        )}
-                      </td>
-                      <td className={`num ${t.type}`}>
-                        {sign(t)}
-                        <Amounts>{money(t.amount)}</Amounts>
-                      </td>
-                      <td className="actions">
-                        <button
-                          type="button"
-                          className="ghost small"
-                          aria-label={`Edit ${t.description || TX_TYPE_LABEL[t.type]}, ${dayLabel(t.date)}`}
-                          onClick={() => setEditing(t)}
-                        >
-                          Edit
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
+            {days.map(([date, dayRows], i) => (
+              <Fragment key={date}>
+                {statementDay && i > 0 && statementFor(days[i - 1][0], statementDay) !== statementFor(date, statementDay) && (
+                  <StatementLine close={statementFor(date, statementDay)} statementDay={statementDay} />
+                )}
+                <tbody>
+                  <tr className="day-head">
+                    <th scope="row" colSpan={4}>
+                      {dayHeading(date)}
+                    </th>
+                  </tr>
+                  {dayRows.map((t) => {
+                    const inbound = t.to_account_id === account.id;
+                    const otherId = t.type === "transfer" ? (inbound ? t.account_id : t.to_account_id) : null;
+                    const other = otherName(otherId);
+                    return (
+                      <tr key={t.id} className={t.type}>
+                        <td>
+                          {t.description || <span className="muted">(no description)</span>}
+                          {otherId && (
+                            <small className="muted">
+                              {" "}
+                              {inbound ? "from" : "to"} {other ? <Link to={`/accounts/${otherId}`}>{other}</Link> : "another account"}
+                            </small>
+                          )}
+                          {t.counterparty && <small className="muted"> · {t.counterparty}</small>}
+                          {statementDay && t.account_id === account.id && <PostedNote t={t} statementDay={statementDay} />}
+                        </td>
+                        <td>
+                          {t.type === "transfer" || t.type === "buy" || t.type === "sell" ? (
+                            <span className="muted">{TX_TYPE_LABEL[t.type]}</span>
+                          ) : (
+                            <span className="cat-cell">
+                              {t.category_id ? categoryLabel(categories.find((c) => c.id === t.category_id)) : <span className="muted">Uncategorized</span>}
+                              {t.type === "refund" && <small className="tag">refund</small>}
+                            </span>
+                          )}
+                        </td>
+                        <td className={`num ${t.type}`}>
+                          {sign(t)}
+                          <Amounts>{money(t.amount)}</Amounts>
+                        </td>
+                        <td className="actions">
+                          <button
+                            type="button"
+                            className="ghost small"
+                            aria-label={`Edit ${t.description || TX_TYPE_LABEL[t.type]}, ${dayLabel(t.date)}`}
+                            onClick={() => setEditing(t)}
+                          >
+                            Edit
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </Fragment>
             ))}
           </table>
         )}
@@ -492,8 +510,11 @@ function Facts({ s, group }: { s: AccountFigures; group: AccountGroup }) {
 }
 
 /** The month's money on this account, each figure signed: green in, red out, grey for moves. */
-function MonthFigures({ s, group }: { s: AccountFigures; group: AccountGroup }) {
+function MonthFigures({ s, group, current }: { s: AccountFigures; group: AccountGroup; current: boolean }) {
   const refunds = Number(s.month_refunds) ? `After ${money(s.month_refunds)} refunds` : undefined;
+  // A card with a statement day shows its bill for the month instead of the calendar month.
+  const bill = s.statement_start && s.statement_end ? { start: s.statement_start, end: s.statement_end } : null;
+  const billRefunds = Number(s.statement_refunds) ? ` · after ${money(s.statement_refunds)} refunds` : "";
   type Figure = { label: string; amount: string; out?: boolean; tone?: "income" | "expense"; note?: string };
   const figures: Figure[] =
     group === "share_broker"
@@ -505,6 +526,21 @@ function MonthFigures({ s, group }: { s: AccountFigures; group: AccountGroup }) 
           { label: "Charges", amount: s.month_expenses, out: true, tone: "expense" },
           { label: "Dividends and other income", amount: s.month_income, tone: "income" },
         ]
+      : group === "credit_card" && bill
+        ? [
+            {
+              label: `${billName(bill.end)} statement`,
+              amount: s.statement_purchases ?? "0",
+              out: true,
+              tone: "expense",
+              note: `${dayRange(bill.start, bill.end)}${bill.end >= today() ? " · so far" : ""}${billRefunds}`,
+            },
+            { label: "Payments", amount: s.statement_payments ?? "0", note: "Same dates" },
+            { label: "Cashback and other credits", amount: s.statement_credits ?? "0", tone: "income" },
+            ...(current && s.unbilled !== null && s.unbilled_since
+              ? [{ label: "Unbilled", amount: s.unbilled, out: true, tone: "expense" as const, note: `${dayLabel(s.unbilled_since)} – today` }]
+              : []),
+          ]
       : group === "credit_card"
         ? [
             { label: "Purchases", amount: s.month_expenses, out: true, tone: "expense", note: refunds },
@@ -531,5 +567,62 @@ function MonthFigures({ s, group }: { s: AccountFigures; group: AccountGroup }) 
         );
       })}
     </dl>
+  );
+}
+
+/** Where one card statement closes in the entry list: newer entries above go on the next bill. */
+function StatementLine({ close, statementDay }: { close: string; statementDay: number }) {
+  const next = statementFor(shiftDay(close, 1), statementDay);
+  return (
+    <tbody className="statement-line">
+      <tr>
+        <td colSpan={4}>
+          <span>
+            {billName(close)} bill {close < today() ? "closed" : "closes"} on {dayLabel(close)} · newer entries go on the {billName(next)} bill
+          </span>
+        </td>
+      </tr>
+    </tbody>
+  );
+}
+
+/**
+ * A card entry's statement: moved ones say where they went (with Undo), and ones bought just
+ * before the statement day offer to move to the next bill, since the bank may post them late.
+ */
+function PostedNote({ t, statementDay }: { t: Transaction; statementDay: number }) {
+  const refresh = useRefreshMoney();
+  const move = useMutation({
+    mutationFn: (postedOn: string | null) => patch(`/transactions/${t.id}`, { posted_on: postedOn }),
+    onSuccess: () => refresh(),
+  });
+  if (t.type !== "expense" && t.type !== "refund") return null;
+  const close = statementFor(t.date, statementDay);
+  if (t.posted_on) {
+    const lands = statementFor(t.posted_on, statementDay);
+    if (lands === close) return null;
+    return (
+      <span className="posted-note">
+        <small className="tag">{billName(lands)} bill</small>
+        <small className="muted">
+          Posted {dayLabel(t.posted_on)}, so it counts on the {billName(lands)} bill.
+        </small>
+        <button type="button" className="ghost small" disabled={move.isPending} onClick={() => move.mutate(null)}>
+          Undo
+        </button>
+      </span>
+    );
+  }
+  const next = shiftDay(close, 1);
+  // Only until the next bill is out: by then the real statement has settled it.
+  const near = t.date >= shiftDay(close, -NEAR_STATEMENT_DAYS) && today() <= statementFor(next, statementDay);
+  if (!near) return null;
+  return (
+    <span className="posted-note warn-text">
+      <small>Close to the statement day, so the bank may post it on the next bill.</small>
+      <button type="button" className="tinted small" disabled={move.isPending} onClick={() => move.mutate(next)}>
+        Move to next statement
+      </button>
+    </span>
   );
 }

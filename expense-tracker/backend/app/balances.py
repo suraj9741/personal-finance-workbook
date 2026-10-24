@@ -14,13 +14,17 @@ separately from buys and sells, so a deposit is never taken as an investment.
 When an account has an opening_date, only transactions on or after it count toward the
 balance: the opening balance already covers what happened before. Month figures always use
 every transaction in the month.
+
+A card with a statement day also gets statement figures: the statement that closes in the
+month runs from the day after the previous statement day to the statement day itself, and an
+entry lands on it by its posted date when it has one, else its purchase date.
 """
 
 import calendar
 import uuid
 from collections import defaultdict
 from dataclasses import dataclass, field
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 
 from sqlalchemy import ColumnElement, func, or_, select, true
@@ -110,6 +114,88 @@ def next_due_date(due_day: int | None, today: date) -> date | None:
     return None  # unreachable: next month always qualifies
 
 
+def statement_close(statement_day: int, year: int, month: int) -> date:
+    """The statement date in a month: statement_day, or the month's last day if shorter."""
+    return date(year, month, min(statement_day, calendar.monthrange(year, month)[1]))
+
+
+def statement_cycle(statement_day: int, month_start: date) -> tuple[date, date]:
+    """First and last day of the statement that closes in month_start's month."""
+    prev = month_start - timedelta(days=1)
+    start = statement_close(statement_day, prev.year, prev.month) + timedelta(days=1)
+    return start, statement_close(statement_day, month_start.year, month_start.month)
+
+
+def last_statement(statement_day: int, today: date) -> date:
+    """The latest statement date before today. On the statement day itself that bill is still
+    open, so the one before it counts."""
+    close = statement_close(statement_day, today.year, today.month)
+    if close < today:
+        return close
+    prev = today.replace(day=1) - timedelta(days=1)
+    return statement_close(statement_day, prev.year, prev.month)
+
+
+@dataclass
+class Statement:
+    start: date
+    end: date
+    since: date  # first day not yet on a statement
+    purchases: Decimal = ZERO
+    refunds: Decimal = ZERO
+    payments: Decimal = ZERO
+    credits: Decimal = ZERO
+    unbilled: Decimal = ZERO
+
+
+def _statements(
+    db: Session, cards: list[Account], month_start: date, today: date
+) -> dict[uuid.UUID, Statement]:
+    """Statement and unbilled figures for each card that has a statement day."""
+    result: dict[uuid.UUID, Statement] = {}
+    for card in cards:
+        if card.statement_day is None:
+            continue
+        start, end = statement_cycle(card.statement_day, month_start)
+        since = last_statement(card.statement_day, today) + timedelta(days=1)
+        result[card.id] = Statement(start=start, end=end, since=since)
+    if not result:
+        return result
+    first = min(min(s.start, s.since) for s in result.values())
+    lands: ColumnElement[date] = func.coalesce(Transaction.posted_on, Transaction.date)
+    rows = db.execute(
+        select(Transaction.account_id, Transaction.type, lands, func.sum(Transaction.amount))
+        .where(
+            Transaction.account_id.in_(result),
+            Transaction.type.in_(("expense", "refund", "income")),
+            lands >= first,
+        )
+        .group_by(Transaction.account_id, Transaction.type, lands)
+    )
+    for account_id, kind, day, amount in rows:
+        s = result[account_id]
+        sign = -1 if kind == "refund" else 1
+        if s.start <= day <= s.end:
+            if kind == "income":
+                s.credits += amount
+            else:
+                s.purchases += sign * amount
+                if kind == "refund":
+                    s.refunds += amount
+        if day >= s.since and kind != "income":
+            s.unbilled += sign * amount
+    payments = db.execute(
+        select(Transaction.to_account_id, Transaction.date, func.sum(Transaction.amount))
+        .where(Transaction.to_account_id.in_(result), Transaction.date >= first)
+        .group_by(Transaction.to_account_id, Transaction.date)
+    )
+    for to_id, day, amount in payments:
+        bill = result.get(to_id) if to_id is not None else None
+        if bill and bill.start <= day <= bill.end:
+            bill.payments += amount
+    return result
+
+
 def figures(
     db: Session, accounts: list[Account], month_start: date, month_end: date, today: date
 ) -> list[AccountFigures]:
@@ -122,6 +208,8 @@ def figures(
         Transaction.date < month_end,
         since_opening=False,
     )
+    cards = [a for a in accounts if a.pay_type == "credit_card"]
+    statements = _statements(db, cards, month_start, today)
     result = []
     for account in accounts:
         f, m = all_time[account.id], month[account.id]
@@ -147,6 +235,7 @@ def figures(
             if f.sell_with_cost:
                 realized = f.sell_with_cost - f.sell_cost
             realized_complete = f.sell_with_cost == sells
+        st = statements.get(account.id)
         result.append(
             AccountFigures(
                 account=AccountOut.model_validate(account),
@@ -170,6 +259,14 @@ def figures(
                 month_transfers_out=m.by_type["transfer"],
                 month_buys=m.by_type["buy"],
                 month_sells=m.by_type["sell"],
+                statement_start=st.start if st else None,
+                statement_end=st.end if st else None,
+                statement_purchases=st.purchases if st else None,
+                statement_refunds=st.refunds if st else None,
+                statement_payments=st.payments if st else None,
+                statement_credits=st.credits if st else None,
+                unbilled_since=st.since if st else None,
+                unbilled=st.unbilled if st else None,
             )
         )
     return result

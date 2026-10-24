@@ -1,3 +1,4 @@
+import datetime as dt
 import uuid
 from datetime import date, datetime
 from decimal import Decimal
@@ -239,6 +240,10 @@ class Transaction(Base):
         CheckConstraint(
             "cost_basis IS NULL OR (type = 'sell' AND cost_basis >= 0)", name="cost_basis_on_sell"
         ),
+        CheckConstraint(
+            "posted_on IS NULL OR (type IN ('expense', 'refund') AND posted_on >= date)",
+            name="posted_on_valid",
+        ),
         CheckConstraint("source IN ('manual', 'import')", name="source_valid"),
         CheckConstraint(
             "(type = 'transfer') = (to_account_id IS NOT NULL)", name="transfer_has_to_account"
@@ -267,6 +272,9 @@ class Transaction(Base):
     description: Mapped[str] = mapped_column(String(200), default="")
     # Sell only: what the units sold had cost. Gives realized profit/loss when present.
     cost_basis: Mapped[Decimal | None] = mapped_column(Numeric(12, 2))
+    # Card purchase or refund only: the day the bank posted it, when later than the purchase.
+    # It decides which statement the entry lands on; NULL means the purchase date does.
+    posted_on: Mapped[dt.date | None] = mapped_column(Date)
     counterparty: Mapped[str | None] = mapped_column(String(100))
     notes: Mapped[str | None] = mapped_column(Text)
     created_by: Mapped[uuid.UUID | None] = mapped_column(

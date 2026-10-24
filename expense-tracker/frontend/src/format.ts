@@ -60,6 +60,12 @@ export function signedPercent(ratio: number): string {
   return `${p > 0 ? "+" : p < 0 ? "−" : ""}${Math.abs(p)}%`;
 }
 
+/** "October", the month alone. */
+export function monthName(month: string): string {
+  const [y, m] = month.split("-").map(Number);
+  return new Date(y, m - 1, 1).toLocaleDateString("en-IN", { month: "long" });
+}
+
 /** "Sept 2026", the short form of monthLabel. */
 export function monthShort(month: string): string {
   const [y, m] = month.split("-").map(Number);
@@ -142,6 +148,24 @@ function parseDay(iso: string): Date {
 export function dayLabel(iso: string, now: string = today()): string {
   const sameYear = iso.slice(0, 4) === now.slice(0, 4);
   return parseDay(iso).toLocaleDateString("en-IN", { day: "numeric", month: "short", ...(sameYear ? {} : { year: "numeric" }) });
+}
+
+/** A card's statement date in a month: its statement day, or the month's last day when shorter. */
+function statementClose(statementDay: number, year: number, month: number): string {
+  const day = Math.min(statementDay, new Date(year, month, 0).getDate());
+  return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+
+/** The closing date of the card statement a day falls on: the statement day itself still counts. */
+export function statementFor(iso: string, statementDay: number): string {
+  const [y, m] = [Number(iso.slice(0, 4)), Number(iso.slice(5, 7))];
+  const close = statementClose(statementDay, y, m);
+  return iso <= close ? close : statementClose(statementDay, m === 12 ? y + 1 : y, m === 12 ? 1 : m + 1);
+}
+
+/** "21 Sept – 20 Oct": a card statement's first and last day. */
+export function dayRange(from: string, to: string, now: string = today()): string {
+  return `${dayLabel(from, now)} – ${dayLabel(to, now)}`;
 }
 
 /** "Today", "Yesterday", or "Fri, 17 Oct" (with the year outside the current one). */

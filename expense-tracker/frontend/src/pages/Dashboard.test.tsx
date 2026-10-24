@@ -8,6 +8,7 @@ import { amountText } from "../test-utils";
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
+  vi.useRealTimers();
 });
 
 const line = (category_id: string, stats_group: string, budget: string | null, actual: string) => ({
@@ -153,4 +154,34 @@ it("shows each Needs attention item that opens something as a row", async () => 
   renderWith({ uncategorized: 3 });
   const link = await screen.findByRole("link", { name: "3 entries have no category" });
   expect(link.className).toBe("attention-link");
+});
+
+it("shows each card's statement by its own statement day, and what's unbilled", async () => {
+  vi.useFakeTimers({ toFake: ["Date"] });
+  vi.setSystemTime(new Date(2026, 9, 24, 12));
+  const base = OVERVIEW.accounts[0];
+  const card = (id: string, name: string, extra: object) => ({
+    ...base, balance: null, outstanding: "1000", available_credit: null, month_expenses: "999", month_transfers_in: "111",
+    account: { ...base.account, id, name, pay_type: "credit_card", credit_limit: null, statement_day: null, due_day: null },
+    ...extra,
+  });
+  const amazon = card("c1", "Amazon Pay", {
+    account: { ...base.account, id: "c1", name: "Amazon Pay", pay_type: "credit_card", credit_limit: null, statement_day: 20, due_day: 7 },
+    statement_start: "2026-09-21", statement_end: "2026-10-20", statement_purchases: "450.00", statement_payments: "900.00",
+    unbilled_since: "2026-10-21", unbilled: "470.00",
+  });
+  const plain = card("c2", "ICICI", { statement_start: null, statement_end: null, statement_purchases: null, statement_payments: null, unbilled_since: null, unbilled: null });
+  renderWith({ overview: { ...OVERVIEW, accounts: [...OVERVIEW.accounts, amazon, plain] } });
+  const row = (await screen.findByRole("link", { name: "Amazon Pay" })).closest("tr")!;
+  const cell = (r: HTMLElement, label: string) => r.querySelector(`[data-label="${label}"]`)!.textContent;
+  expect(cell(row, "October statement")).toMatch(/^₹450\.0021 Sept? – 20 Oct$/);
+  expect(cell(row, "Payments")).toBe("₹900.00");
+  expect(cell(row, "Unbilled")).toBe("₹470.0021 Oct – today");
+  // No statement day: the calendar month, said so.
+  const icici = screen.getByRole("link", { name: "ICICI" }).closest("tr")!;
+  expect(cell(icici, "October statement")).toBe("₹999.00Calendar month · no statement day");
+  expect(cell(icici, "Payments")).toBe("₹111.00");
+  const totals = row.closest("table")!.querySelector("tfoot")!;
+  expect(cell(totals, "October statement")).toBe("₹1,449.00");
+  expect(cell(totals, "Unbilled")).toBe("₹470.00");
 });

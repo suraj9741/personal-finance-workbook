@@ -52,6 +52,8 @@ export interface Transaction {
   category_id: string | null;
   description: string;
   cost_basis: string | null;
+  /** Card purchase or refund the bank posted later: decides which statement it lands on. */
+  posted_on: string | null;
   counterparty: string | null;
   notes: string | null;
   created_by: string | null;
@@ -66,6 +68,7 @@ export interface TransactionInput {
   category_id?: string | null;
   description: string;
   cost_basis?: string | null;
+  posted_on?: string | null;
   counterparty?: string | null;
   notes?: string | null;
 }
@@ -143,6 +146,16 @@ export interface AccountFigures {
   month_transfers_out: string;
   month_buys: string;
   month_sells: string;
+  /** Card with a statement day: the statement closing in the month (posted dates count). Else null. */
+  statement_start: string | null;
+  statement_end: string | null;
+  statement_purchases: string | null;
+  statement_refunds: string | null;
+  statement_payments: string | null;
+  statement_credits: string | null;
+  /** Purchases less refunds since the last statement that closed before today. */
+  unbilled_since: string | null;
+  unbilled: string | null;
 }
 export interface Overview {
   month: string;

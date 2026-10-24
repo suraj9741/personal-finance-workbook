@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.db import get_db
 from app.deps import Ctx, get_ctx, not_found
-from app.models import Category, CategoryRule, Transaction, User
+from app.models import Account, Category, CategoryRule, Transaction, User
 from app.routers.catalog import ensure_unique_pattern, get_account, get_category
 from app.schemas import (
     Month,
@@ -44,6 +44,10 @@ CATEGORY_KIND = {
 }
 
 
+def posted_on_allowed(account: Account, tx_type: str) -> bool:
+    return account.pay_type == "credit_card" and tx_type in ("expense", "refund")
+
+
 def validate(db: Session, ctx: Ctx, row: Transaction) -> None:
     """Rules the database can't express: visibility, household and kind matching."""
     account = get_account(db, ctx, row.account_id)
@@ -54,6 +58,11 @@ def validate(db: Session, ctx: Ctx, row: Transaction) -> None:
             raise HTTPException(422, "Buys and sells don't take a category")
     if row.cost_basis is not None and row.type != "sell":
         raise HTTPException(422, "Only a sell has a cost basis")
+    if row.posted_on is not None:
+        if not posted_on_allowed(account, row.type):
+            raise HTTPException(422, "Only a card purchase or refund has a posted date")
+        if row.posted_on < row.date:
+            raise HTTPException(422, "The posted date can't be before the purchase date")
     if row.type == "transfer":
         if row.to_account_id is None:
             raise HTTPException(422, "A transfer needs a 'to' account")
@@ -228,6 +237,13 @@ def patch_transaction(
         row.to_account_id = None
     if changes.get("type") and changes["type"] != "sell" and "cost_basis" not in changes:
         row.cost_basis = None
+    # A posted date that no longer fits (moved off the card, or the purchase date moved past
+    # it) is dropped rather than refused, like the 'to' account and cost basis above.
+    if row.posted_on is not None and "posted_on" not in changes:
+        with db.no_autoflush:
+            account = get_account(db, ctx, row.account_id)
+        if not posted_on_allowed(account, row.type) or row.posted_on < row.date:
+            row.posted_on = None
     validate(db, ctx, row)
     db.commit()
     db.refresh(row)
