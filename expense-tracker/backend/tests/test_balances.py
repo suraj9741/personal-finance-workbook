@@ -128,6 +128,51 @@ def test_bank_balance_from_opening_income_and_expenses(admin: Api) -> None:
     assert money(summary(admin, bank, "2026-08")["balance"]) == Decimal("42000")
 
 
+def test_bank_month_start_end_and_balance_up_to_today(
+    admin: Api, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from datetime import date
+
+    monkeypatch.setattr("app.routers.stats.today", lambda: date(2026, 10, 24))
+    bank = new_account(admin, name="Kotak", pay_type="bank", opening_balance="1000")
+    sbi = account_id(admin, "SBI", "bank")
+    salary = category_id(admin, "Wages", "Paycheck", "income")
+    add_tx(admin, account_id=bank, date="2026-09-15", amount="100")  # before October
+    add_tx(
+        admin, account_id=bank, date="2026-10-01", type="income", amount="5000", category_id=salary
+    )
+    add_tx(admin, account_id=bank, date="2026-10-10", amount="700")
+    add_tx(
+        admin, account_id=sbi, date="2026-10-12", type="transfer", to_account_id=bank, amount="300"
+    )
+    add_tx(admin, account_id=bank, date="2026-10-31", amount="2000")  # rent, entered ahead
+    add_tx(admin, account_id=bank, date="2026-11-03", amount="50")  # next month
+    f = summary(admin, bank)
+    assert money(f["balance_month_start"]) == Decimal("900")
+    assert money(f["balance_month_end"]) == Decimal("3500")  # 900 + 5000 - 700 + 300 - 2000
+    # Today's balance waits for the rent's day.
+    assert money(f["balance"]) == Decimal("5500")
+    # The row adds up: start + income - expenses + transfers in - out = end.
+    flows = (
+        money(f["month_income"])
+        - money(f["month_expenses"])
+        + money(f["month_transfers_in"])
+        - money(f["month_transfers_out"])
+    )
+    assert money(f["balance_month_start"]) + flows == money(f["balance_month_end"])
+    # November starts where October ends.
+    assert money(summary(admin, bank, "2026-11")["balance_month_start"]) == Decimal("3500")
+    view = overview(admin)
+    banks = [r for r in view["accounts"] if r["account"]["pay_type"] in ("bank", "cash")]
+    for key in ("balance_month_start", "balance_month_end"):
+        assert money(view["totals"][f"bank_{key}"]) == sum(money(r[key]) for r in banks)
+    # The transfer only moved money between two banks: SBI is 300 down, so the total is 3200.
+    assert money(view["totals"]["bank_balance_month_end"]) == Decimal("3200")
+    # Cards have no start and end balance.
+    card = account_id(admin, "HDFC CC", "credit_card")
+    assert summary(admin, card)["balance_month_end"] is None
+
+
 def test_bank_to_bank_transfer_is_not_income_or_expense(admin: Api) -> None:
     hdfc, sbi = account_id(admin, "HDFC", "bank"), account_id(admin, "SBI", "bank")
     add_tx(admin, account_id=hdfc, type="transfer", to_account_id=sbi, amount="5000")

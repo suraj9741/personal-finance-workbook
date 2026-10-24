@@ -458,8 +458,12 @@ class AccountFigures(BaseModel):
     """
 
     account: AccountOut
-    # Bank, cash and broker cash: money in the account now.
+    # Bank, cash and broker cash: money in the account now, from entries dated up to today.
     balance: Decimal | None
+    # Bank, cash and broker cash: the balance as the month began and as its last day ends,
+    # counting entries already dated later in the month. Null for cards.
+    balance_month_start: Decimal | None = None
+    balance_month_end: Decimal | None = None
     # Credit card: owed now (negative means the card is in credit).
     outstanding: Decimal | None
     # Credit card: limit minus outstanding, never below 0. Null without a limit.
@@ -502,6 +506,9 @@ class OverviewTotals(BaseModel):
     """Active accounts only for balances; every visible account for the month's activity."""
 
     bank_balance: Decimal
+    # The bank balance as the month began and as it ends (see AccountFigures).
+    bank_balance_month_start: Decimal
+    bank_balance_month_end: Decimal
     card_outstanding: Decimal
     # Null when no active card has a credit limit set.
     available_credit: Decimal | None

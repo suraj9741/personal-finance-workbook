@@ -5,6 +5,7 @@ import { ACCOUNT_GROUPS, DECIMALS_HINT, GROUP_ICON, GROUP_LABEL, groupOf, tooMan
 import { forgetDraft, useDraft, useKeepDraft } from "../draft";
 import { focusFirstInvalid, invalidProps, splitServerError, type FieldErrors } from "../forms";
 import { useMe } from "../hooks";
+import { DateInput } from "./DateInput";
 import { BusyLabel, DraftNote, FieldError } from "./FormBits";
 import { useModal } from "./modal-context";
 import { useToasts } from "./toast-context";
@@ -255,7 +256,7 @@ export function AccountForm({ existing, group: initialGroup = "bank", onDone, on
         </label>
         <label>
           Opening date (optional)
-          <input type="date" value={form.opening_date} onChange={(e) => set({ opening_date: e.target.value })} />
+          <DateInput value={form.opening_date} onChange={(opening_date) => set({ opening_date })} />
         </label>
       </div>
       <p className="hint">With an opening date, only entries on or after it count toward the balance. Without one, every entry counts.</p>
@@ -295,7 +296,7 @@ export function AccountForm({ existing, group: initialGroup = "bank", onDone, on
             </label>
             <label>
               Value as of
-              <input type="date" value={form.valued_on} onChange={(e) => set({ valued_on: e.target.value })} />
+              <DateInput value={form.valued_on} onChange={(valued_on) => set({ valued_on })} />
             </label>
           </div>
           <p className="hint">The app has no live prices. Profit/loss shows only when you enter a value.</p>

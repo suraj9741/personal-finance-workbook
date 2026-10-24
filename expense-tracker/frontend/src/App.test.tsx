@@ -8,6 +8,7 @@ import { amountText } from "./test-utils";
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
+  vi.useRealTimers();
 });
 
 const ME = { id: "u1", email: "s@example.com", display_name: "Suraj", is_site_admin: true, household_id: "h1", household_name: "Home", role: "owner" };
@@ -118,9 +119,12 @@ const figures = (a: ReturnType<typeof account>, extra: object = {}) => ({
 });
 const OVERVIEW = {
   month: "2026-10",
-  totals: { bank_balance: "42000", card_outstanding: "25000", available_credit: "75000", broker_cash: "0", invested: "50000", portfolio_value: null, brokers_valued: 0, brokers: 1, month_income: "10000", month_expenses: "18000", net_cash: "17000" },
+  totals: { bank_balance: "42000", bank_balance_month_start: "30000", bank_balance_month_end: "40000", card_outstanding: "25000", available_credit: "75000", broker_cash: "0", invested: "50000", portfolio_value: null, brokers_valued: 0, brokers: 1, month_income: "10000", month_expenses: "18000", net_cash: "17000" },
   accounts: [
-    figures(ACCOUNTS[0], { balance: "42000.00" }),
+    figures(ACCOUNTS[0], {
+      balance: "42000.00", balance_month_start: "30000.00", balance_month_end: "40000.00",
+      month_income: "10000", month_expenses: "3000", month_transfers_in: "5000", month_transfers_out: "2000",
+    }),
     figures(ACCOUNTS[1], { balance: "0.00" }),
     figures(ACCOUNTS[2], { balance: "0.00" }),
     figures(ACCOUNTS[3], { outstanding: "25000.00", available_credit: "75000.00" }),
@@ -194,6 +198,8 @@ it("shows a bank total below zero in red", async () => {
 });
 
 it("shows the financial overview above the monthly dashboard", async () => {
+  vi.useFakeTimers({ toFake: ["Date"] });
+  vi.setSystemTime(new Date(2026, 9, 24, 12));
   mockApi();
   renderAt("/");
   const overview = await screen.findByRole("region", { name: "Financial overview" });
@@ -205,7 +211,15 @@ it("shows the financial overview above the monthly dashboard", async () => {
   expect(within(overview).getByText("Credit card outstanding").parentElement?.textContent).toContain("₹75,000.00 of limits still available, not cash");
   expect(within(overview).queryByText("Net cash position")).toBeNull();
   expect(within(overview).queryByText("Expenses this month")).toBeNull();
-  expect(within(overview).getByRole("columnheader", { name: "All expenses (month)" })).toBeTruthy();
+  // Bank rows add up from the start of the month to its end; today's balance sits beside them.
+  const bankHeads = within(overview).getAllByRole("columnheader").map((h) => h.textContent);
+  expect(bankHeads).toEqual(expect.arrayContaining(["Start of Oct1 Oct", "Income", "Expenses", "Transfersin − out", "End of Oct31 Oct"]));
+  expect(bankHeads).toContain("Current balancetoday, 24 Oct");
+  expect(bankHeads).not.toContain("Opening balance");
+  const hdfc = within(overview).getByRole("link", { name: "HDFC" }).closest("tr")!;
+  expect([...hdfc.querySelectorAll("td[data-label]")].map((td) => td.textContent)).toEqual([
+    "₹30,000.00", "₹10,000.00", "₹3,000.00", "+₹3,000.00", "₹40,000.00", "₹42,000.00",
+  ]);
   expect(screen.getByText("Net cash").nextSibling?.textContent).toBe("₹17,000.00");
   expect(within(overview).getByText("Portfolio value").nextSibling?.textContent).toBe("Not valued");
   expect(within(overview).getByText("0 of 1 brokers have a value entered")).toBeTruthy();

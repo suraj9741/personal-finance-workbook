@@ -7,6 +7,7 @@ import { focusFirstInvalid, invalidProps, splitServerError, type FieldErrors } f
 import { useAccounts, useCategories, useRefreshMoney } from "../hooks";
 import { AccountPicker } from "./AccountPicker";
 import { CategoryPicker } from "./CategoryPicker";
+import { DateInput } from "./DateInput";
 import { BusyLabel, DraftNote, FieldError } from "./FormBits";
 import { useModal } from "./modal-context";
 import { useToasts } from "./toast-context";
@@ -216,17 +217,16 @@ export function TransactionForm({ existing, accountId, onDone }: Props) {
       )}
       <label>
         Date
-        <input type="date" required value={form.date} onChange={(e) => set({ date: e.target.value })} {...field("date")} />
+        <DateInput required value={form.date} onChange={(date) => set({ date })} {...field("date")} />
         <FieldError errors={errors} name="date" formId={formId} />
       </label>
       {postedOn && (
         <label>
           Posted on (optional)
-          <input
-            type="date"
+          <DateInput
             value={form.posted_on ?? ""}
             min={form.date}
-            onChange={(e) => set({ posted_on: e.target.value })}
+            onChange={(posted_on) => set({ posted_on })}
             aria-describedby={`${formId}-posted-hint`}
             {...field("posted_on")}
           />

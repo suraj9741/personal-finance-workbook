@@ -128,7 +128,11 @@ export interface Attention {
 /** One account's numbers from the server. Fields that don't fit the account's type are null. */
 export interface AccountFigures {
   account: Account;
+  /** Bank, cash and broker cash: entries dated up to today. */
   balance: string | null;
+  /** Bank, cash and broker cash: as the month began and as its last day ends. Null for cards. */
+  balance_month_start: string | null;
+  balance_month_end: string | null;
   outstanding: string | null;
   available_credit: string | null;
   next_due_date: string | null;
@@ -161,6 +165,8 @@ export interface Overview {
   month: string;
   totals: {
     bank_balance: string;
+    bank_balance_month_start: string;
+    bank_balance_month_end: string;
     card_outstanding: string;
     available_credit: string | null;
     broker_cash: string;

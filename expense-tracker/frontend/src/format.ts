@@ -225,3 +225,28 @@ export function budgetTone(actual: number, budget: number): "" | "warn" | "over"
   if (actual > budget) return "over";
   return actual >= budget * 0.9 ? "warn" : "";
 }
+
+/** "2026-10-24" → "24/10/2026", the way dates are written here. */
+export function formatDay(iso: string): string {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) return "";
+  const [y, m, d] = iso.split("-");
+  return `${d}/${m}/${y}`;
+}
+
+/**
+ * What was typed, as an ISO date, or null when it isn't one yet. Day first, then month, then
+ * year, with any of / - . or a space between: "22/10/2026", "22-10-26", "2.10.2026", or the
+ * digits alone ("22102026", "221026").
+ */
+export function readTypedDay(text: string): string | null {
+  const t = text.trim();
+  const parts = /^\d{6}$|^\d{8}$/.test(t)
+    ? [t.slice(0, 2), t.slice(2, 4), t.slice(4)]
+    : (t.match(/^(\d{1,2})[/.\- ](\d{1,2})[/.\- ](\d{2}|\d{4})$/)?.slice(1) ?? null);
+  if (!parts) return null;
+  const [d, m] = parts.map(Number);
+  const y = parts[2].length === 2 ? 2000 + Number(parts[2]) : Number(parts[2]);
+  const date = new Date(y, m - 1, d);
+  if (date.getFullYear() !== y || date.getMonth() !== m - 1 || date.getDate() !== d) return null;
+  return `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+}
