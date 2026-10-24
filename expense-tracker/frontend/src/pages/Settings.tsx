@@ -1,7 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
-import { api, ApiError, del, patch, post, type Category, type InviteLink, type Kind, type Member, type Rule, type StatsGroup } from "../api";
+import { api, ApiError, del, patch, post, put, type Category, type InviteLink, type Kind, type Member, type Rule, type StatsGroup } from "../api";
 import { CategoryPicker } from "../components/CategoryPicker";
 import { CopyLink } from "../components/CopyLink";
 import { BusyLabel, FieldError, InlineRename } from "../components/FormBits";
@@ -96,6 +96,12 @@ function Categories({ isOwner }: { isOwner: boolean }) {
     onSuccess: refresh,
     onError: (e: Error, { id }) => setNote(id, { text: e.message }),
   });
+  // The Family tick covers a whole group, its expense and income categories alike.
+  const family = useMutation({
+    mutationFn: (body: { parent_name: string; is_family: boolean }) => put<Category[]>("/categories/family", body),
+    onSuccess: refresh,
+    onError: (e: Error) => notify(e.message, "error"),
+  });
   // A category that entries use can't be deleted: say so on its row now, not 6 seconds later.
   const remove = useMutation({
     mutationFn: (c: Category) => api<{ total: number }>(`/transactions?category_id=${c.id}&limit=1`).then(({ total }) => ({ c, total })),
@@ -179,11 +185,15 @@ function Categories({ isOwner }: { isOwner: boolean }) {
         {parents.map((p) => {
           const rows = shown.filter((c) => c.parent_name === p);
           const open = !!q || openGroups.has(p);
+          const isFamily = family.isPending && family.variables.parent_name === p ? family.variables.is_family : ofKind.some((c) => c.parent_name === p && c.is_family);
           return (
             <details key={`${kind}:${p}`} className="cat-group" open={open} onToggle={(e) => !q && toggleGroup(p, e.currentTarget.open)}>
               <summary>
                 <Icon name="chevron-right" className="disclosure" />
-                <h3>{p}</h3>
+                <h3>
+                  {p}
+                  {isFamily && <span className="tag">Family</span>}
+                </h3>
                 <span className="muted small">
                   {rows.length}
                   <span className="sr-only"> {rows.length === 1 ? "category" : "categories"}</span>
@@ -191,6 +201,17 @@ function Categories({ isOwner }: { isOwner: boolean }) {
               </summary>
               {open && (
                 <>
+                  {kind !== "transfer" && (
+                    <label className="check family-tick">
+                      <input
+                        type="checkbox"
+                        checked={isFamily}
+                        disabled={!isOwner || family.isPending}
+                        onChange={(e) => family.mutate({ parent_name: p, is_family: e.target.checked })}
+                      />
+                      Family group: show it on the Family cards of the year view
+                    </label>
+                  )}
                   <div className="cat-row cat-head" aria-hidden="true">
                     <span>Category</span>
                     <span>Counts as</span>

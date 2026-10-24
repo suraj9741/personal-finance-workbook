@@ -1,7 +1,7 @@
 import { Amounts } from "../components/Amounts";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { api, type Attention, type MonthStats, type TrendPoint } from "../api";
 import { DashboardHero } from "../components/DashboardHero";
 import { FinancialOverview } from "../components/FinancialOverview";
@@ -11,6 +11,8 @@ import { budgetSplit, budgetTone, currentMonth, money } from "../format";
 import { SegmentedRadio } from "../components/SegmentedRadio";
 import { Meter } from "../components/Meter";
 import { Icon } from "../components/Icon";
+import { YearPicker } from "../components/YearPicker";
+import { YearView } from "../components/YearView";
 
 type Scope = MonthStats["scope"];
 const SCOPES: Scope[] = ["household", "me"];
@@ -21,12 +23,12 @@ const SCOPE_CAPTION: Record<Scope, string> = {
 };
 
 /** Household / Just me: a radio group, so arrows move and Tab enters once. */
-function ScopeSwitch({ scope, onChange }: { scope: Scope; onChange: (next: Scope) => void }) {
+function ScopeSwitch({ scope, onChange, controls = "dash-glance dash-categories" }: { scope: Scope; onChange: (next: Scope) => void; controls?: string }) {
   return (
     <SegmentedRadio
       label="Show figures for"
       describedBy="scope-caption"
-      controls="dash-glance dash-categories"
+      controls={controls}
       value={scope}
       onChange={onChange}
       options={SCOPES.map((v) => ({ value: v, label: SCOPE_LABEL[v] }))}
@@ -34,9 +36,53 @@ function ScopeSwitch({ scope, onChange }: { scope: Scope; onChange: (next: Scope
   );
 }
 
+type View = "month" | "year";
+
+/** Month / Year: which dashboard shows. The year view lives in the URL, so a reload keeps it. */
+function ViewSwitch({ view, onChange }: { view: View; onChange: (next: View) => void }) {
+  return (
+    <SegmentedRadio
+      label="Dashboard view"
+      className="segmented view-switch"
+      value={view}
+      onChange={onChange}
+      options={[
+        { value: "month", label: "Month" },
+        { value: "year", label: "Year" },
+      ]}
+    />
+  );
+}
+
 export function Dashboard() {
-  const [month, setMonth] = useState(currentMonth);
+  const [params, setParams] = useSearchParams();
   const [scope, setScope] = useState<Scope>("household");
+  const view: View = params.get("view") === "year" ? "year" : "month";
+  const thisYear = Number(currentMonth().slice(0, 4));
+  const year = Number(params.get("year")) || thisYear;
+
+  function show(next: View, nextYear = year) {
+    setParams(next === "year" ? { view: "year", ...(nextYear !== thisYear ? { year: String(nextYear) } : {}) } : {}, { replace: true });
+  }
+
+  if (view === "year") {
+    return (
+      <section className="dashboard">
+        <div className="toolbar">
+          <h1>Dashboard</h1>
+          <ViewSwitch view={view} onChange={show} />
+          <YearPicker year={year} max={thisYear} onChange={(y) => show("year", y)} />
+          <ScopeSwitch scope={scope} onChange={setScope} controls="year-view" />
+        </div>
+        <YearView year={year} scope={scope} />
+      </section>
+    );
+  }
+  return <MonthDashboard scope={scope} setScope={setScope} view={view} onView={show} />;
+}
+
+function MonthDashboard({ scope, setScope, view, onView }: { scope: Scope; setScope: (s: Scope) => void; view: View; onView: (v: View) => void }) {
+  const [month, setMonth] = useState(currentMonth);
   // Old numbers stay on screen (dimmed) while a new month or scope loads, so nothing blanks or jumps.
   const stats = useQuery({
     queryKey: ["stats", month, scope],
@@ -80,6 +126,7 @@ export function Dashboard() {
     <section className="dashboard">
       <div className="toolbar">
         <h1>Dashboard</h1>
+        <ViewSwitch view={view} onChange={onView} />
         <MonthPicker month={month} onChange={setMonth} />
         <ScopeSwitch scope={scope} onChange={setScope} />
       </div>

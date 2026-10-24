@@ -133,3 +133,19 @@ it("opens the groups that match a search and counts the matches", async () => {
   const types = screen.getByRole("radiogroup", { name: "Category type" });
   expect(within(types).getByRole("radio", { name: "Income" }).getAttribute("aria-checked")).toBe("true");
 });
+
+it("ticks a whole category group as family", async () => {
+  renderSettings();
+  const group = (await screen.findByRole("heading", { name: "Everyday" })).closest("details")!;
+  fireEvent.click(group.querySelector("summary")!);
+  const tick = await within(group).findByRole("checkbox", { name: /Family group/ });
+  expect((tick as HTMLInputElement).checked).toBe(false);
+  fireEvent.click(tick);
+  const put = await vi.waitFor(() => {
+    const call = vi.mocked(fetch).mock.calls.find(([, init]) => init?.method === "PUT");
+    if (!call) throw new Error("no PUT sent");
+    return call;
+  });
+  expect(String(put[0])).toBe("/api/v1/categories/family");
+  expect(JSON.parse(String(put[1]!.body))).toEqual({ parent_name: "Everyday", is_family: true });
+});
