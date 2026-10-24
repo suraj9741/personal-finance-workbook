@@ -62,6 +62,8 @@ Categories = dict[Kind, dict[Name, list[Name | CategoryItem] | CategoryGroup]]
 class HouseholdSeed(Strict):
     accounts: dict[PayType, list[Name | AccountItem]] = Field(default_factory=dict)
     categories: Categories = Field(default_factory=dict)
+    # Category groups to tick as family (Settings > Categories), once, like everything else here.
+    family: list[Name] = Field(default_factory=list)
 
 
 class TemplateSeed(Strict):
@@ -166,6 +168,18 @@ def seed_household(db: Session, household_id: uuid.UUID, seed: HouseholdSeed) ->
                 )
             )
             added["categories"] += 1
+    db.flush()
+    # A group is ticked the first time the config names it; unticking it in the app sticks.
+    for parent in seed.family:
+        if seen.should_add(f"family:{parent.lower()}", False):
+            for category in db.scalars(
+                select(Category).where(
+                    Category.household_id == household_id,
+                    Category.parent_name == parent,
+                    Category.kind != "transfer",
+                )
+            ):
+                category.is_family = True
     return added
 
 
