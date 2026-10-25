@@ -10,9 +10,10 @@ from sqlalchemy.orm import Session
 
 from app.config import get_settings
 from app.db import get_db
-from app.deps import not_found, require_admin
+from app.deps import Ctx, get_ctx, not_found, require_admin
 from app.models import (
     AppSetting,
+    Category,
     CategoryTemplate,
     Household,
     HouseholdMember,
@@ -35,6 +36,7 @@ from app.schemas import (
     TemplateOut,
 )
 from app.security import hash_token, new_token
+from app.services import TEMPLATE_ORDER
 
 router = APIRouter(prefix="/admin", tags=["admin"], dependencies=[Depends(require_admin)])
 
@@ -161,7 +163,7 @@ def rename_household(
 
 @router.get("/category-template", response_model=list[TemplateOut])
 def list_template(db: Session = Depends(get_db)) -> list[CategoryTemplate]:
-    return list(db.scalars(select(CategoryTemplate).order_by(CategoryTemplate.sort_order)))
+    return list(db.scalars(select(CategoryTemplate).order_by(*TEMPLATE_ORDER)))
 
 
 @router.post("/category-template", response_model=TemplateOut, status_code=status.HTTP_201_CREATED)
@@ -182,6 +184,34 @@ def add_template(body: CategoryIn, db: Session = Depends(get_db)) -> CategoryTem
             status.HTTP_409_CONFLICT, "That template category already exists"
         ) from exc
     return row
+
+
+@router.put("/category-template/from-my-categories", response_model=list[TemplateOut])
+def copy_my_categories(
+    ctx: Ctx = Depends(get_ctx), db: Session = Depends(get_db)
+) -> list[TemplateOut]:
+    """Replace the template with the admin's own active categories. Groups ticked Family are
+    the admin's own people, so they stay out."""
+    mine = db.scalars(
+        select(Category).where(
+            Category.household_id == ctx.household_id,
+            Category.is_active.is_(True),
+            Category.is_family.is_(False),
+        )
+    )
+    db.execute(delete(CategoryTemplate))
+    db.add_all(
+        CategoryTemplate(
+            kind=c.kind,
+            parent_name=c.parent_name,
+            sub_name=c.sub_name,
+            stats_group=c.stats_group,
+            sort_order=c.sort_order,
+        )
+        for c in mine
+    )
+    db.commit()
+    return [TemplateOut.model_validate(t) for t in list_template(db)]
 
 
 @router.delete("/category-template/{template_id}", status_code=status.HTTP_204_NO_CONTENT)

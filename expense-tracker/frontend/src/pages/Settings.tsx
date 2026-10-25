@@ -185,6 +185,8 @@ function Categories({ isOwner }: { isOwner: boolean }) {
         {parents.map((p) => {
           const rows = shown.filter((c) => c.parent_name === p);
           const open = !!q || openGroups.has(p);
+          // A rename covers the same group under the other types too.
+          const alsoIn = KINDS.filter((k) => k.value !== kind && categories.some((c) => c.kind === k.value && c.parent_name === p));
           const isFamily = family.isPending && family.variables.parent_name === p ? family.variables.is_family : ofKind.some((c) => c.parent_name === p && c.is_family);
           return (
             <details key={`${kind}:${p}`} className="cat-group" open={open} onToggle={(e) => !q && toggleGroup(p, e.currentTarget.open)}>
@@ -201,6 +203,22 @@ function Categories({ isOwner }: { isOwner: boolean }) {
               </summary>
               {open && (
                 <>
+                  {isOwner && (
+                    <div className="group-rename">
+                      <span className="muted small">Group</span>
+                      <InlineRename
+                        value={p}
+                        label={`New name for the ${p} group`}
+                        onSave={(name) =>
+                          put<Category[]>("/categories/group-name", { parent_name: p, new_name: name }).then(() => {
+                            toggleGroup(name, true);
+                            return refresh();
+                          })
+                        }
+                      />
+                      {alsoIn.length > 0 && <span className="muted small group-rename-note">Renames it under {alsoIn.map((k) => k.label).join(" and ")} too.</span>}
+                    </div>
+                  )}
                   {kind !== "transfer" && (
                     <label className="check family-tick">
                       <input

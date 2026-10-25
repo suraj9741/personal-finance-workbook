@@ -105,6 +105,36 @@ def test_template_from_admin_page_is_copied_to_new_households(admin: Api) -> Non
     assert ("Kids", "School") in {(c["parent_name"], c["sub_name"]) for c in cats}
 
 
+def test_admin_copies_own_categories_to_the_template(admin: Api, family_member: Api) -> None:
+    food = category_id(admin, "Everyday", "Food")
+    assert admin.patch(f"/api/v1/categories/{food}", json={"is_active": False}).status_code == 200
+    mine = admin.get("/api/v1/categories").json()
+    family = {"Gotu", "Mom", "Baba", "Pratiksha", "Farm"}
+    expected = {
+        (c["kind"], c["parent_name"], c["sub_name"], c["stats_group"])
+        for c in mine
+        if not c["is_family"]
+    }
+    assert (
+        family_member.put("/api/v1/admin/category-template/from-my-categories").status_code == 403
+    )
+
+    copied = admin.put("/api/v1/admin/category-template/from-my-categories")
+    assert copied.status_code == 200
+    rows = {(t["kind"], t["parent_name"], t["sub_name"], t["stats_group"]) for t in copied.json()}
+    # Active categories only, and the groups ticked Family stay with the admin.
+    assert rows == expected
+    assert not {t["parent_name"] for t in copied.json()} & family
+    assert ("expense", "Everyday", "Food", "spend") not in rows
+
+    newcomer = join_by_invite(admin, "new@example.com", "New", admin_new_household="New house")
+    got = {
+        (c["kind"], c["parent_name"], c["sub_name"], c["stats_group"])
+        for c in newcomer.get("/api/v1/categories").json()
+    }
+    assert got == expected
+
+
 def test_template_changes_do_not_touch_existing_households(solo: Api, db: Session) -> None:
     food = category_id(solo, "Everyday", "Food")
     assert solo.delete(f"/api/v1/categories/{food}").status_code == 204

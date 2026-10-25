@@ -190,6 +190,13 @@ class CategoryPatchIn(Strict):
     sort_order: int | None = None
 
 
+class GroupRenameIn(Strict):
+    """Rename one group (by name, in every type that has it)."""
+
+    parent_name: Name
+    new_name: Name
+
+
 class FamilyGroupIn(Strict):
     """Tick or untick one group (by name, expense and income alike) as family."""
 
