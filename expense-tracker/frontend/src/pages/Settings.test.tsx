@@ -149,3 +149,20 @@ it("ticks a whole category group as family", async () => {
   expect(String(put[0])).toBe("/api/v1/categories/family");
   expect(JSON.parse(String(put[1]!.body))).toEqual({ parent_name: "Everyday", is_family: true });
 });
+
+it("renames a whole category group, and says when that covers income too", async () => {
+  renderSettings();
+  const group = (await screen.findByRole("heading", { name: "Everyday" })).closest("details")!;
+  fireEvent.click(group.querySelector("summary")!);
+  fireEvent.click(await within(group).findByRole("button", { name: "Rename Everyday" }));
+  expect(within(group).queryByText(/Renames it under/)).toBeNull();
+  fireEvent.change(within(group).getByRole("textbox", { name: "New name for the Everyday group" }), { target: { value: "Daily" } });
+  fireEvent.click(within(group).getByRole("button", { name: "Save" }));
+  const put = await vi.waitFor(() => {
+    const call = vi.mocked(fetch).mock.calls.find(([, init]) => init?.method === "PUT");
+    if (!call) throw new Error("no PUT sent");
+    return call;
+  });
+  expect(String(put[0])).toBe("/api/v1/categories/group-name");
+  expect(JSON.parse(String(put[1]!.body))).toEqual({ parent_name: "Everyday", new_name: "Daily" });
+});

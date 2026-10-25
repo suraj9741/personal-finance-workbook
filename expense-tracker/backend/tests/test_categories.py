@@ -64,3 +64,39 @@ def test_categories_come_a_to_z_with_other_last(admin: Api) -> None:
     wages = [c["sub_name"] for c in listed if c["kind"] == "income" and c["parent_name"] == "Wages"]
     assert wages == ["Bonus", "Commission", "Paycheck", "W Other"]
     assert list(dict.fromkeys(c["kind"] for c in listed)) == ["expense", "income", "transfer"]
+
+
+def test_owner_renames_a_whole_group(admin: Api, family_member: Api) -> None:
+    tuition = category_id(admin, "Gotu", "Tuition")
+    add_tx(admin, category_id=tuition)
+    body = {"parent_name": "Gotu", "new_name": "Gautam"}
+    assert family_member.put("/api/v1/categories/group-name", json=body).status_code == 403
+
+    renamed = admin.put("/api/v1/categories/group-name", json=body)
+    assert renamed.status_code == 200
+    listed = admin.get("/api/v1/categories").json()
+    assert not [c for c in listed if c["parent_name"] == "Gotu"]
+    gautam = [c for c in listed if c["parent_name"] == "Gautam"]
+    # Expense and income move together, keep their Family tick, and entries follow.
+    assert {c["kind"] for c in gautam} == {"expense", "income"}
+    assert all(c["is_family"] for c in gautam)
+    assert category_id(admin, "Gautam", "Tuition") == tuition
+    entries = admin.get("/api/v1/transactions?category_group=Gautam&month=2026-10").json()
+    assert entries["total"] == 1
+
+
+def test_group_rename_refuses_a_name_in_use(admin: Api) -> None:
+    taken = admin.put(
+        "/api/v1/categories/group-name", json={"parent_name": "Gotu", "new_name": "mom"}
+    )
+    assert taken.status_code == 409
+    assert taken.json()["detail"] == "There's already a group called Mom"
+    missing = admin.put(
+        "/api/v1/categories/group-name", json={"parent_name": "Nope", "new_name": "X"}
+    )
+    assert missing.status_code == 404
+    # Only the capitals change: fine.
+    caps = admin.put(
+        "/api/v1/categories/group-name", json={"parent_name": "Everyday", "new_name": "EVERYDAY"}
+    )
+    assert caps.status_code == 200
