@@ -135,6 +135,22 @@ def test_admin_copies_own_categories_to_the_template(admin: Api, family_member: 
     assert got == expected
 
 
+def test_copy_leaves_out_a_family_group_whole(admin: Api, db: Session) -> None:
+    added = admin.post(
+        "/api/v1/categories",
+        json={"kind": "expense", "parent_name": "Baba", "sub_name": "Medical test"},
+    )
+    # Unticked, as categories added before this fix were.
+    db.execute(
+        text("UPDATE categories SET is_family = false WHERE id = :c"), {"c": added.json()["id"]}
+    )
+    db.commit()
+    first = admin.put("/api/v1/admin/category-template/from-my-categories").json()
+    assert "Baba" not in {t["parent_name"] for t in first}
+    again = admin.put("/api/v1/admin/category-template/from-my-categories").json()
+    assert len(again) == len(first)
+
+
 def test_template_changes_do_not_touch_existing_households(solo: Api, db: Session) -> None:
     food = category_id(solo, "Everyday", "Food")
     assert solo.delete(f"/api/v1/categories/{food}").status_code == 204

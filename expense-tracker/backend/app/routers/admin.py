@@ -4,7 +4,7 @@ import uuid
 from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import delete, select
+from sqlalchemy import delete, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -36,7 +36,7 @@ from app.schemas import (
     TemplateOut,
 )
 from app.security import hash_token, new_token
-from app.services import TEMPLATE_ORDER
+from app.services import TEMPLATE_ORDER, family_group_names
 
 router = APIRouter(prefix="/admin", tags=["admin"], dependencies=[Depends(require_admin)])
 
@@ -196,7 +196,10 @@ def copy_my_categories(
         select(Category).where(
             Category.household_id == ctx.household_id,
             Category.is_active.is_(True),
-            Category.is_family.is_(False),
+            or_(
+                Category.kind == "transfer",
+                Category.parent_name.not_in(family_group_names(ctx.household_id)),
+            ),
         )
     )
     db.execute(delete(CategoryTemplate))

@@ -4,7 +4,7 @@ import uuid
 from datetime import date
 from typing import Any
 
-from sqlalchemy import ColumnElement, case, func, or_, select
+from sqlalchemy import ColumnElement, Select, case, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.models import AppSetting, Category, CategoryRule, CategoryTemplate, Household
@@ -21,6 +21,16 @@ def a_to_z(model: type[Category] | type[CategoryTemplate]) -> tuple[ColumnElemen
         group,
         or_(sub == "other", sub.like("% other")),
         sub,
+    )
+
+
+def family_group_names(household_id: uuid.UUID) -> Select[str]:
+    """Names of the household's Family groups. The tick belongs to the group: one ticked
+    category is enough, so a category added to the group later counts too."""
+    return select(Category.parent_name).where(
+        Category.household_id == household_id,
+        Category.is_family.is_(True),
+        Category.kind != "transfer",
     )
 
 

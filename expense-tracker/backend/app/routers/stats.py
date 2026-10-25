@@ -37,7 +37,7 @@ from app.schemas import (
     YearMonth,
     YearStats,
 )
-from app.services import CATEGORY_ORDER, add_months
+from app.services import CATEGORY_ORDER, add_months, family_group_names
 
 router = APIRouter(tags=["stats"])
 
@@ -491,14 +491,18 @@ def year_stats(
         select(Category.parent_name, Category.kind, func.sum(SIGNED_AMOUNT))
         .select_from(Transaction)
         .join(Category, Category.id == Transaction.category_id)
-        .where(*in_year, Category.is_family.is_(True))
+        .where(
+            *in_year,
+            Category.kind != "transfer",
+            Category.parent_name.in_(family_group_names(ctx.household_id)),
+        )
         .group_by(Category.parent_name, Category.kind)
     ).all()
     family_groups = db.scalars(
         select(Category.parent_name)
         .where(
             Category.household_id == ctx.household_id,
-            Category.is_family.is_(True),
+            Category.parent_name.in_(family_group_names(ctx.household_id)),
             Category.kind == "expense",
         )
         .distinct()

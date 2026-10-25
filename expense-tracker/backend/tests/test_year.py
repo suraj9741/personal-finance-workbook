@@ -136,6 +136,25 @@ def test_family_tick_covers_the_whole_group(admin: Api, family_member: Api) -> N
     assert member.status_code == 403
 
 
+def test_a_category_added_to_a_family_group_counts_as_family(admin: Api, db: Session) -> None:
+    added = admin.post(
+        "/api/v1/categories", json={"kind": "expense", "parent_name": "Gotu", "sub_name": "Savings"}
+    )
+    assert added.json()["is_family"] is True
+    other = admin.post(
+        "/api/v1/categories", json={"kind": "expense", "parent_name": "Room", "sub_name": "Paint"}
+    )
+    assert other.json()["is_family"] is False
+    # One added before this fix kept an unticked flag: the group's tick still covers it.
+    db.execute(
+        text("UPDATE categories SET is_family = false WHERE id = :c"), {"c": added.json()["id"]}
+    )
+    db.commit()
+    add_tx(admin, date="2025-03-03", amount="1500", category_id=added.json()["id"])
+    family = {f["parent_name"]: f for f in admin.get(YEAR).json()["family"]}
+    assert family["Gotu"]["given"] == "1500.00"
+
+
 def test_seed_ticks_family_groups_once(admin: Api, db: Session) -> None:
     admin.put("/api/v1/categories/family", json={"parent_name": "Mom", "is_family": False})
     seed.apply(db, config())
