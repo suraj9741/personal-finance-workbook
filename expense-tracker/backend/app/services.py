@@ -2,23 +2,30 @@
 
 import uuid
 from datetime import date
+from typing import Any
 
-from sqlalchemy import case, func, or_, select
+from sqlalchemy import ColumnElement, case, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.models import AppSetting, Category, CategoryRule, CategoryTemplate, Household
 
-_group = func.lower(Category.parent_name)
-_sub = func.lower(Category.sub_name)
-# Expense, income, then transfer; groups and the categories in them A to Z, with any
-# "Other" (or "W Other") last, since it is the catch-all.
-CATEGORY_ORDER = (
-    case({"expense": 0, "income": 1}, value=Category.kind, else_=2),
-    _group == "other",
-    _group,
-    or_(_sub == "other", _sub.like("% other")),
-    _sub,
-)
+
+def a_to_z(model: type[Category] | type[CategoryTemplate]) -> tuple[ColumnElement[Any], ...]:
+    """Expense, income, then transfer; groups and the categories in them A to Z, with any
+    "Other" (or "W Other") last, since it is the catch-all."""
+    group = func.lower(model.parent_name)
+    sub = func.lower(model.sub_name)
+    return (
+        case({"expense": 0, "income": 1}, value=model.kind, else_=2),
+        group == "other",
+        group,
+        or_(sub == "other", sub.like("% other")),
+        sub,
+    )
+
+
+CATEGORY_ORDER = a_to_z(Category)
+TEMPLATE_ORDER = a_to_z(CategoryTemplate)
 
 
 def create_household(db: Session, name: str) -> Household:

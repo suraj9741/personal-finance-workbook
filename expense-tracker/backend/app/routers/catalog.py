@@ -4,7 +4,7 @@ import uuid
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import exists, or_, select
+from sqlalchemy import exists, func, or_, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -20,6 +20,7 @@ from app.schemas import (
     CategoryOut,
     CategoryPatchIn,
     FamilyGroupIn,
+    GroupRenameIn,
     RuleIn,
     RuleOut,
     RulePatchIn,
@@ -119,6 +120,34 @@ def set_family_group(
         raise not_found("Category group not found")
     for category in categories:
         category.is_family = body.is_family
+    db.commit()
+    return categories
+
+
+@router.put("/categories/group-name", response_model=list[CategoryOut])
+def rename_group(
+    body: GroupRenameIn, ctx: Ctx = Depends(require_owner), db: Session = Depends(get_db)
+) -> list[Category]:
+    """Rename a whole group. Expense and income groups of the same name move together, as the
+    Family tick treats them as one. Budgets, rules and entries point at the categories, so they
+    follow the new name."""
+    mine = Category.household_id == ctx.household_id
+    categories = list(
+        db.scalars(select(Category).where(mine, Category.parent_name == body.parent_name))
+    )
+    if not categories:
+        raise not_found("Category group not found")
+    taken = db.scalar(
+        select(Category.parent_name).where(
+            mine,
+            func.lower(Category.parent_name) == body.new_name.lower(),
+            Category.parent_name != body.parent_name,
+        )
+    )
+    if taken is not None:
+        raise conflict(f"There's already a group called {taken}")
+    for category in categories:
+        category.parent_name = body.new_name
     db.commit()
     return categories
 

@@ -4,11 +4,12 @@ import { Navigate } from "react-router-dom";
 import { api, ApiError, del, patch, post, put, type AdminHousehold, type AdminUser, type InviteLink, type Kind, type StatsGroup } from "../api";
 import { CopyLink } from "../components/CopyLink";
 import { BusyLabel, FieldError, InlineRename } from "../components/FormBits";
+import { Modal } from "../components/Modal";
 import { SegmentedRadio } from "../components/SegmentedRadio";
 import { SettingsNav, SettingsSection } from "../components/SettingsNav";
 import { useToasts } from "../components/toast-context";
 import { invalidProps, splitServerError, type FieldErrors } from "../forms";
-import { useMe } from "../hooks";
+import { useCategories, useMe } from "../hooks";
 import { Icon } from "../components/Icon";
 
 interface Template {
@@ -338,6 +339,19 @@ function TemplateSection() {
       setError(split.general);
     },
   });
+  // Your own active categories, minus the groups ticked Family: those are your own people.
+  const mine = (useCategories(true).data ?? []).filter((c) => c.is_active);
+  const copied = mine.filter((c) => !c.is_family);
+  const familyGroups = [...new Set(mine.filter((c) => c.is_family).map((c) => c.parent_name))];
+  const [confirming, setConfirming] = useState(false);
+  const copy = useMutation({
+    mutationFn: () => put<Template[]>("/admin/category-template/from-my-categories", {}),
+    onSuccess: (list) => {
+      setConfirming(false);
+      notify(`The template is now your ${list.length} categories`);
+      return refresh();
+    },
+  });
   const remove = (r: Template) =>
     deferDelete({ id: r.id, text: `Removed ${r.sub_name} from the template`, commit: (keepalive) => del(`/admin/category-template/${r.id}`, keepalive), after: refresh });
 
@@ -358,7 +372,12 @@ function TemplateSection() {
   return (
     <SettingsSection id="template" title="Category template" intro={`New households get a copy of this list (${rows.length} categories). Existing households are not changed.`}>
       <div className="card">
-        <SegmentedRadio label="Category type" options={KINDS} value={kind} onChange={setKind} />
+        <div className="template-toolbar">
+          <SegmentedRadio label="Category type" options={KINDS} value={kind} onChange={setKind} />
+          <button type="button" disabled={copied.length === 0} onClick={() => setConfirming(true)}>
+            Copy my categories
+          </button>
+        </div>
         <form className="settings-form" aria-label="Add to the template" aria-busy={add.isPending} noValidate onSubmit={submit}>
           <label className="field">
             Group
@@ -415,6 +434,27 @@ function TemplateSection() {
           </div>
         ))}
       </div>
+      {confirming && (
+        <Modal title="Replace the template with your categories?" onClose={() => setConfirming(false)}>
+          <p>
+            New households will start with your {copied.length} categories instead of these {rows.length}.
+            {familyGroups.length > 0 && ` Your Family groups (${familyGroups.join(", ")}) are left out.`} Inactive categories are left out too. Households that already exist don't change.
+          </p>
+          {copy.error && (
+            <p className="error" role="alert">
+              {copy.error.message}
+            </p>
+          )}
+          <div className="row">
+            <button type="button" data-autofocus disabled={copy.isPending} onClick={() => setConfirming(false)}>
+              Cancel
+            </button>
+            <button type="button" className="primary" disabled={copy.isPending} onClick={() => copy.mutate()}>
+              <BusyLabel busy={copy.isPending} idle="Replace the template" working="Copying…" />
+            </button>
+          </div>
+        </Modal>
+      )}
     </SettingsSection>
   );
 }
