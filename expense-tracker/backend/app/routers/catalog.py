@@ -26,7 +26,7 @@ from app.schemas import (
     RulePatchIn,
     ValuationOut,
 )
-from app.services import CATEGORY_ORDER
+from app.services import CATEGORY_ORDER, family_group_names
 
 router = APIRouter(tags=["catalog"])
 
@@ -80,6 +80,11 @@ def create_category(
         stats_group=group,
         sort_order=body.sort_order,
     )
+    if body.kind != "transfer":
+        # Added to a Family group, it is family too.
+        category.is_family = (
+            body.parent_name in db.scalars(family_group_names(ctx.household_id)).all()
+        )
     db.add(category)
     commit_or_conflict(db, "That category already exists")
     return category
