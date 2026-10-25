@@ -37,7 +37,7 @@ from app.schemas import (
     YearMonth,
     YearStats,
 )
-from app.services import add_months
+from app.services import CATEGORY_ORDER, add_months
 
 router = APIRouter(tags=["stats"])
 
@@ -283,7 +283,7 @@ def category_lines(
     categories = db.scalars(
         select(Category)
         .where(Category.id.in_(ids), Category.kind != "transfer")
-        .order_by(Category.sort_order)
+        .order_by(*CATEGORY_ORDER)
     )
     lines = []
     for c in categories:
