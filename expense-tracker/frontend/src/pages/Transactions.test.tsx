@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, expect, it, vi } from "vitest";
 import { shiftDay, today } from "../format";
@@ -71,4 +71,43 @@ it("marks the last day 'so far' when more rows are still to load", async () => {
   renderWith([tx("a", now, "expense", "100.00")], 5);
   expect(await screen.findByText("so far")).toBeTruthy();
   expect(screen.getByRole("button", { name: "Show 4 more (4 left)" })).toBeTruthy();
+});
+
+it("filters by a whole category group as well as by one category", async () => {
+  const cat = (id: string, kind: string, parent_name: string, sub_name: string) => ({ id, kind, parent_name, sub_name, stats_group: "spend", is_active: true });
+  const categories = [cat("c1", "expense", "Everyday", "Food"), cat("c2", "expense", "Everyday", "Groceries"), cat("c3", "income", "Gotu", "Cash"), cat("c4", "income", "Gotu", "Bank"), cat("c5", "expense", "Debt", "Car EMI")];
+  const urls: string[] = [];
+  vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+    const url = String(input);
+    urls.push(url);
+    const body = url.includes("/transactions") ? { items: [], total: 0 } : url.includes("/categories") ? categories : [];
+    return new Response(JSON.stringify(body), { status: 200 });
+  });
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  render(
+    <QueryClientProvider client={client}>
+      <MemoryRouter>
+        <Transactions />
+      </MemoryRouter>
+    </QueryClientProvider>,
+  );
+  const button = await screen.findByRole("button", { name: /^Category filter/ });
+  fireEvent.click(button);
+  const options = () => within(screen.getByRole("listbox")).getAllByRole("option").map((o) => o.textContent);
+  await vi.waitFor(() => expect(options()).toContain("All2 categories"));
+  // Each group opens with its "All" row; income groups say so.
+  // A group of one category has no "All" row.
+  expect(options()).toEqual(["All categories", "All2 categories", "Food", "Groceries", "All2 categories", "Cash", "Bank", "Car EMI"]);
+  fireEvent.click(within(screen.getByRole("listbox")).getAllByRole("option")[1]);
+  await vi.waitFor(() => expect(urls.some((u) => u.includes("category_group=Everyday") && !u.includes("category_kind"))).toBe(true));
+  expect(button.textContent).toContain("Everyday › All");
+  // Picking one category replaces the group.
+  fireEvent.click(button);
+  fireEvent.click(within(screen.getByRole("listbox")).getByText("Cash"));
+  await vi.waitFor(() => expect(urls.at(-1)).toMatch(/category_id=c3/));
+  expect(urls.at(-1)).not.toMatch(/category_group/);
+  // The income group sends its kind.
+  fireEvent.click(button);
+  fireEvent.click(within(screen.getByRole("listbox")).getAllByRole("option")[4]);
+  await vi.waitFor(() => expect(urls.at(-1)).toMatch(/category_group=Gotu.*category_kind=income|category_kind=income.*category_group=Gotu/));
 });

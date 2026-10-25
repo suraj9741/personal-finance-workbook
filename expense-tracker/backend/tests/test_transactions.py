@@ -61,6 +61,28 @@ def test_filters_and_search(admin: Api) -> None:
     assert admin.get("/api/v1/transactions?month=2026-13").status_code == 422
 
 
+def test_filter_by_a_whole_category_group(admin: Api) -> None:
+    food, groceries = (category_id(admin, "Everyday", sub) for sub in ("Food", "Groceries"))
+    add_tx(admin, description="Swiggy", category_id=food)
+    add_tx(admin, description="DMart", category_id=groceries)
+    add_tx(admin, description="Uncategorized", category_id=None)
+    gotu_spend = category_id(admin, "Gotu", "Cash")
+    gotu_in = category_id(admin, "Gotu", "Cash", "income")
+    add_tx(admin, description="For Gotu", category_id=gotu_spend)
+    add_tx(admin, description="From Gotu", type="income", category_id=gotu_in)
+
+    def found(query: str) -> set[str]:
+        page = admin.get(f"/api/v1/transactions?{query}").json()
+        return {t["description"] for t in page["items"]}
+
+    assert found("category_group=Everyday") == {"Swiggy", "DMart"}
+    # The same group name under income is a different group.
+    assert found("category_group=Gotu") == {"For Gotu"}
+    assert found("category_group=Gotu&category_kind=income") == {"From Gotu"}
+    assert found("category_group=Nothing") == set()
+    assert admin.get("/api/v1/transactions?category_kind=refund").status_code == 422
+
+
 def test_rule_fills_category_on_quick_add(admin: Api) -> None:
     food = category_id(admin, "Everyday", "Food")
     assert (
