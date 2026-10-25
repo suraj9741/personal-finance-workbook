@@ -3,10 +3,22 @@
 import uuid
 from datetime import date
 
-from sqlalchemy import select
+from sqlalchemy import case, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.models import AppSetting, Category, CategoryRule, CategoryTemplate, Household
+
+_group = func.lower(Category.parent_name)
+_sub = func.lower(Category.sub_name)
+# Expense, income, then transfer; groups and the categories in them A to Z, with any
+# "Other" (or "W Other") last, since it is the catch-all.
+CATEGORY_ORDER = (
+    case({"expense": 0, "income": 1}, value=Category.kind, else_=2),
+    _group == "other",
+    _group,
+    or_(_sub == "other", _sub.like("% other")),
+    _sub,
+)
 
 
 def create_household(db: Session, name: str) -> Household:

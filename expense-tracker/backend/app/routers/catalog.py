@@ -25,6 +25,7 @@ from app.schemas import (
     RulePatchIn,
     ValuationOut,
 )
+from app.services import CATEGORY_ORDER
 
 router = APIRouter(tags=["catalog"])
 
@@ -60,7 +61,7 @@ def list_categories(
     query = select(Category).where(Category.household_id == ctx.household_id)
     if not include_inactive:
         query = query.where(Category.is_active.is_(True))
-    return list(db.scalars(query.order_by(Category.sort_order, Category.parent_name)))
+    return list(db.scalars(query.order_by(*CATEGORY_ORDER)))
 
 
 @router.post("/categories", response_model=CategoryOut, status_code=status.HTTP_201_CREATED)
