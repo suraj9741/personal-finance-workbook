@@ -107,13 +107,34 @@ Data lives in the Docker volume `expense-tracker_pgdata`.
 
 - `make down` stops the app and keeps the data.
 - **Never run `docker compose down -v`.** The `-v` deletes the volume and every entry with it.
-- The `backup` service writes a `pg_dump` to `./backups` every night and keeps the last 14
-  (`BACKUP_KEEP` in `.env`). `make backup` takes one right now.
+- The `backup` service writes a `pg_dump` to `./backups` when it starts and then every 24
+  hours while it keeps running, and keeps the last 14 (`BACKUP_KEEP` in `.env`). The timer
+  starts over whenever Docker restarts, and nothing runs while the Mac sleeps, so don't count
+  on a dump every night. `make backup` takes one right now.
 - `make restore FILE=backups/expense-YYYYMMDD-HHMMSS.dump` replaces the database with that
   backup. It asks you to type `yes` first.
 
 Copy `./backups` somewhere off the laptop (iCloud Drive, an external disk) now and then.
-`.env` and `backups/` are gitignored, so neither ends up in git.
+`.env` and `backups/` are gitignored, so neither ends up in git. The
+[backup guide](docs/backup-guide.md) covers checking a dump, encrypting copies, and the
+known gaps.
+
+## Operations docs
+
+| Guide | Use it to |
+| --- | --- |
+| [Architecture overview](docs/architecture-overview.md) | understand the components, data, network, and single points of failure |
+| [Deployment guide](docs/deployment-guide.md) | set up a new machine from scratch, and deploy updates |
+| [Backup guide](docs/backup-guide.md) | take, check, encrypt and store backups |
+| [Restore guide](docs/restore-guide.md) | recover from lost data, a broken database, a lost Mac or a bad deploy |
+| [Environment migration guide](docs/environment-migration-guide.md) | move the app and its data to a new machine, with cutover and rollback |
+| [Quick reference](docs/quick-reference-commands.md) | copy the commands without the explanations |
+
+The diagrams for these guides are in [`docs/diagrams/`](docs/diagrams):
+[system architecture](docs/diagrams/system-architecture.drawio.svg),
+[deployment flow](docs/diagrams/deployment-flow.drawio.svg),
+[backup and restore](docs/diagrams/backup-restore-architecture.drawio.svg) and
+[environment migration](docs/diagrams/environment-migration.drawio.svg).
 
 ## Commands
 
@@ -141,7 +162,7 @@ browser ──► frontend (nginx, :8080) ──/api──► backend (FastAPI, 
                                                        ▲
                        migrate (one-shot: alembic upgrade head, then exits)
                        seed    (one-shot: adds what's missing from config/seed.yaml)
-                       backup  (nightly pg_dump into ./backups)
+                       backup  (pg_dump into ./backups on start, then every 24 hours)
 ```
 
 - **backend/**: Python 3.12, FastAPI, Pydantic v2, SQLAlchemy 2, Alembic. All routes are under

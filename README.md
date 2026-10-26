@@ -38,5 +38,5 @@ seed file. A change to `Defaults.gs` also runs the expense tracker's CI.
 ```
 .github/workflows/   CI for both products (GitHub only reads workflows from the repo root)
 finance-sheet/       Apps Script source (src/), Node tests, clasp config, docs
-expense-tracker/     backend/, frontend/, docker-compose, Makefile
+expense-tracker/     backend/, frontend/, docker-compose, Makefile, docs/ (deploy, backup, restore, migration)
 ```
