@@ -189,7 +189,16 @@ upload() {
   log "Drive is up to date"
 }
 
-new_name() { echo "$BACKUP_DIR/expense-$(date -u +%Y%m%d-%H%M%SZ)$1.dump"; }
+# A new dump name, never an existing one: two dumps in the same second would overwrite.
+new_name() {
+  local file
+  file="$BACKUP_DIR/expense-$(date -u +%Y%m%d-%H%M%SZ)$1.dump"
+  while [ -e "$file" ]; do
+    sleep 1
+    file="$BACKUP_DIR/expense-$(date -u +%Y%m%d-%H%M%SZ)$1.dump"
+  done
+  echo "$file"
+}
 
 # Upload first, and prune this Mac only once Drive has a copy, so old dumps are never deleted
 # while the only other copy is missing.
