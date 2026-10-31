@@ -122,13 +122,19 @@ make backup-drive-setup
 
 1. A browser opens. Sign in to Google and allow access. rclone asks only for `drive.file`,
    so it can see the files it creates and nothing else in your Drive.
-2. Answer `N` to "Restoring on a new Mac". The script makes a random passphrase and salt,
-   creates the encrypted remote `expense-drive-crypt:` over the Drive folder
-   `expense-backups`, and prints both values once.
+2. Answer `N` to "Reuse a passphrase and salt from Bitwarden?". The script makes a random
+   passphrase and salt, creates the encrypted remote `expense-drive-crypt:` over the Drive
+   folder `expense-backups`, and prints both values once. (`y` is only for a new machine: it
+   asks you to paste the saved values, with hidden input, and refuses empty ones.)
 3. **Save the passphrase and salt in Bitwarden now.** Without them the Drive copies are
    unreadable, and there is no way to reset them.
 4. `make backup-schedule`, then `make backup`, then `make backup-status`. Expect "Drive copy:
    expense-drive-crypt:, last upload <just now>".
+
+Answered the prompt wrongly? Run `rclone config delete expense-drive-crypt` and
+`make backup-drive-setup` again. The Google sign-in is kept. If `make backup` already ran with
+the wrong key, empty the `expense-backups` folder in Drive first: the new key can't read
+those files.
 
 To keep backups on the Mac only, set `BACKUP_REMOTE=none` in `.env`.
 
