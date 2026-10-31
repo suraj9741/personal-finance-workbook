@@ -108,7 +108,7 @@ Data lives in the Docker volume `expense-tracker_pgdata`.
 - `make down` stops the app and keeps the data.
 - **Never run `docker compose down -v`.** The `-v` deletes the volume and every entry with it.
 - A launchd job (`make backup-schedule`) checks every hour and takes a daily `pg_dump` into
-  `./backups`. `make backup` takes one right now. Each dump is encrypted and copied to
+  `~/expense-tracker-backups` (`./backups` links there). `make backup` takes one right now. Each dump is encrypted and copied to
   Google Drive, and the newest 7 daily and 3 manual dumps are kept in both places.
   `make backup-status` shows what ran.
 - `make restore FILE=backups/expense-YYYYMMDD-HHMMSS.dump` replaces the database with that

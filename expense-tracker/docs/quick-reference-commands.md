@@ -238,7 +238,7 @@ curl -s http://localhost:8000/readyz              # Safe: backend can reach the 
 | `port is already allocated` | `lsof -iTCP:8080 -sTCP:LISTEN` | Free the port, or change `FRONTEND_PORT` / `BACKEND_PORT` |
 | `/readyz` returns 503 | `docker compose logs db` | Start `db`; put back the original `POSTGRES_PASSWORD` if it was changed |
 | `502 Bad Gateway` in the app | `make ps` | Backend down: `docker compose logs backend`, then `make up` |
-| No new daily backup | `make backup-status`, `tail backups/backup.log` | Schedule OFF: `make backup-schedule`. Docker not running: start it; the next hourly check catches up |
+| No new daily backup | `make backup-status`, `tail backups/backup.log` | Schedule OFF: `make backup-schedule`. "Last run FAILED (exit code 78)" or "scheduled copy is out of date": `make backup-schedule` again. Docker not running: start it; the next hourly check catches up |
 | Upload to Drive fails | `tail backups/backup.log` | Sign-in expired: `rclone config reconnect expense-gdrive:`. The next run retries |
 | Build fails at `pip`, `uv` or `npm` | the build output | Network or registry problem; retry. The running app is unaffected |
 

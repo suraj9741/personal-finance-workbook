@@ -103,7 +103,7 @@ The browser only ever talks to nginx, so the app needs no CORS (see
 | Data | Where it lives | In git? | Lost if |
 | --- | --- | --- | --- |
 | Users, households, accounts, categories, transactions, budgets, rules, sessions, invites | Docker volume `expense-tracker_pgdata` | No | the volume is deleted (`docker compose down -v`, `docker volume rm`, resetting Docker Desktop) or the Mac's disk fails |
-| Database dumps | `expense-tracker/backups/` on the Mac, and encrypted in Google Drive (`expense-backups/`) | No (gitignored) | both the Mac and the Google account are lost, or the passphrase in Bitwarden is lost |
+| Database dumps | `~/expense-tracker-backups` on the Mac (`expense-tracker/backups` links there), and encrypted in Google Drive (`expense-backups/`) | No (gitignored) | both the Mac and the Google account are lost, or the passphrase in Bitwarden is lost |
 | `.env` (database password, ports, URLs) | `expense-tracker/.env` | No (gitignored) | the Mac's disk fails |
 | Seed config, code, migrations | `config/seed.yaml` and the rest of the repository | Yes | not lost: it is on GitHub |
 | Built images | Docker Desktop's image store | No registry | rebuilt by `make up` |
@@ -182,7 +182,9 @@ Source: [diagrams/deployment-flow.drawio.svg](diagrams/deployment-flow.drawio.sv
 Source: [diagrams/backup-restore-architecture.drawio.svg](diagrams/backup-restore-architecture.drawio.svg).
 
 - `scripts/backup.sh` runs on the Mac, outside Compose. A launchd job runs it hourly and it
-  takes a daily `pg_dump --format=custom` into `expense-tracker/backups/`; `make backup`
+  takes a daily `pg_dump --format=custom` into `~/expense-tracker-backups` (linked as
+  `expense-tracker/backups`). The job runs a copy of the script from
+  `~/.local/share/expense-tracker`, because macOS blocks background jobs from `~/Documents`; `make backup`
   takes a manual one. Each dump is checked, encrypted with rclone `crypt` and copied to
   Google Drive. The newest 7 daily and 3 manual dumps are kept on each side.
 - `make restore FILE=...` replaces the database with a dump; `make backup-fetch` gets one

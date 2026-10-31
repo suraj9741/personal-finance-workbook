@@ -121,6 +121,46 @@ check "the oldest file was deleted, whatever its name" test ! -f "$BACKUP_DIR/$l
 check "still 3 manual on the Mac" equals "$(local_manual)" 3
 check "old dumps are made private" equals "$(find "$BACKUP_DIR" -maxdepth 1 -name 'expense-*.dump' -perm -044 | wc -l | tr -d ' ')" 0
 
+echo "10. install moves the backups and the scheduled copy out of the app folder"
+# A throwaway app folder and home, so the real backups/ is never touched.
+APP="$WORK/app"
+FAKE_HOME="$WORK/home"
+mkdir -p "$APP/scripts/launchd" "$APP/backups/pre-retention" "$FAKE_HOME"
+cp "$SCRIPT" "$APP/scripts/backup.sh"
+cp "$HERE/launchd/com.expense-tracker.backup.plist" "$APP/scripts/launchd/"
+printf 'PGDMP old' >"$APP/backups/expense-20261001-010000.dump"
+touch -t 202610010100 "$APP/backups/expense-20261001-010000.dump"
+printf 'PGDMP kept aside' >"$APP/backups/pre-retention/expense-20260901-010000-manual.dump"
+echo 2026-10-01T01:00:00Z >"$APP/backups/.last-upload"
+printf 'BACKUP_KEEP_DAILY=5\nBACKUP_REMOTE=testcrypt:\n' >"$APP/.env"
+OUT="$FAKE_HOME/expense-tracker-backups"
+RUNNER="$FAKE_HOME/.local/share/expense-tracker"
+install_app() { env -u BACKUP_DIR -u BACKUP_KEEP_DAILY -u BACKUP_REMOTE HOME="$FAKE_HOME" "$APP/scripts/backup.sh" install >>"$WORK/out.log" 2>&1; }
+install_app
+check "install succeeds" test $? = 0
+check "backups/ is now a link to the outside folder" equals "$(readlink "$APP/backups")" "$OUT"
+check "dumps, dot files and folders moved" test -f "$OUT/expense-20261001-010000.dump" -a -f "$OUT/.last-upload" -a -f "$OUT/pre-retention/expense-20260901-010000-manual.dump"
+check "the scheduled copy matches the script" cmp -s "$SCRIPT" "$RUNNER/scripts/backup.sh"
+check "its settings point at the outside folder" grep -qx "BACKUP_DIR=$OUT" "$RUNNER/.env"
+check "and keep the app's own settings" grep -qx "BACKUP_KEEP_DAILY=5" "$RUNNER/.env"
+check "the launchd job runs the copy and logs outside the app folder" \
+  test "$(grep -c -e "<string>$RUNNER/scripts/backup.sh</string>" -e "<string>$OUT/backup.log</string>" "$RUNNER/com.expense-tracker.backup.plist")" = 2
+check "no placeholders left in the job file" test "$(grep -c @ "$RUNNER/com.expense-tracker.backup.plist")" = 0
+rm -rf "${APP:?}"/* "$APP/.env"   # the scheduled copy must work without the app folder
+env -u BACKUP_DIR HOME="$FAKE_HOME" "$RUNNER/scripts/backup.sh" auto >>"$WORK/out.log" 2>&1
+check "the scheduled copy takes its dump in the outside folder" test -n "$(cd "$OUT" && ls expense-*Z.dump 2>/dev/null)"
+new_dump=$(cd "$OUT" && ls -1t expense-*Z.dump 2>/dev/null | head -n 1)
+check "and uploads it to Drive" test -n "$new_dump" -a -n "$(drive_names | grep -x "$new_dump")"
+mkdir -p "$APP/scripts/launchd" && cp "$SCRIPT" "$APP/scripts/backup.sh" && cp "$HERE/launchd/com.expense-tracker.backup.plist" "$APP/scripts/launchd/"
+ln -s "$OUT" "$APP/backups"
+install_app
+check "running install again keeps the link" equals "$(readlink "$APP/backups")" "$OUT"
+rm "$APP/backups" && mkdir "$APP/backups"
+printf 'PGDMP clash' >"$APP/backups/expense-20261001-010000.dump"
+install_app
+check "a name clash stops the move" test $? != 0
+check "and keeps both files" test "$(cat "$APP/backups/expense-20261001-010000.dump")" = "PGDMP clash" -a "$(cat "$OUT/expense-20261001-010000.dump")" = "PGDMP old"
+
 if [ "$failures" -gt 0 ]; then
   echo
   echo "$failures check(s) failed. Script output:"
