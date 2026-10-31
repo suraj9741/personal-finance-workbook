@@ -1,7 +1,10 @@
 name: Expense tracker
 
 on:
+  # Runs once per PR. push is limited to main, so a merge is still checked
+  # but a push to a PR branch doesn't run everything a second time.
   push:
+    branches: [main]
     paths:
       - "expense-tracker/**"
       - "finance-sheet/src/config/Defaults.gs"
