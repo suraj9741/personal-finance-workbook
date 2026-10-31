@@ -99,9 +99,10 @@ lock() {
   trap 'rmdir "$LOCK" 2>/dev/null' EXIT
 }
 
-# Dump names, newest first. Names start with the date, so sorting by name sorts by time.
-list_daily() { (cd "$BACKUP_DIR" && ls -1 expense-*.dump 2>/dev/null | grep -v -- '-manual\.dump$' | sort -r); }
-list_manual() { (cd "$BACKUP_DIR" && ls -1 expense-*-manual.dump 2>/dev/null | sort -r); }
+# Dump names, newest first by modification time. Not by name: dumps from before October 2026
+# have manual names in local time, which sort wrongly against the UTC ones.
+list_daily() { (cd "$BACKUP_DIR" && ls -1t expense-*.dump 2>/dev/null | grep -v -- '-manual\.dump$'); }
+list_manual() { (cd "$BACKUP_DIR" && ls -1t expense-*-manual.dump 2>/dev/null); }
 
 recent_daily_exists() {
   [ -n "$(find "$BACKUP_DIR" -maxdepth 1 -name 'expense-*.dump' ! -name '*-manual.dump' -mmin -"$DAILY_AGE_MINUTES")" ]
@@ -154,6 +155,7 @@ delete_beyond() {
 }
 
 prune_local() {
+  chmod 600 "$BACKUP_DIR"/expense-*.dump 2>/dev/null || true
   list_daily | delete_beyond local "$KEEP_DAILY"
   list_manual | delete_beyond local "$KEEP_MANUAL"
 }
@@ -173,13 +175,15 @@ upload() {
     fail "the upload to Google Drive failed (see backups/backup.log)"
     return 1
   fi
+  # "modtime|name" lines, newest first, then just the names.
   local names
-  names=$(rclone lsf "$REMOTE" --files-only --include 'expense-*.dump' 2>>"$LOG") || {
+  names=$(rclone lsf "$REMOTE" --files-only --include 'expense-*.dump' --format tp --separator '|' 2>>"$LOG" |
+    sort -r | cut -d '|' -f 2) || {
     fail "couldn't list the backups in Google Drive"
     return 1
   }
-  echo "$names" | grep -v -- '-manual\.dump$' | sort -r | delete_beyond remote "$KEEP_DAILY"
-  echo "$names" | grep -- '-manual\.dump$' | sort -r | delete_beyond remote "$KEEP_MANUAL"
+  echo "$names" | grep -v -- '-manual\.dump$' | delete_beyond remote "$KEEP_DAILY"
+  echo "$names" | grep -- '-manual\.dump$' | delete_beyond remote "$KEEP_MANUAL"
   rm -f "$PENDING"
   now >"$LAST_UPLOAD"
   log "Drive is up to date"
@@ -187,22 +191,31 @@ upload() {
 
 new_name() { echo "$BACKUP_DIR/expense-$(date -u +%Y%m%d-%H%M%SZ)$1.dump"; }
 
+# Upload first, and prune this Mac only once Drive has a copy, so old dumps are never deleted
+# while the only other copy is missing.
+upload_then_prune() {
+  if upload; then
+    prune_local
+  else
+    log "kept the older dumps on this Mac until Drive has a copy"
+    return 1
+  fi
+}
+
 cmd_auto() {
   lock
   trim_log
   if ! recent_daily_exists; then
     take_dump "$(new_name "")" || return 1
   fi
-  prune_local
-  upload
+  upload_then_prune
 }
 
 cmd_manual() {
   lock
   trim_log
   take_dump "$(new_name -manual)" || return 1
-  prune_local
-  upload
+  upload_then_prune
 }
 
 cmd_status() {

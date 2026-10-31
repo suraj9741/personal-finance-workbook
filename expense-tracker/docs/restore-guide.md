@@ -68,8 +68,9 @@ make backup-list-drive                          # Safe: the copies in Google Dri
 
 - Pick the newest dump taken **before** the problem started. For a bad deploy, that's the
   dump you took before `git pull`.
-- Names are in UTC and sort by time (`expense-YYYYMMDD-HHMMSSZ[-manual].dump`). Dumps from
-  before October 2026 have no `Z`, and their manual names are in local time (see the
+- Names are in UTC (`expense-YYYYMMDD-HHMMSSZ[-manual].dump`). Dumps from before October 2026
+  have no `Z`, and their manual names are in local time, so go by `ls -lt` (file time), not
+  by the name (see the
   [backup guide](backup-guide.md#where-backups-are-stored-and-how-they-are-named)).
 - Files dated before that change may include 0-byte failed manual dumps or a tiny dump of
   an empty new install. Skip them. The backup script no longer writes either.

@@ -65,10 +65,12 @@ Each run:
 2. Writes the dump to a `.tmp` file, then checks it starts with `PGDMP` and that
    `pg_restore --list` can read it. Only then does it get its `.dump` name. A failed dump is
    deleted, never left looking like a backup.
-3. Keeps the newest 7 daily and the newest 3 manual dumps on the Mac and deletes the rest.
-4. Copies the dumps Drive doesn't have yet, then keeps the newest 7 daily and 3 manual dumps
+3. Copies the dumps Drive doesn't have yet, then keeps the newest 7 daily and 3 manual dumps
    in Drive. Drive is pruned from its own file list, so losing the local folder never deletes
    anything in Drive.
+4. Only after a successful upload, keeps the newest 7 daily and 3 manual dumps on the Mac and
+   deletes the rest. While Drive is not set up or an upload keeps failing, nothing on the Mac
+   is deleted.
 5. Appends what it did to `backups/backup.log`. On a failure it also shows a macOS
    notification (at most one every 6 hours) and the next hourly run tries again.
 
@@ -138,7 +140,7 @@ To keep backups on the Mac only, set `BACKUP_REMOTE=none` in `.env`.
 | In Drive | Folder `expense-backups` in My Drive. File names and contents are encrypted, so Drive shows random names |
 | Daily name | `expense-YYYYMMDD-HHMMSSZ.dump` (UTC) |
 | Manual name | `expense-YYYYMMDD-HHMMSSZ-manual.dump` (UTC) |
-| Older names | `expense-YYYYMMDD-HHMMSS.dump` (UTC) and `...-manual.dump` (local time) from before October 2026. They are counted and pruned the same way |
+| Older names | `expense-YYYYMMDD-HHMMSS.dump` (UTC) and `...-manual.dump` (local time) from before October 2026. They are counted and pruned the same way, newest by file time |
 | Format | `pg_dump` custom format, gzip-compressed, version 1.15 (Postgres 16) |
 | Copies | Two: the Mac and Google Drive |
 
@@ -172,7 +174,8 @@ Rules:
 | --- | --- |
 | Policy | The newest `BACKUP_KEEP_DAILY` (7) daily and `BACKUP_KEEP_MANUAL` (3) manual dumps, by count. Change them in `.env` |
 | Where | On the Mac and in Drive, each pruned from its own list |
-| When | Every run that takes a dump or uploads |
+| When | Every run that takes a dump or uploads. The Mac is pruned only after Drive has a copy (or when `BACKUP_REMOTE=none`) |
+| Newest means | By file modification time, not by name, so older local-time names sort correctly |
 | Why by count, not by age | A Mac left off for two weeks still has 7 copies when it comes back |
 | Deleted in Drive | Go to the Drive bin, which Google empties after 30 days. They are encrypted there too |
 

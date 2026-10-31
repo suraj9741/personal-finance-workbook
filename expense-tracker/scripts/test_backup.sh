@@ -87,8 +87,10 @@ check "a non-Postgres file is refused too" equals "$(ls "$BACKUP_DIR" | sort)" "
 echo "5. A failed upload is retried on the next run"
 BACKUP_REMOTE="missing-remote:" run manual
 check "upload marked as waiting" test -f "$BACKUP_DIR/.upload-pending"
+check "nothing deleted on the Mac while Drive lacks a copy" equals "$(local_manual)" 4
 run auto
 check "next run uploaded it" test ! -f "$BACKUP_DIR/.upload-pending"
+check "then the Mac was pruned to 3 manual" equals "$(local_manual)" 3
 check "Drive matches the Mac" equals "$(drive_names)" "$(cd "$BACKUP_DIR" && ls -1 expense-*.dump | sort)"
 
 echo "6. Losing the Mac's folder never deletes the Drive copies"
@@ -109,6 +111,15 @@ drive_before=$(drive_names)
 BACKUP_REMOTE=none run manual
 check "the run succeeds" test "$(tail -n 1 "$BACKUP_DIR/backup.log" | grep -c 'dump written')" = 1
 check "Drive unchanged" equals "$(drive_names)" "$drive_before"
+
+echo "9. Older local-time names are ordered by file time, not by name"
+legacy="expense-20991231-235959-manual.dump"   # name sorts newest, file time is oldest
+printf 'PGDMP legacy' >"$BACKUP_DIR/$legacy"
+touch -t 202601010000 "$BACKUP_DIR/$legacy"
+BACKUP_REMOTE=none run manual
+check "the oldest file was deleted, whatever its name" test ! -f "$BACKUP_DIR/$legacy"
+check "still 3 manual on the Mac" equals "$(local_manual)" 3
+check "old dumps are made private" equals "$(find "$BACKUP_DIR" -maxdepth 1 -name 'expense-*.dump' -perm -044 | wc -l | tr -d ' ')" 0
 
 if [ "$failures" -gt 0 ]; then
   echo
