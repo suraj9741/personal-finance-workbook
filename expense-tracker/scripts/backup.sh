@@ -280,10 +280,17 @@ cmd_drive_setup() {
     return 0
   fi
   local answer pass salt
-  read -r -p "Restoring on a new Mac with a passphrase you already saved? [y/N] " answer
+  echo
+  echo "First setup: answer N, and a new passphrase and salt are made and printed for Bitwarden."
+  echo "Answer y only on a new machine, to reuse the passphrase and salt already in Bitwarden."
+  read -r -p "Reuse a passphrase and salt from Bitwarden? [y/N] " answer
   if [ "$answer" = y ] || [ "$answer" = Y ]; then
-    read -r -s -p "Passphrase: " pass; echo
-    read -r -s -p "Salt: " salt; echo
+    read -r -s -p "Paste the passphrase from Bitwarden (hidden): " pass; echo
+    read -r -s -p "Paste the salt from Bitwarden (hidden): " salt; echo
+    if [ -z "$pass" ] || [ -z "$salt" ]; then
+      echo "The passphrase and salt can't be empty. Nothing was set up; run make backup-drive-setup again." >&2
+      return 1
+    fi
   else
     pass=$(openssl rand -base64 32)
     salt=$(openssl rand -base64 32)
