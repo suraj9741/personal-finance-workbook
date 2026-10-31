@@ -8,16 +8,22 @@
 #   scripts/backup.sh list-drive   dumps stored in Google Drive
 #   scripts/backup.sh fetch FILE   download and decrypt one dump from Drive into backups/fetched/
 #   scripts/backup.sh drive-setup  connect Google Drive and create the encrypted remote (once per Mac)
+#   scripts/backup.sh install      copy this script and its settings out of the app folder for launchd
 #
 # Every dump is checked, the newest BACKUP_KEEP_DAILY daily and BACKUP_KEEP_MANUAL manual dumps
 # are kept (on the Mac and in Drive, counted separately on each side), and new dumps are copied
 # to BACKUP_REMOTE, an rclone crypt remote. Settings come from the environment, then .env.
 #
+# The scheduled job runs a copy installed in ~/.local/share/expense-tracker, and the dumps live in
+# ~/expense-tracker-backups (backups/ links there). macOS won't let a background job open anything
+# in ~/Documents, where the app folder usually sits, so the job never touches the app folder.
+#
 # Written for the bash 3.2 and BSD tools that ship with macOS; also runs on Linux.
 
 set -uo pipefail
 
-APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
+SELF="$APP_DIR/scripts/$(basename "${BASH_SOURCE[0]}")"
 cd "$APP_DIR" || exit 1
 
 # A value from the environment, else from .env, else the default.
@@ -36,6 +42,8 @@ KEEP_MANUAL=$(setting BACKUP_KEEP_MANUAL 3)
 # "none" turns the Drive copy off.
 REMOTE=$(setting BACKUP_REMOTE "expense-drive-crypt:")
 [ "$REMOTE" = none ] && REMOTE=""
+# The database container is found by its Compose labels, so no compose file is needed.
+COMPOSE_PROJECT=$(setting BACKUP_COMPOSE_PROJECT expense-tracker)
 # Tests replace the database dump with their own command. Unset in normal use.
 DUMP_CMD=$(printenv BACKUP_DUMP_CMD || true)
 
@@ -45,6 +53,10 @@ LAUNCHD_LABEL=com.expense-tracker.backup
 GDRIVE_REMOTE=expense-gdrive
 CRYPT_REMOTE=expense-drive-crypt
 DRIVE_FOLDER=expense-backups
+# Where `install` puts the copy launchd runs, and the backups folder outside the app folder.
+RUNNER_DIR="$HOME/.local/share/expense-tracker"
+RUNNER="$RUNNER_DIR/scripts/backup.sh"
+OUTSIDE_DIR="$HOME/expense-tracker-backups"
 
 LOG="$BACKUP_DIR/backup.log"
 PENDING="$BACKUP_DIR/.upload-pending"
@@ -108,21 +120,23 @@ recent_daily_exists() {
   [ -n "$(find "$BACKUP_DIR" -maxdepth 1 -name 'expense-*.dump' ! -name '*-manual.dump' -mmin -"$DAILY_AGE_MINUTES")" ]
 }
 
-compose_db_running() {
-  command -v docker >/dev/null 2>&1 || return 1
-  docker info >/dev/null 2>&1 || return 1
-  [ -n "$(docker compose ps --status running -q db 2>/dev/null)" ]
+# The running database container's id, or nothing.
+db_container() {
+  command -v docker >/dev/null 2>&1 || return 0
+  docker ps -q --filter "label=com.docker.compose.project=$COMPOSE_PROJECT" \
+    --filter label=com.docker.compose.service=db --filter status=running 2>/dev/null | head -n 1
 }
 
 # Write a dump to $1. It is checked before it gets its final name, so a failed dump is never
 # mistaken for a backup.
 take_dump() {
-  local file=$1 tmp="$1.tmp"
+  local file=$1 tmp="$1.tmp" db=""
   if [ -n "$DUMP_CMD" ]; then
     sh -c "$DUMP_CMD" >"$tmp" 2>>"$LOG" || { rm -f "$tmp"; fail "the dump command failed"; return 1; }
   else
-    compose_db_running || { fail "Docker or the database isn't running, so no backup was taken"; return 1; }
-    docker compose exec -T db sh -c 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" --format=custom' \
+    db=$(db_container)
+    [ -n "$db" ] || { fail "Docker or the database isn't running, so no backup was taken"; return 1; }
+    docker exec -i "$db" sh -c 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" --format=custom' \
       >"$tmp" 2>>"$LOG" || { rm -f "$tmp"; fail "pg_dump failed"; return 1; }
   fi
   if [ ! -s "$tmp" ] || [ "$(head -c 5 "$tmp")" != PGDMP ]; then
@@ -130,7 +144,7 @@ take_dump() {
     fail "the dump was empty or not a Postgres dump"
     return 1
   fi
-  if [ -z "$DUMP_CMD" ] && ! docker compose exec -T db pg_restore --list <"$tmp" >/dev/null 2>>"$LOG"; then
+  if [ -n "$db" ] && ! docker exec -i "$db" pg_restore --list <"$tmp" >/dev/null 2>>"$LOG"; then
     rm -f "$tmp"
     fail "pg_restore can't read the new dump"
     return 1
@@ -241,7 +255,20 @@ cmd_status() {
     [ -f "$PENDING" ] && echo "               an upload is waiting to be retried"
   fi
   if command -v launchctl >/dev/null 2>&1; then
-    if launchctl list 2>/dev/null | grep -q "$LAUNCHD_LABEL"; then echo "Schedule:      on (hourly check)"; else echo "Schedule:      OFF (run make backup-schedule)"; fi
+    local job exit_code
+    if job=$(launchctl print "gui/$(id -u)/$LAUNCHD_LABEL" 2>/dev/null); then
+      exit_code=$(echo "$job" | sed -n 's/.*last exit code = \([0-9]*\).*/\1/p' | head -n 1)
+      if [ -n "$exit_code" ] && [ "$exit_code" != 0 ]; then
+        echo "Schedule:      on, but the last run FAILED (exit code $exit_code; see the log below)"
+      else
+        echo "Schedule:      on (hourly check)"
+      fi
+    else
+      echo "Schedule:      OFF (run make backup-schedule)"
+    fi
+  fi
+  if [ -f "$RUNNER" ] && [ "$SELF" != "$RUNNER" ] && ! cmp -s "$SELF" "$RUNNER"; then
+    echo "               the scheduled copy is out of date (run make backup-schedule)"
   fi
   echo "Last log lines:"
   tail -n 5 "$LOG" 2>/dev/null | sed 's/^/  /'
@@ -307,6 +334,58 @@ cmd_drive_setup() {
   echo "Done. Drive folder: $DRIVE_FOLDER (file names and contents are encrypted)."
 }
 
+# Prepare everything the scheduled job needs outside the app folder:
+#  1. the backups folder: backups/ moves to ~/expense-tracker-backups and becomes a link to it
+#     (skipped when BACKUP_DIR is set to a folder of your own);
+#  2. a copy of this script, with the backup settings from .env, in ~/.local/share/expense-tracker;
+#  3. the launchd job file, written next to that copy for `make backup-schedule` to load.
+# Safe to run again: it refreshes the copy and settings.
+cmd_install() {
+  local target entry
+  if [ "$SELF" = "$RUNNER" ]; then
+    echo "Run install from the app folder (make backup-schedule), not from the scheduled copy." >&2
+    return 1
+  fi
+  if [ "$BACKUP_DIR" != "$APP_DIR/backups" ]; then
+    target=$BACKUP_DIR
+  elif [ -L backups ]; then
+    target=$(cd backups && pwd -P)
+  else
+    if [ -d backups/.lock ]; then
+      echo "A backup is running. Try again in a minute (or remove backups/.lock if it is stale)." >&2
+      return 1
+    fi
+    target=$OUTSIDE_DIR
+    mkdir -p "$target" && chmod 700 "$target" || return 1
+    # Move everything over, never overwriting, then swap the folder for a link.
+    for entry in backups/* backups/.[!.]*; do
+      [ -e "$entry" ] || continue
+      mv -n "$entry" "$target/" 2>/dev/null || true
+    done
+    if ! rmdir backups 2>/dev/null; then
+      echo "Some files in backups/ already exist in $target, so nothing more was moved." >&2
+      echo "Compare the two folders, move what's left by hand, then run this again." >&2
+      return 1
+    fi
+    ln -s "$target" backups
+    echo "Moved the backups to $target (backups/ now links there)."
+  fi
+  mkdir -p "$RUNNER_DIR/scripts" || return 1
+  cp "$SELF" "$RUNNER.tmp" && chmod 700 "$RUNNER.tmp" && mv "$RUNNER.tmp" "$RUNNER" || return 1
+  {
+    echo "# Written by make backup-schedule from $APP_DIR/.env. Run it again after changing backup settings."
+    echo "BACKUP_DIR=$target"
+    echo "BACKUP_KEEP_DAILY=$KEEP_DAILY"
+    echo "BACKUP_KEEP_MANUAL=$KEEP_MANUAL"
+    echo "BACKUP_REMOTE=${REMOTE:-none}"
+    echo "BACKUP_COMPOSE_PROJECT=$COMPOSE_PROJECT"
+  } >"$RUNNER_DIR/.env"
+  chmod 600 "$RUNNER_DIR/.env"
+  sed -e "s|@RUNNER@|$RUNNER|g" -e "s|@BACKUP_DIR@|$target|g" \
+    "$APP_DIR/scripts/launchd/$LAUNCHD_LABEL.plist" >"$RUNNER_DIR/$LAUNCHD_LABEL.plist" || return 1
+  echo "Installed the scheduled copy in $RUNNER_DIR."
+}
+
 case "${1:-}" in
   auto) cmd_auto ;;
   manual) cmd_manual ;;
@@ -314,8 +393,9 @@ case "${1:-}" in
   list-drive) cmd_list_drive ;;
   fetch) cmd_fetch "${2:-}" ;;
   drive-setup) cmd_drive_setup ;;
+  install) cmd_install ;;
   *)
-    sed -n '4,10p' "$0" | sed 's/^# \{0,1\}//'
+    sed -n '4,11p' "$0" | sed 's/^# \{0,1\}//'
     exit 2
     ;;
 esac

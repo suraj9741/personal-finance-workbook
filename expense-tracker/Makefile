@@ -4,6 +4,8 @@ COMPOSE := docker compose
 TEST_COMPOSE := docker compose -f docker-compose.test.yml
 LAUNCHD_LABEL := com.expense-tracker.backup
 LAUNCHD_PLIST := $(HOME)/Library/LaunchAgents/$(LAUNCHD_LABEL).plist
+# The copy of scripts/backup.sh that launchd runs (see scripts/backup.sh install).
+RUNNER_DIR := $(HOME)/.local/share/expense-tracker
 
 .DEFAULT_GOAL := help
 .PHONY: help env up down logs ps migrate create-admin apply-config seed backup backup-status backup-schedule backup-unschedule backup-drive-setup backup-list-drive backup-fetch backup-test restore test lint fmt clean-test
@@ -38,6 +40,8 @@ create-admin: env ## Create the first admin: make create-admin EMAIL=you@example
 
 apply-config: env ## Add what's missing from config/seed.yaml now (make up does this too)
 	$(COMPOSE) run --rm seed
+	@# A deploy can change the backup script, so refresh the copy the schedule runs.
+	@if [ -f "$(LAUNCHD_PLIST)" ]; then scripts/backup.sh install; fi
 
 seed: env ## Load demo households with fake data (for trying the app, not for real use)
 	$(COMPOSE) run --rm backend python -m app.cli seed-demo
@@ -49,15 +53,17 @@ backup-status: ## Newest backups, last Drive upload, schedule on or off
 	@scripts/backup.sh status
 
 backup-schedule: ## Turn on the daily backup (a launchd job on this Mac that checks hourly)
-	@mkdir -p backups "$$HOME/Library/LaunchAgents"
-	@sed "s|@APP_DIR@|$(CURDIR)|g" scripts/launchd/$(LAUNCHD_LABEL).plist > "$(LAUNCHD_PLIST)"
+	@scripts/backup.sh install
+	@mkdir -p "$$HOME/Library/LaunchAgents"
+	@cp "$(RUNNER_DIR)/$(LAUNCHD_LABEL).plist" "$(LAUNCHD_PLIST)"
 	@launchctl bootout gui/$$(id -u)/$(LAUNCHD_LABEL) 2>/dev/null || true
 	launchctl bootstrap gui/$$(id -u) "$(LAUNCHD_PLIST)"
 	@echo "Daily backup is on. Check it with: make backup-status"
 
-backup-unschedule: ## Turn the daily backup off
+backup-unschedule: ## Turn the daily backup off (the backups themselves stay)
 	@launchctl bootout gui/$$(id -u)/$(LAUNCHD_LABEL) 2>/dev/null || true
 	@rm -f "$(LAUNCHD_PLIST)"
+	@rm -rf "$(RUNNER_DIR)"
 	@echo "Daily backup is off."
 
 backup-drive-setup: ## Connect Google Drive and create the encrypted backup folder (once per Mac)

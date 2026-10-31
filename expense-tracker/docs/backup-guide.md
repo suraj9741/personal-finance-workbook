@@ -14,7 +14,8 @@ Commands run from `expense-tracker/` on the machine that runs the app. Marks: **
   backup of it.
 - A launchd job on the Mac checks every hour and takes a daily dump when the newest one is
   23 hours old or more. `make backup` takes a manual one at any time.
-- Each dump is checked, kept in `expense-tracker/backups/`, encrypted with rclone and copied
+- Each dump is checked, kept in `~/expense-tracker-backups` (`expense-tracker/backups` links
+  there), encrypted with rclone and copied
   to Google Drive. The newest **7 daily** and **3 manual** dumps are kept, on the Mac and in
   Drive. Older ones are deleted.
 - `make backup-status` shows the newest dumps, the last upload and whether the schedule is on.
@@ -52,13 +53,31 @@ Source: [diagrams/backup-restore-architecture.drawio.svg](diagrams/backup-restor
 ## How backups are taken
 
 Everything goes through one script, `scripts/backup.sh`. It runs on the Mac, not in a
-container, and reaches the database with `docker compose exec db pg_dump`.
+container, and reaches the database with `docker exec <db container> pg_dump`. It finds the
+container by its Compose labels (project `expense-tracker`, service `db`), so it needs no
+compose file.
 
 ### Daily: the launchd job
 
-`make backup-schedule` installs `~/Library/LaunchAgents/com.expense-tracker.backup.plist`
-from `scripts/launchd/`. launchd runs `scripts/backup.sh auto` every hour and when you log in.
-Each run:
+macOS doesn't let a background job open anything in `~/Documents` (or Desktop or Downloads).
+The app folder usually sits there, so the job never touches it. When it did, launchd gave up
+before the script started: `launchctl print` showed `last exit code = 78: EX_CONFIG` and
+nothing reached the log. `make backup-schedule` (`scripts/backup.sh install`) sets up the
+job outside the app folder:
+
+1. Moves `backups/` to `~/expense-tracker-backups` and leaves `backups` as a link to it, so
+   `backups/...` paths in these guides still work. It never overwrites a file. If a name
+   already exists on both sides it stops and moves nothing more. Skipped when `BACKUP_DIR` in
+   `.env` names a folder of your own.
+2. Copies `scripts/backup.sh` and the backup settings from `.env` into
+   `~/.local/share/expense-tracker/`.
+3. Installs `~/Library/LaunchAgents/com.expense-tracker.backup.plist`, which runs that copy.
+
+`make up` refreshes the copy when the schedule is on, so a deploy that changes the script
+reaches the job. `make backup-status` says when the copy is out of date. Run
+`make backup-schedule` again after changing a `BACKUP_` setting in `.env`.
+
+launchd runs the copy with `auto` every hour and when you log in. Each run:
 
 1. Takes a dump only if the newest daily dump is 23 hours old or more. So a Mac that slept or
    was switched off catches up within an hour of waking, and the dump time doesn't drift.
@@ -71,7 +90,7 @@ Each run:
 4. Only after a successful upload, keeps the newest 7 daily and 3 manual dumps on the Mac and
    deletes the rest. While Drive is not set up or an upload keeps failing, nothing on the Mac
    is deleted.
-5. Appends what it did to `backups/backup.log`. On a failure it also shows a macOS
+5. Appends what it did to `backup.log` in the backups folder. On a failure it also shows a macOS
    notification (at most one every 6 hours) and the next hourly run tries again.
 
 An hourly run with nothing to do takes no dump and makes no network call.
@@ -90,6 +109,10 @@ make backup-schedule      # on
 make backup-unschedule    # off
 make backup-status        # "Schedule: on (hourly check)"
 ```
+
+If the status says "on, but the last run FAILED (exit code N)", the job is loaded but its
+last run failed. Exit code 1 is a backup failure; the log says which. Exit code 78 means
+launchd couldn't start the job at all: run `make backup-schedule` again from the app folder.
 
 ### Manual: `make backup`
 
@@ -142,7 +165,8 @@ To keep backups on the Mac only, set `BACKUP_REMOTE=none` in `.env`.
 
 | Item | Current |
 | --- | --- |
-| On the Mac | `expense-tracker/backups/`, gitignored, mode 700. Also holds `backup.log` and the `.last-upload` and `.upload-pending` markers |
+| On the Mac | `~/expense-tracker-backups`, mode 700, with `expense-tracker/backups` (gitignored) linking to it. Also holds `backup.log` and the `.last-upload` and `.upload-pending` markers |
+| Scheduled copy | `~/.local/share/expense-tracker/`: the script launchd runs, its settings and the job file. Rebuilt by `make backup-schedule` |
 | In Drive | Folder `expense-backups` in My Drive. File names and contents are encrypted, so Drive shows random names |
 | Daily name | `expense-YYYYMMDD-HHMMSSZ.dump` (UTC) |
 | Manual name | `expense-YYYYMMDD-HHMMSSZ-manual.dump` (UTC) |
@@ -232,7 +256,7 @@ docker compose exec -T db sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Atc
 
 ## Record and monitor backup results
 
-- `backups/backup.log`: one line per dump, deletion and upload, and every failure. It keeps
+- `backups/backup.log` (in `~/expense-tracker-backups`): one line per dump, deletion and upload, and every failure. It keeps
   its last 1000 lines.
 - A macOS notification on any failure, at most one every 6 hours.
 - `make backup-status` (**Safe**):
@@ -301,3 +325,7 @@ go.
   fixed: no off-Mac copy, the timer that reset on restarts, manual dumps counting toward the
   limit, 0-byte files from a failed `make backup`, the empty first dump on a new install, and
   mixed local and UTC names.
+- 31 October 2026: the launchd job never ran, because macOS blocked it from the app folder in
+  `~/Documents` (exit code 78). The job now runs a copy of the script from
+  `~/.local/share/expense-tracker`, and the dumps moved to `~/expense-tracker-backups`.
+  `make backup-status` now reports a failing schedule instead of "on".

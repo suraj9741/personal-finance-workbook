@@ -1,6 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<!-- Template. make backup-schedule fills in @APP_DIR@ and installs it in ~/Library/LaunchAgents. -->
+<!-- Template. make backup-schedule fills in @RUNNER@ and @BACKUP_DIR@ and loads it from ~/Library/LaunchAgents.
+     Both paths are outside ~/Documents on purpose: macOS stops background jobs from opening
+     anything there, and launchd then gives up with exit code 78 before the script even starts. -->
 <plist version="1.0">
 <dict>
   <key>Label</key>
@@ -8,7 +10,7 @@
   <key>ProgramArguments</key>
   <array>
     <string>/bin/bash</string>
-    <string>@APP_DIR@/scripts/backup.sh</string>
+    <string>@RUNNER@</string>
     <string>auto</string>
   </array>
   <!-- Check every hour and when you log in. The script only dumps when the newest daily dump
@@ -25,7 +27,7 @@
   <key>StandardOutPath</key>
   <string>/dev/null</string>
   <key>StandardErrorPath</key>
-  <string>@APP_DIR@/backups/backup.log</string>
+  <string>@BACKUP_DIR@/backup.log</string>
   <key>ProcessType</key>
   <string>Background</string>
 </dict>
