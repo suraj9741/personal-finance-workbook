@@ -77,33 +77,7 @@ services:
     ports:
       - "0.0.0.0:${FRONTEND_PORT:-8080}:8080"
 
-  # Nightly pg_dump into ./backups, keeping the newest BACKUP_KEEP files.
-  backup:
-    image: postgres:16-alpine
-    restart: unless-stopped
-    environment:
-      PGHOST: db
-      PGUSER: ${POSTGRES_USER}
-      PGPASSWORD: ${POSTGRES_PASSWORD}
-      PGDATABASE: ${POSTGRES_DB}
-      BACKUP_KEEP: ${BACKUP_KEEP:-14}
-    volumes:
-      - ./backups:/backups
-    depends_on:
-      db: { condition: service_healthy }
-    entrypoint: ["/bin/sh", "-c"]
-    command:
-      - |
-        while true; do
-          file=/backups/expense-$$(date +%Y%m%d-%H%M%S).dump
-          if pg_dump --format=custom --file="$$file.tmp" && mv "$$file.tmp" "$$file"; then
-            echo "backup written: $$file"
-          else
-            echo "backup FAILED" >&2; rm -f "$$file.tmp"
-          fi
-          ls -1t /backups/expense-*.dump 2>/dev/null | tail -n +$$((BACKUP_KEEP + 1)) | xargs -r rm -f
-          sleep 86400
-        done
+# Backups run outside Compose: scripts/backup.sh, scheduled by make backup-schedule.
 
 volumes:
   pgdata:
