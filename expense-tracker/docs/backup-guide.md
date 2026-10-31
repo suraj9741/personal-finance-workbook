@@ -12,16 +12,19 @@ Commands run from `expense-tracker/` on the machine that runs the app. Marks: **
 
 - Everything that matters is in one Postgres database. A `pg_dump` file is a complete
   backup of it.
-- `make backup` writes one now. The `backup` container also writes one when it starts, then
-  every 24 hours that it keeps running.
-- Both go to `expense-tracker/backups/` on the same Mac, unencrypted. **If the Mac's disk is
-  lost, the backups go with it.** Copying them somewhere else is a manual step today.
+- A launchd job on the Mac checks every hour and takes a daily dump when the newest one is
+  23 hours old or more. `make backup` takes a manual one at any time.
+- Each dump is checked, kept in `expense-tracker/backups/`, encrypted with rclone and copied
+  to Google Drive. The newest **7 daily** and **3 manual** dumps are kept, on the Mac and in
+  Drive. Older ones are deleted.
+- `make backup-status` shows the newest dumps, the last upload and whether the schedule is on.
+  A failure shows a macOS notification.
+- The Drive copies can only be opened with the passphrase and salt saved in Bitwarden.
 - Take a backup before every deploy, restore or migration.
 
-![The db volume is dumped by the backup loop and by make backup into ./backups on the Mac; the recommended part copies them, encrypted, off the Mac; make restore or the scratch-database check restores them](diagrams/backup-restore-architecture.drawio.svg)
+![launchd and make backup run scripts/backup.sh, which dumps the db, writes ./backups, encrypts with rclone crypt and copies to Google Drive; restore from ./backups on the same machine or fetch from Drive on a recovery machine](diagrams/backup-restore-architecture.drawio.svg)
 
 Source: [diagrams/backup-restore-architecture.drawio.svg](diagrams/backup-restore-architecture.drawio.svg).
-Dashed boxes are recommended, not built.
 
 ## Kinds of backup
 
@@ -29,49 +32,63 @@ Dashed boxes are recommended, not built.
 | --- | --- | --- |
 | Database backup | The rows, the schema and the migration version | `pg_dump --format=custom` of the one database. This is the only backup that can't be recreated |
 | Application-data backup | Files the app stores outside the database (uploads, attachments) | None exist. The app stores nothing outside Postgres |
-| Configuration backup | Settings that live on the machine, not in git | `.env`. Everything else (`docker-compose.yml`, `config/seed.yaml`, `nginx.conf`) is in git |
+| Configuration backup | Settings that live on the machine, not in git | `.env`, and the rclone config that holds the Drive sign-in. Everything else is in git |
 | Infrastructure-state backup | Terraform state, cluster manifests, cloud resources | Not applicable. There is no IaC and no cloud. The "infrastructure" is a Mac with Docker installed |
 
 ## What to back up
 
 | Component | Back up? | Why | How |
 | --- | --- | --- | --- |
-| Database `expense` in volume `expense-tracker_pgdata` | **Yes, always** | All users, entries, budgets, rules, sessions, invites | `pg_dump` (below) |
+| Database `expense` in volume `expense-tracker_pgdata` | **Yes, always** | All users, entries, budgets, rules, sessions, invites | `scripts/backup.sh` (below) |
 | Database roles, permissions, extensions | No separate step | There is one role, the container's superuser, created from `.env`. No extensions are used. Restores use `--no-owner`, so the target's own user owns everything | covered by the dump plus `.env` |
-| `expense-tracker/.env` | **Yes, once, and after each change** | Ports, `PUBLIC_BASE_URL`, `COOKIE_SECURE`, `BACKUP_KEEP`. The password in it isn't needed to restore a dump onto a new machine | copy it to a password manager or the encrypted off-Mac location |
+| `expense-tracker/.env` | **Yes, once, and after each change** | Ports, `PUBLIC_BASE_URL`, `COOKIE_SECURE`, the `BACKUP_*` settings. The password in it isn't needed to restore a dump onto a new machine | copy it to Bitwarden |
+| Drive passphrase and salt | **Yes, once** | Without them the Drive copies can't be decrypted. There is no reset | saved in Bitwarden by `make backup-drive-setup` (you copy them in) |
+| `~/.config/rclone/rclone.conf` | No | The Drive sign-in token and the passphrase in obscured (not encrypted) form. Recreated by `make backup-drive-setup` | not applicable |
 | Code, migrations, `config/seed.yaml`, compose and nginx config | No | In git on GitHub | note the deployed commit (`git log --oneline -1`) with each backup |
 | Docker images | No | Rebuilt from source by `make up`. There is no registry | not applicable |
 | Tailscale setup | No | Lives in the Tailscale app and admin console, not in the repo | sign in again on a new machine |
-| Uploaded files, object storage, Kubernetes, Helm, IaC state, DNS, load balancers, certificates, cron jobs, monitoring config | Not applicable | None of them exist | none |
+| Uploaded files, object storage, Kubernetes, Helm, IaC state, DNS, load balancers, certificates, monitoring config | Not applicable | None of them exist | none |
 
-## How backups are taken today
+## How backups are taken
 
-### Automatic: the `backup` service
+Everything goes through one script, `scripts/backup.sh`. It runs on the Mac, not in a
+container, and reaches the database with `docker compose exec db pg_dump`.
 
-Defined in `docker-compose.yml`. It is a `postgres:16-alpine` container running this loop:
+### Daily: the launchd job
 
-1. `pg_dump --format=custom --file=/backups/expense-<UTC date>-<UTC time>.dump.tmp`
-2. If that succeeds, it renames the file to `.dump` and logs `backup written: <path>`.
-   Otherwise it deletes the `.tmp` file and logs `backup FAILED`.
-3. It keeps the newest `BACKUP_KEEP` (default 14) files matching `expense-*.dump`, newest by
-   modification time, and deletes the rest.
-4. It sleeps 86400 seconds, then repeats.
+`make backup-schedule` installs `~/Library/LaunchAgents/com.expense-tracker.backup.plist`
+from `scripts/launchd/`. launchd runs `scripts/backup.sh auto` every hour and when you log in.
+Each run:
 
-What this means in practice:
+1. Takes a dump only if the newest daily dump is 23 hours old or more. So a Mac that slept or
+   was switched off catches up within an hour of waking, and the dump time doesn't drift.
+2. Writes the dump to a `.tmp` file, then checks it starts with `PGDMP` and that
+   `pg_restore --list` can read it. Only then does it get its `.dump` name. A failed dump is
+   deleted, never left looking like a backup.
+3. Copies the dumps Drive doesn't have yet, then keeps the newest 7 daily and 3 manual dumps
+   in Drive. Drive is pruned from its own file list, so losing the local folder never deletes
+   anything in Drive.
+4. Only after a successful upload, keeps the newest 7 daily and 3 manual dumps on the Mac and
+   deletes the rest. While Drive is not set up or an upload keeps failing, nothing on the Mac
+   is deleted.
+5. Appends what it did to `backups/backup.log`. On a failure it also shows a macOS
+   notification (at most one every 6 hours) and the next hourly run tries again.
 
-- The first dump is taken the moment the container starts. On a brand-new install, that is
-  before migrations finish, so the first file is an empty database (well under 1 KB).
-- "Every 24 hours" counts from the last container start. If Docker restarts, the timer starts
-  over. While the Mac sleeps or Docker Desktop is stopped, nothing runs. On the Mac this
-  folder held only 2 automatic dumps between 18 and 25 October 2026, 64 hours apart. Do not
-  rely on this loop alone.
-- File names use the container's clock, which is UTC.
+An hourly run with nothing to do takes no dump and makes no network call.
 
-Check that it is running (**Safe**):
+What it needs:
+
+- **Docker Desktop running.** If it isn't, the run fails with "Docker or the database isn't
+  running" and retries an hour later. Turn on "Start Docker Desktop when you sign in".
+- **The Mac powered on.** Nothing runs while it is off. The first check after it starts
+  catches up.
+
+Turn it on or off (**Safe**):
 
 ```sh
-make ps                                        # the backup service should be "Up"
-docker compose logs --tail=20 backup           # "backup written: /backups/expense-....dump" lines
+make backup-schedule      # on
+make backup-unschedule    # off
+make backup-status        # "Schedule: on (hourly check)"
 ```
 
 ### Manual: `make backup`
@@ -80,19 +97,9 @@ docker compose logs --tail=20 backup           # "backup written: /backups/expen
 make backup        # Safe
 ```
 
-What it does: `docker compose exec -T db sh -c 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" --format=custom'`,
-with the output redirected to `backups/expense-<local date>-<local time>-manual.dump` on the
-host. Then it lists the newest three files.
-
-Expect a new file of tens of KB or more for a real database. A dump of the live database was
-about 55 KB in October 2026. Check its size: a 0-byte file means it failed.
-
-- Needs the `db` container to be running.
-- The name uses the **host's local time**, so on a Mac set to IST, a manual dump taken at
-  00:41 IST is named `...-004113-manual.dump`, while an automatic dump taken at the same
-  moment would be named with 19:11 UTC.
-- If `pg_dump` fails, make reports an error **and leaves a 0-byte file behind**. Delete it
-  so it isn't mistaken for a backup (see [known gaps](#known-gaps)).
+Runs `scripts/backup.sh manual`: always takes a dump, named `...-manual.dump`, then does
+steps 2 to 5 above. Manual dumps are counted separately from daily ones, so a burst of
+`make backup` runs never pushes a daily dump out.
 
 ### When to take one
 
@@ -102,80 +109,82 @@ about 55 KB in October 2026. Check its size: a 0-byte file means it failed.
 | Before `make restore` | `make backup`, so the restore itself can be undone |
 | Before a migration to a new machine | `make backup` after freezing writes (see the [migration guide](environment-migration-guide.md)) |
 | After a large data-entry session | `make backup` |
-| Daily | Recommended: a scheduled `make backup` ([below](#recommended-improvements)) |
+| Daily | Automatic, once `make backup-schedule` has been run |
+
+## Set up the Drive copy (once per Mac)
+
+**Your values**, on the Mac, from `expense-tracker/`:
+
+```sh
+brew install rclone
+make backup-drive-setup
+```
+
+1. A browser opens. Sign in to Google and allow access. rclone asks only for `drive.file`,
+   so it can see the files it creates and nothing else in your Drive.
+2. Answer `N` to "Restoring on a new Mac". The script makes a random passphrase and salt,
+   creates the encrypted remote `expense-drive-crypt:` over the Drive folder
+   `expense-backups`, and prints both values once.
+3. **Save the passphrase and salt in Bitwarden now.** Without them the Drive copies are
+   unreadable, and there is no way to reset them.
+4. `make backup-schedule`, then `make backup`, then `make backup-status`. Expect "Drive copy:
+   expense-drive-crypt:, last upload <just now>".
+
+To keep backups on the Mac only, set `BACKUP_REMOTE=none` in `.env`.
 
 ## Where backups are stored and how they are named
 
 | Item | Current |
 | --- | --- |
-| Location | `expense-tracker/backups/` on the Mac (bind-mounted into the `backup` container as `/backups`). Gitignored |
-| Automatic name | `expense-YYYYMMDD-HHMMSS.dump` (UTC) |
-| Manual name | `expense-YYYYMMDD-HHMMSS-manual.dump` (host local time) |
+| On the Mac | `expense-tracker/backups/`, gitignored, mode 700. Also holds `backup.log` and the `.last-upload` and `.upload-pending` markers |
+| In Drive | Folder `expense-backups` in My Drive. File names and contents are encrypted, so Drive shows random names |
+| Daily name | `expense-YYYYMMDD-HHMMSSZ.dump` (UTC) |
+| Manual name | `expense-YYYYMMDD-HHMMSSZ-manual.dump` (UTC) |
+| Older names | `expense-YYYYMMDD-HHMMSS.dump` (UTC) and `...-manual.dump` (local time) from before October 2026. They are counted and pruned the same way, newest by file time |
 | Format | `pg_dump` custom format, gzip-compressed, version 1.15 (Postgres 16) |
-| Versioning | One file per backup. There is no version history beyond the retained files |
-| Copies | One. **Nothing copies backups off the Mac** |
+| Copies | Two: the Mac and Google Drive |
 
 List them, newest first (**Safe**):
 
 ```sh
 ls -lt backups/ | head
+make backup-list-drive
 ```
 
 ## Encryption and access
 
-Current: none. Dumps are plain files on the Mac's disk, readable by the macOS user, and only
-as safe as the Mac (FileVault, the login password). They contain every entry, email
-address, password hash and session token hash, so treat them as sensitive.
+| Where | Protection |
+| --- | --- |
+| On the Mac | None beyond the Mac itself (FileVault, the login password). Files are mode 600 |
+| In Drive | rclone `crypt`: file contents with XSalsa20-Poly1305, names with EME, keys from the passphrase and salt via scrypt. Encrypted on the Mac before upload |
+| Passphrase and salt | Bitwarden, plus an obscured (not encrypted) copy in `~/.config/rclone/rclone.conf` on the Mac |
+
+The dumps contain every entry, email address, password hash and session token hash, so treat
+them as sensitive.
 
 Rules:
 
 - Never commit a dump. `backups/` is gitignored; keep it that way.
 - Never attach a dump to an issue, chat or email.
-- Encrypt any copy that leaves the Mac. Keep the passphrase in a password manager, never in
-  the repo or next to the file.
+- Never copy the passphrase into the repo, `.env` or a note next to the files.
 
 ## Retention and cleanup
 
 | Item | Current |
 | --- | --- |
-| Policy | The `backup` loop keeps the newest `BACKUP_KEEP` (14) files matching `expense-*.dump`, and deletes older ones each time it runs |
-| Manual dumps | **Count toward the 14.** Many `make backup` runs push the automatic dumps out |
-| When cleanup runs | Only when the loop runs. Between runs, the folder can hold more than 14 files |
-| Off-Mac copies | No policy (none exist) |
+| Policy | The newest `BACKUP_KEEP_DAILY` (7) daily and `BACKUP_KEEP_MANUAL` (3) manual dumps, by count. Change them in `.env` |
+| Where | On the Mac and in Drive, each pruned from its own list |
+| When | Every run that takes a dump or uploads. The Mac is pruned only after Drive has a copy (or when `BACKUP_REMOTE=none`) |
+| Newest means | By file modification time, not by name, so older local-time names sort correctly |
+| Why by count, not by age | A Mac left off for two weeks still has 7 copies when it comes back |
+| Deleted in Drive | Go to the Drive bin, which Google empties after 30 days. They are encrypted there too |
+
+With daily dumps, 7 daily copies cover about a week. A mistake noticed later than that has no
+clean copy left, so raise `BACKUP_KEEP_DAILY` if you want a longer window. At about 55 KB a
+dump, storage isn't a limit.
 
 To keep a dump out of the rotation, copy it with a different name, for example
 `cp backups/<file>.dump backups/keep-<file>.dump`. The rotation only matches `expense-*`.
-
-Recommended retention (to agree): 14 daily dumps on the Mac, plus one dump a week for
-3 months and one a month for a year, off the Mac. The data is small, at around 55 KB a dump,
-so storage cost isn't a limit.
-
-## Copy backups off the Mac
-
-Not automated today. This manual procedure uses only `openssl`, which `make env` already
-needs. It is an **example that needs confirming** before you rely on it: decide where the
-copies go, and test a decrypt.
-
-**Your values:**
-
-```sh
-f=backups/<file>.dump
-openssl enc -aes-256-cbc -pbkdf2 -salt -in "$f" -out "$f.enc"    # asks for a passphrase twice
-shasum -a 256 "$f" > "$f.sha256"
-cp "$f.enc" "$f.sha256" "<offsite-dir>/"                         # an external disk or a cloud-synced folder
-rm "$f.enc"
-```
-
-- `-pbkdf2` derives the key from the passphrase properly. Without it, `openssl` uses a weak
-  key derivation.
-- `<offsite-dir>` must be on a different physical device or service than the Mac's disk.
-- Check the copy decrypts and matches:
-
-```sh
-openssl enc -d -aes-256-cbc -pbkdf2 -in "<offsite-dir>/<file>.dump.enc" -out /tmp/check.dump
-shasum -a 256 /tmp/check.dump        # same hash as <file>.dump.sha256
-rm /tmp/check.dump
-```
 
 ## Verify a backup
 
@@ -217,17 +226,21 @@ docker compose exec -T db sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Atc
 
 ## Record and monitor backup results
 
-Current: the only record is the `backup` container's log (`backup written` or
-`backup FAILED`) and the files themselves. Nothing alerts on a failure. The log is lost
-when the container is removed by `make down`.
+- `backups/backup.log`: one line per dump, deletion and upload, and every failure. It keeps
+  its last 1000 lines.
+- A macOS notification on any failure, at most one every 6 hours.
+- `make backup-status` (**Safe**):
 
-Check freshness by hand (**Safe**):
-
-```sh
-ls -lt backups/*.dump | head -1                     # newest dump and its time
-find backups -name 'expense-*.dump' -mtime -1       # empty output: no dump in the last 24 hours
-find backups -name 'expense-*.dump' -size 0         # any output: failed manual dumps to delete
+```text
+Folder:        /Users/.../expense-tracker/backups
+Newest daily:  expense-20261031-073000Z.dump (7 kept, limit 7)
+Newest manual: expense-20261030-201500Z-manual.dump (3 kept, limit 3)
+Daily dump:    taken in the last 23 hours
+Drive copy:    expense-drive-crypt:, last upload 2026-10-31T07:30:04Z
+Schedule:      on (hourly check)
 ```
+
+"DUE", "NOT SET UP", "OFF" or "an upload is waiting to be retried" in that output need a look.
 
 ## Test a restore in a separate environment
 
@@ -243,6 +256,7 @@ cd /tmp/restore-test/expense-tracker
 export COMPOSE_PROJECT_NAME=expense-tracker-restoretest   # own containers and volume; the live stack is untouched
 make env
 sed -i.bak 's/^FRONTEND_PORT=.*/FRONTEND_PORT=18080/; s/^BACKEND_PORT=.*/BACKEND_PORT=18000/' .env && rm .env.bak
+echo BACKUP_REMOTE=none >> .env                            # never upload test dumps: they would count toward the 7 in Drive
 make up
 mkdir -p backups && cp <repo-dir>/expense-tracker/backups/<file>.dump backups/
 make restore FILE=backups/<file>.dump                     # type yes; this replaces only the test stack's empty database
@@ -265,33 +279,19 @@ go.
 
 ## Known gaps
 
-Found while writing these docs (October 2026). They are recorded here, not fixed. Code
-changes need their own pull request.
-
 | Gap | Risk | Suggested fix |
 | --- | --- | --- |
-| Backups exist only on the Mac | Disk loss or theft loses the app and every backup | Encrypted off-Mac copy (above), then automate it |
-| The 24-hour loop restarts its timer and stalls while the Mac sleeps | Days between automatic dumps | A launchd job running `make backup` daily (below) |
-| Manual dumps count toward `BACKUP_KEEP` | A burst of manual dumps deletes the automatic ones | Only rotate files without `-manual`, or write manual dumps to their own folder |
-| A failed `make backup` leaves a 0-byte file | It looks like the newest backup | Write to a `.tmp` file and rename on success, as the loop does |
-| The first automatic dump on a new install is of an empty database | Takes a retention slot | Make `backup` wait for `seed` to finish |
-| Manual names use local time, automatic names use UTC | Names sort in the wrong order | Use UTC (`date -u`) in the Makefile |
-| No encryption | A copied dump is readable by anyone who gets it | Encrypt off-Mac copies |
-| No alerting or freshness check | A stopped backup goes unnoticed | Daily freshness check with a notification |
-| No restore test | A broken dump is found only when it's needed | Monthly test restore (above) |
+| No dump while the Mac is off or Docker Desktop is closed | Gaps of days if the Mac stays off | Start Docker Desktop at login. The hourly check catches up once both are running |
+| 7 daily copies cover about a week | A mistake noticed later has no clean copy | Raise `BACKUP_KEEP_DAILY`, or keep a weekly copy longer |
+| One off-Mac copy, in one Google account | Losing that account loses the off-Mac copies | Accept for now; add a second remote later if needed |
+| The passphrase is only in Bitwarden and the Mac | Losing both makes the Drive copies useless | Check once that Bitwarden has it |
+| No automatic restore test | A broken dump is found only when it's needed | Each dump is checked with `pg_restore --list`; also run the monthly test restore (above) |
+| `.env` isn't copied automatically | A new Mac needs it rebuilt by hand | Keep a copy in Bitwarden |
 
-## Recommended improvements
+## Change history
 
-These are proposals. None of them exist in the repository yet.
-
-1. **Daily `make backup` from launchd** on the Mac instead of relying on the loop. launchd
-   runs a missed calendar job when the Mac wakes. Add a LaunchAgent in
-   `~/Library/LaunchAgents/` that runs `make -C <repo-dir>/expense-tracker backup` each day
-   at a fixed time. It needs Docker running at that time.
-2. **Automatic off-Mac copy** of each new dump, encrypted, as in
-   [Copy backups off the Mac](#copy-backups-off-the-mac).
-3. **Freshness check:** a daily job that fails loudly (for example, a macOS notification
-   through `osascript`) when `find backups -name 'expense-*.dump' -mtime -1` is empty.
-4. **Fix the Makefile and the backup loop** as listed in [known gaps](#known-gaps).
-5. **Agree RPO and RTO** (see the [restore guide](restore-guide.md#recovery-objectives)) and
-   set the schedule from them.
+- October 2026: the `backup` container loop was replaced by `scripts/backup.sh` and a launchd
+  job, with encrypted Google Drive copies and count-based retention (7 daily, 3 manual). This
+  fixed: no off-Mac copy, the timer that reset on restarts, manual dumps counting toward the
+  limit, 0-byte files from a failed `make backup`, the empty first dump on a new install, and
+  mixed local and UTC names.

@@ -27,7 +27,7 @@ There is one environment. It runs on one Mac under Docker Desktop, started with
 Kubernetes, no load balancer and no DNS record. A cloud or EKS move is an idea for later,
 not something in the repository.
 
-![Browser to nginx on 0.0.0.0:8080, proxying /api to FastAPI on 127.0.0.1:8000, which talks SQL to Postgres 16 on the pgdata volume; one-shot migrate and seed containers and a backup loop writing to ./backups](diagrams/system-architecture.drawio.svg)
+![Browser to nginx on 0.0.0.0:8080, proxying /api to FastAPI on 127.0.0.1:8000, which talks SQL to Postgres 16 on the pgdata volume; one-shot migrate and seed containers; outside Compose, scripts/backup.sh dumps the db into ./backups and copies it to Google Drive](diagrams/system-architecture.drawio.svg)
 
 Source: [diagrams/system-architecture.drawio.svg](diagrams/system-architecture.drawio.svg)
 (open it in draw.io to edit).
@@ -37,8 +37,10 @@ browser ──► frontend (nginx, :8080) ──/api──► backend (FastAPI, 
                                                        ▲                       │
                        migrate (one-shot: alembic upgrade head, then exits)    │ pgdata volume
                        seed    (one-shot: adds what's missing from config/seed.yaml)
-                       backup  (pg_dump into ./backups, then sleeps 24 hours)
 ```
+
+Backups run outside Compose: `scripts/backup.sh`, started hourly by launchd, takes a daily
+`pg_dump` through `docker compose exec db` and copies it, encrypted, to Google Drive.
 
 ## Components
 
@@ -53,7 +55,6 @@ data volume is `expense-tracker_pgdata`.
 | `seed` | same backend image | Runs `python -m app.cli seed-config`: adds accounts, categories and settings from `config/seed.yaml` that are missing. Never changes or deletes. | `migrate` done | `db:5432` | `no` |
 | `backend` | same backend image | FastAPI under `/api/v1`, plus `/healthz`, `/readyz`, `/metrics`. Runs as a non-root user. | `db` healthy, `seed` done | `db:5432` | `unless-stopped` |
 | `frontend` | `expense-tracker-frontend:local` (built from `frontend/`) | nginx (unprivileged) serves the built React app and proxies `/api/` to `backend:8000`. | `backend` healthy | `backend:8000` | `unless-stopped` |
-| `backup` | `postgres:16-alpine` | A shell loop: `pg_dump` into `./backups`, delete all but the newest `BACKUP_KEEP`, sleep 86400 seconds, repeat. | `db` healthy | `db:5432` | `unless-stopped` |
 
 Health checks:
 
@@ -102,7 +103,7 @@ The browser only ever talks to nginx, so the app needs no CORS (see
 | Data | Where it lives | In git? | Lost if |
 | --- | --- | --- | --- |
 | Users, households, accounts, categories, transactions, budgets, rules, sessions, invites | Docker volume `expense-tracker_pgdata` | No | the volume is deleted (`docker compose down -v`, `docker volume rm`, resetting Docker Desktop) or the Mac's disk fails |
-| Database dumps | `expense-tracker/backups/` on the Mac (bind mount) | No (gitignored) | the Mac's disk fails, or the folder is deleted |
+| Database dumps | `expense-tracker/backups/` on the Mac, and encrypted in Google Drive (`expense-backups/`) | No (gitignored) | both the Mac and the Google account are lost, or the passphrase in Bitwarden is lost |
 | `.env` (database password, ports, URLs) | `expense-tracker/.env` | No (gitignored) | the Mac's disk fails |
 | Seed config, code, migrations | `config/seed.yaml` and the rest of the repository | Yes | not lost: it is on GitHub |
 | Built images | Docker Desktop's image store | No registry | rebuilt by `make up` |
@@ -176,14 +177,17 @@ Source: [diagrams/deployment-flow.drawio.svg](diagrams/deployment-flow.drawio.sv
 
 ## Backup and restore
 
-![The db volume is dumped by the backup loop and by make backup into ./backups on the Mac; the recommended part copies them, encrypted, off the Mac; make restore or the scratch-database check restores them](diagrams/backup-restore-architecture.drawio.svg)
+![launchd and make backup run scripts/backup.sh, which dumps the db, writes ./backups, encrypts with rclone crypt and copies to Google Drive; restore from ./backups on the same machine or fetch from Drive on a recovery machine](diagrams/backup-restore-architecture.drawio.svg)
 
 Source: [diagrams/backup-restore-architecture.drawio.svg](diagrams/backup-restore-architecture.drawio.svg).
 
-- **Current:** `pg_dump --format=custom` files in `expense-tracker/backups/`, from the
-  `backup` service and from `make backup`. `make restore FILE=...` replaces the database
-  with a dump. Details and known gaps are in the [backup guide](backup-guide.md#known-gaps).
-- **Not current:** no copy off the Mac, no encryption, no alerting, no restore test.
+- `scripts/backup.sh` runs on the Mac, outside Compose. A launchd job runs it hourly and it
+  takes a daily `pg_dump --format=custom` into `expense-tracker/backups/`; `make backup`
+  takes a manual one. Each dump is checked, encrypted with rclone `crypt` and copied to
+  Google Drive. The newest 7 daily and 3 manual dumps are kept on each side.
+- `make restore FILE=...` replaces the database with a dump; `make backup-fetch` gets one
+  back from Drive. Details and remaining gaps are in the
+  [backup guide](backup-guide.md#known-gaps). There is no automatic restore test.
 
 ## Monitoring, logging and alerting
 
@@ -192,10 +196,10 @@ Source: [diagrams/backup-restore-architecture.drawio.svg](diagrams/backup-restor
 | Logs | JSON lines on stdout, kept by Docker's default log driver; `make logs` to read them. They carry the route template, status and timing, and never amounts, descriptions or emails. Removing a container (`make down`) removes its logs |
 | Metrics | Prometheus format at `http://localhost:8000/metrics`. Nothing scrapes it |
 | Health | Docker health checks, shown by `make ps` |
-| Alerting | none. A failed backup, a stopped container or a full disk alerts nobody |
+| Alerting | A failed backup or upload shows a macOS notification. A stopped container or a full disk alerts nobody |
 
-**Recommended:** a daily check that the newest backup is less than 26 hours old, and a
-notification when it isn't (see the [backup guide](backup-guide.md#recommended-improvements)).
+`make backup-status` shows whether the daily backup is due and when Drive was last updated
+(see the [backup guide](backup-guide.md#record-and-monitor-backup-results)).
 
 ## Security boundaries and secrets
 
@@ -213,9 +217,9 @@ notification when it isn't (see the [backup guide](backup-guide.md#recommended-i
 
 | Failure | Effect | Recovery today |
 | --- | --- | --- |
-| Mac disk failure, loss or theft | App, data **and every backup** gone | Only what you copied off the Mac by hand. This is the biggest risk |
+| Mac disk failure, loss or theft | App, data and local backups gone | The Drive copies: [restore guide, scenario D](restore-guide.md#d-the-machine-is-lost). Needs the passphrase from Bitwarden |
 | `docker compose down -v` or a Docker Desktop reset | Database gone, backups kept | [Restore guide, scenario B](restore-guide.md#b-the-database-volume-is-gone) |
-| Mac asleep or Docker Desktop stopped | App unreachable; automatic backups don't run | Wake the Mac, start Docker Desktop. The containers restart on their own |
+| Mac asleep or Docker Desktop stopped | App unreachable; the daily backup waits | Wake the Mac, start Docker Desktop. The containers restart on their own, and the next hourly check takes the missed backup |
 | A bad deploy (code or migration) | App down or wrong | [Restore guide, scenario C](restore-guide.md#c-a-deploy-failed) |
 | Docker Hub, PyPI or npm unreachable | `make up --build` cannot build, the running app keeps working | Wait, or keep the old images (don't prune them) |
 
@@ -243,5 +247,5 @@ app.diagrams.net), edit it, and save; GitHub shows the updated image.
 | --- | --- |
 | [system-architecture.drawio.svg](diagrams/system-architecture.drawio.svg) | Clients, network, the Mac, Docker Compose services, storage, and build-time services |
 | [deployment-flow.drawio.svg](diagrams/deployment-flow.drawio.svg) | Change, CI, merge, and the manual deploy on the Mac |
-| [backup-restore-architecture.drawio.svg](diagrams/backup-restore-architecture.drawio.svg) | Current backups, the recommended off-Mac copy, and both restore paths |
+| [backup-restore-architecture.drawio.svg](diagrams/backup-restore-architecture.drawio.svg) | The backup script, its schedule, the encrypted Drive copy, and both restore paths |
 | [environment-migration.drawio.svg](diagrams/environment-migration.drawio.svg) | Moving from the old machine to a new one, with the rollback path |

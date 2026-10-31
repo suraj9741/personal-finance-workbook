@@ -63,7 +63,7 @@ Inventory:
 | Ports and bind addresses | `FRONTEND_PORT`, `BACKEND_PORT`, `0.0.0.0` or `127.0.0.1` for the app | |
 | `PUBLIC_BASE_URL`, `COOKIE_SECURE` | `<values>` | Change them for the new address |
 | How users reach it | `localhost` / Tailscale name / `tailscale serve` | Decides the cutover |
-| Scheduled jobs | the `backup` loop in Compose; launchd or cron jobs, if any | Recreate them on the new machine, then disable them on the old |
+| Scheduled jobs | the launchd backup job (`make backup-status`); other launchd or cron jobs, if any | Recreate them on the new machine, then disable them on the old |
 | Off-machine backups | `<where, or none>` | |
 | External integrations | none at runtime; Docker Hub, PyPI, npm and GitHub at build | |
 
@@ -171,9 +171,10 @@ to the new machine's database user.
 ### Configuration, jobs, monitoring and integrations
 
 - `.env` values: set in phase 2. Check with `grep -v '^POSTGRES_PASSWORD=' .env`.
-- Scheduled jobs: the `backup` loop comes with Compose. Recreate any launchd job from the
-  [backup guide](backup-guide.md#recommended-improvements) on the new machine. Disable it on
-  the old one at cutover.
+- Scheduled jobs: on the new machine run `make backup-drive-setup` (answer y, use the
+  passphrase and salt from Bitwarden) and `make backup-schedule` after cutover. Run
+  `make backup-unschedule` on the old one at cutover, so two machines never upload to the
+  same Drive folder.
 - Monitoring: none to move.
 - Integrations: none at runtime. Sign in to Tailscale if used.
 - Ownership and permissions: `chmod 600 .env`. The `backups/` files belong to the user who
@@ -249,7 +250,7 @@ make backup && ls -lt backups | head -3                                       # 
 8. **Tell users** it's back.
 
 Why this prevents split brain and duplicate jobs: writes stop before the final dump, and the
-old machine's containers, including its `backup` loop, are removed before the new one goes
+old machine's containers are removed and its backup job is turned off before the new one goes
 live. Only one database accepts writes at any time.
 
 ## Phase 7: Rollback
