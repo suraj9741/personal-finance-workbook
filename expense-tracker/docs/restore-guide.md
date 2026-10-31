@@ -57,21 +57,22 @@ docker compose ps --format '{{.Name}} {{.Status}}'
 
 - Docker running, and the repository cloned on the machine you restore to.
 - A dump file (`*.dump`, `pg_dump` custom format) from the [backup guide](backup-guide.md).
-- For an encrypted off-Mac copy, its passphrase.
+- For a copy from Google Drive: rclone, and the passphrase and salt from Bitwarden.
 
 ## 1. Choose a backup
 
 ```sh
-ls -lt backups/ | head                          # Safe: newest first
+ls -lt backups/ | head                          # Safe: newest first, on this Mac
+make backup-list-drive                          # Safe: the copies in Google Drive
 ```
 
 - Pick the newest dump taken **before** the problem started. For a bad deploy, that's the
   dump you took before `git pull`.
-- Ignore 0-byte files, which are failed manual dumps. Also ignore tiny automatic dumps from a
-  brand-new install (well under 1 KB), which hold an empty database.
-- Automatic names are in UTC and manual names are in local time (see the
-  [backup guide](backup-guide.md#where-backups-are-stored-and-how-they-are-named)). Go by
-  `ls -lt` (modification time), not by the name.
+- Names are in UTC and sort by time (`expense-YYYYMMDD-HHMMSSZ[-manual].dump`). Dumps from
+  before October 2026 have no `Z`, and their manual names are in local time (see the
+  [backup guide](backup-guide.md#where-backups-are-stored-and-how-they-are-named)).
+- Files dated before that change may include 0-byte failed manual dumps or a tiny dump of
+  an empty new install. Skip them. The backup script no longer writes either.
 
 ## 2. Check it before you use it
 
@@ -97,12 +98,18 @@ Compatibility:
   current schema, which the restore then replaces.
 - **New or recovery machine:** follow the [deployment guide](deployment-guide.md) through
   section 11 (`make up`). Skip `make create-admin`, because the users come from the dump.
-  Then copy the dump into `expense-tracker/backups/`, decrypting it if needed:
+  Then fetch the dump from Google Drive (**Your values**):
 
 ```sh
-openssl enc -d -aes-256-cbc -pbkdf2 -in <offsite-dir>/<file>.dump.enc -out backups/<file>.dump   # Your values
-shasum -a 256 backups/<file>.dump                                                                 # compare with <file>.dump.sha256
+brew install rclone
+make backup-drive-setup              # sign in to Google; answer y and paste the passphrase and salt from Bitwarden
+make backup-list-drive               # pick a file
+make backup-fetch FILE=<file>.dump   # decrypts into backups/fetched/<file>.dump
 ```
+
+  `backup-fetch` checks that the result is a Postgres dump. "isn't a Postgres dump" means the
+  passphrase or salt is wrong: run `rclone config delete expense-drive-crypt` and
+  `make backup-drive-setup` again. Restore from `backups/fetched/<file>.dump` in step 4.
 
 To test a restore without touching the live app, use a separate Compose project on other
 ports, as in
@@ -120,8 +127,8 @@ make restore FILE=backups/<file>.dump             # type yes
 What `make restore` does (`Makefile`):
 
 1. Checks the file exists, and asks you to type `yes`.
-2. `docker compose stop backend frontend`. The app goes offline. The `backup` loop keeps
-   running, but it only reads.
+2. `docker compose stop backend frontend`. The app goes offline. A scheduled backup that
+   runs now only reads.
 3. `DROP SCHEMA public CASCADE; CREATE SCHEMA public`, which empties the database. Postgres
    prints `NOTICE: drop cascades to 17 other objects` and lists them. That is expected.
 4. `pg_restore --no-owner` from the file. `--no-owner` makes the target's own user own
@@ -153,7 +160,7 @@ Not applicable. The app keeps no files outside Postgres.
 - `.env` is the only machine-local config. On the same machine, keep the existing one. On a
   new machine, `make env` makes a fresh one with a new random password. That's fine: the
   dump doesn't depend on the old password. Then set `PUBLIC_BASE_URL`, `COOKIE_SECURE`,
-  ports and `BACKUP_KEEP` from your saved copy.
+  ports and the `BACKUP_*` settings from your saved copy.
 - **Don't change `POSTGRES_PASSWORD` on an existing volume.** Postgres keeps the password it
   was created with, and the backend would fail `/readyz`.
 - Keep `.env` out of git and out of chat (`chmod 600 .env`).
@@ -203,8 +210,8 @@ re-entering.
 5. Admin: users and households are listed.
 
 **Background and scheduled jobs:** the only ones are `migrate` and `seed` (they exited 0
-above) and the `backup` loop. Run `make backup` and check that the new file has a
-plausible size.
+above) and the launchd backup job. Run `make backup`, then `make backup-status`: the new
+dump has a plausible size and "last upload" is now.
 
 **Networking:** from another device, open `PUBLIC_BASE_URL`, if other devices use the app.
 
@@ -287,11 +294,12 @@ git checkout <good-commit> && make up
 
 ### D. The machine is lost
 
-1. Get the newest off-Mac copy and its passphrase. If there is none, the data can't be
-   recovered. That is the main gap in the [backup guide](backup-guide.md#known-gaps).
+1. Get the passphrase and salt from Bitwarden. Without them the Drive copies can't be
+   decrypted, and the data can't be recovered.
 2. On the new machine, follow the [deployment guide](deployment-guide.md) to `make up`.
-3. Decrypt, check and restore (steps 2 to 4), then validate (step 9).
-4. Set `PUBLIC_BASE_URL`, Tailscale and off-Mac backups again, then follow the cutover in
+3. Fetch the newest dump from Drive (step 3), check and restore it (steps 2 to 4), then
+   validate (step 9).
+4. Set `PUBLIC_BASE_URL` and Tailscale again, run `make backup-schedule`, then follow the cutover in
    the [migration guide](environment-migration-guide.md#phase-6-cutover).
 5. Remove the lost Mac from the tailnet in the Tailscale admin console. The restored
    database still accepts the old sessions, so sign everyone out. This deletes logins only,
@@ -332,8 +340,9 @@ app. The values below describe what the current setup can do. They are not targe
 
 | | Current reality | To agree |
 | --- | --- | --- |
-| RPO, same machine | Age of the newest good dump in `backups/`. It can be days, because the loop stalls (see the backup guide) | Proposed: 24 hours, with a daily scheduled `make backup` |
-| RPO, machine lost | Age of the newest off-Mac copy. Unbounded today, because nothing copies automatically | Proposed: 7 days at first, then 24 hours once copies are automated |
+| RPO, same machine | About 24 hours: the launchd job takes a daily dump. Longer if the Mac is off or Docker Desktop is closed | Proposed: 24 hours |
+| RPO, machine lost | The same: each dump is copied to Google Drive in the same run | Proposed: 24 hours |
+| How far back | The newest 7 daily dumps, about a week | Raise `BACKUP_KEEP_DAILY` for longer |
 | RTO, database only | A ~55 KB dump restored in seconds in a test. Allow 15 minutes including checks | Proposed: 1 hour |
 | RTO, new machine | Docker install plus first image build plus restore. Not measured end to end | Proposed: 1 day |
 

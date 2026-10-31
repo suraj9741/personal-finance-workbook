@@ -107,17 +107,17 @@ Data lives in the Docker volume `expense-tracker_pgdata`.
 
 - `make down` stops the app and keeps the data.
 - **Never run `docker compose down -v`.** The `-v` deletes the volume and every entry with it.
-- The `backup` service writes a `pg_dump` to `./backups` when it starts and then every 24
-  hours while it keeps running, and keeps the last 14 (`BACKUP_KEEP` in `.env`). The timer
-  starts over whenever Docker restarts, and nothing runs while the Mac sleeps, so don't count
-  on a dump every night. `make backup` takes one right now.
+- A launchd job (`make backup-schedule`) checks every hour and takes a daily `pg_dump` into
+  `./backups`. `make backup` takes one right now. Each dump is encrypted and copied to
+  Google Drive, and the newest 7 daily and 3 manual dumps are kept in both places.
+  `make backup-status` shows what ran.
 - `make restore FILE=backups/expense-YYYYMMDD-HHMMSS.dump` replaces the database with that
   backup. It asks you to type `yes` first.
 
-Copy `./backups` somewhere off the laptop (iCloud Drive, an external disk) now and then.
-`.env` and `backups/` are gitignored, so neither ends up in git. The
-[backup guide](docs/backup-guide.md) covers checking a dump, encrypting copies, and the
-known gaps.
+Set up the Drive copy once per Mac with `brew install rclone` and `make backup-drive-setup`,
+and keep the passphrase it prints in Bitwarden. `.env` and `backups/` are gitignored, so
+neither ends up in git. The [backup guide](docs/backup-guide.md) covers setup, checking a
+dump, and restoring from Drive.
 
 ## Operations docs
 
@@ -148,7 +148,8 @@ make migrate       apply database migrations
 make apply-config  add what's missing from config/seed.yaml (make up does this too)
 make create-admin  EMAIL=... NAME=...
 make seed          demo households with fake data (asha@, ravi@, sam@example.com / demo-password)
-make backup        back up now
+make backup        back up now (and copy to Drive)
+make backup-status newest backups, last upload, schedule
 make restore       FILE=backups/....dump
 make test          backend + frontend tests in throwaway containers
 make lint          ruff, mypy, ESLint
@@ -162,7 +163,6 @@ browser ──► frontend (nginx, :8080) ──/api──► backend (FastAPI, 
                                                        ▲
                        migrate (one-shot: alembic upgrade head, then exits)
                        seed    (one-shot: adds what's missing from config/seed.yaml)
-                       backup  (pg_dump into ./backups on start, then every 24 hours)
 ```
 
 - **backend/**: Python 3.12, FastAPI, Pydantic v2, SQLAlchemy 2, Alembic. All routes are under

@@ -24,8 +24,9 @@ these docs.
 
 ## 1. Purpose, scope and prerequisites
 
-This guide covers the Docker Compose deployment in this repository: one machine running six
-containers (`db`, `migrate`, `seed`, `backend`, `frontend`, `backup`). It runs in daily use on
+This guide covers the Docker Compose deployment in this repository: one machine running five
+containers (`db`, `migrate`, `seed`, `backend`, `frontend`), plus a launchd backup job on the
+Mac. It runs in daily use on
 macOS with Docker Desktop. While these docs were being written, `make up`, `make backup` and
 `make restore` were also tried on Linux with Docker Engine, in a throwaway environment. A
 long-running Linux server has not been tried, so its boot, firewall and update behaviour
@@ -131,7 +132,8 @@ Then review `.env` (**Your values**):
 | `PUBLIC_BASE_URL` | `http://localhost:8080` | Other devices use the app. Set it to the address they open (`http://<host>:8080`, or `https://<host>` with `tailscale serve`). Invite and reset links are built from it |
 | `COOKIE_SECURE` | `false` | Set `true` once the app is served over HTTPS |
 | `CORS_ORIGINS` | `http://localhost:5173` | Only for a page on another origin. The app itself doesn't need it |
-| `BACKUP_KEEP` | `14` | You want more or fewer dumps kept (see the [backup guide](backup-guide.md)) |
+| `BACKUP_KEEP_DAILY`, `BACKUP_KEEP_MANUAL` | `7`, `3` | You want more or fewer dumps kept, on the Mac and in Drive (see the [backup guide](backup-guide.md#retention-and-cleanup)) |
+| `BACKUP_REMOTE` | `expense-drive-crypt:` | `none` keeps backups on the Mac only |
 | `APP_ENV`, `LOG_LEVEL`, `LOG_FORMAT`, `SESSION_TTL_DAYS` | `production`, `INFO`, `json`, `30` | Rarely |
 
 `.env` is gitignored. Keep it readable only by you (`chmod 600 .env`). There is no secrets
@@ -231,7 +233,7 @@ there is nothing new.
 | Path | Type | Holds |
 | --- | --- | --- |
 | `expense-tracker_pgdata` | Docker named volume, mounted at `/var/lib/postgresql/data` | The database |
-| `./backups` | bind mount into the `backup` container | Dumps |
+| `./backups` | folder on the Mac, written by `scripts/backup.sh` | Dumps and `backup.log` |
 | `./config` | read-only bind mount into `seed` and `backend` | `seed.yaml` |
 
 `make down` stops the containers and keeps the volume. **Never run `docker compose down -v`**:
@@ -277,8 +279,9 @@ curl -s -o /dev/null -w '%{http_code}\n' http://localhost:8080/         # 200
 curl -s -o /dev/null -w '%{http_code}\n' http://localhost:8080/api/v1/auth/me   # 401: nginx reaches the API, not logged in
 ```
 
-Expected `make ps`: `db`, `backend` and `frontend` show `(healthy)`. `backup` shows `Up`.
-`migrate` and `seed` show `Exited (0)`.
+Expected `make ps`: `db`, `backend` and `frontend` show `(healthy)`. `migrate` and `seed`
+show `Exited (0)`. On a new Mac, set up backups once: `make backup-drive-setup` and
+`make backup-schedule` (see the [backup guide](backup-guide.md#set-up-the-drive-copy-once-per-mac)).
 
 Then in a browser:
 
@@ -323,5 +326,5 @@ Then in a browser:
 - [ ] `.env` reviewed: `PUBLIC_BASE_URL`, `COOKIE_SECURE`, ports. `chmod 600 .env`.
 - [ ] Docker set to start at login.
 - [ ] `make backup` works and the file is in `backups/` ([backup guide](backup-guide.md)).
-- [ ] Backups are copied off the machine ([backup guide](backup-guide.md#copy-backups-off-the-mac)).
+- [ ] Backups are scheduled and reach Drive: `make backup-status` ([backup guide](backup-guide.md#set-up-the-drive-copy-once-per-mac)).
 - [ ] The deployed commit is noted: `git log --oneline -1`.

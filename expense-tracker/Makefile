@@ -2,12 +2,14 @@
 SHELL := /bin/bash
 COMPOSE := docker compose
 TEST_COMPOSE := docker compose -f docker-compose.test.yml
+LAUNCHD_LABEL := com.expense-tracker.backup
+LAUNCHD_PLIST := $(HOME)/Library/LaunchAgents/$(LAUNCHD_LABEL).plist
 
 .DEFAULT_GOAL := help
-.PHONY: help env up down logs ps migrate create-admin apply-config seed backup restore test lint fmt clean-test
+.PHONY: help env up down logs ps migrate create-admin apply-config seed backup backup-status backup-schedule backup-unschedule backup-drive-setup backup-list-drive backup-fetch backup-test restore test lint fmt clean-test
 
 help: ## Show this list
-	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  make %-14s %s\n", $$1, $$2}'
+	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  make %-19s %s\n", $$1, $$2}'
 
 env: ## Create .env from .env.example (first run only)
 	@test -f .env || (cp .env.example .env && \
@@ -15,7 +17,7 @@ env: ## Create .env from .env.example (first run only)
 	  echo "Created .env with a random database password")
 
 up: env ## Build and start everything (app at http://localhost:8080)
-	$(COMPOSE) up -d --build
+	$(COMPOSE) up -d --build --remove-orphans
 	@echo "App: http://localhost:$${FRONTEND_PORT:-8080}   API docs: http://localhost:$${BACKEND_PORT:-8000}/docs"
 
 down: ## Stop the app. Your data is kept.
@@ -40,10 +42,35 @@ apply-config: env ## Add what's missing from config/seed.yaml now (make up does 
 seed: env ## Load demo households with fake data (for trying the app, not for real use)
 	$(COMPOSE) run --rm backend python -m app.cli seed-demo
 
-backup: ## Write a database backup to ./backups now
-	@mkdir -p backups
-	$(COMPOSE) exec -T db sh -c 'pg_dump -U "$$POSTGRES_USER" -d "$$POSTGRES_DB" --format=custom' > backups/expense-$$(date +%Y%m%d-%H%M%S)-manual.dump
-	@ls -lh backups | tail -n 3
+backup: ## Back up now (kept as a manual dump) and copy it to Google Drive
+	@scripts/backup.sh manual
+
+backup-status: ## Newest backups, last Drive upload, schedule on or off
+	@scripts/backup.sh status
+
+backup-schedule: ## Turn on the daily backup (a launchd job on this Mac that checks hourly)
+	@mkdir -p backups "$$HOME/Library/LaunchAgents"
+	@sed "s|@APP_DIR@|$(CURDIR)|g" scripts/launchd/$(LAUNCHD_LABEL).plist > "$(LAUNCHD_PLIST)"
+	@launchctl bootout gui/$$(id -u)/$(LAUNCHD_LABEL) 2>/dev/null || true
+	launchctl bootstrap gui/$$(id -u) "$(LAUNCHD_PLIST)"
+	@echo "Daily backup is on. Check it with: make backup-status"
+
+backup-unschedule: ## Turn the daily backup off
+	@launchctl bootout gui/$$(id -u)/$(LAUNCHD_LABEL) 2>/dev/null || true
+	@rm -f "$(LAUNCHD_PLIST)"
+	@echo "Daily backup is off."
+
+backup-drive-setup: ## Connect Google Drive and create the encrypted backup folder (once per Mac)
+	@scripts/backup.sh drive-setup
+
+backup-list-drive: ## List the backups stored in Google Drive
+	@scripts/backup.sh list-drive
+
+backup-fetch: ## Download and decrypt a backup from Drive: make backup-fetch FILE=expense-....dump
+	@scripts/backup.sh fetch "$(FILE)"
+
+backup-test: ## Test the backup script against a local folder instead of Drive (needs rclone)
+	@scripts/test_backup.sh
 
 restore: ## Replace the database with a backup: make restore FILE=backups/xxx.dump
 	@test -f "$(FILE)" || (echo "Usage: make restore FILE=backups/expense-....dump" && exit 1)

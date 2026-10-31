@@ -77,9 +77,19 @@ curl -s -o /dev/null -w '%{http_code}\n' http://localhost:8080/api/v1/auth/me # 
 Full guide: [backup-guide.md](backup-guide.md).
 
 ```sh
-make backup                                       # Safe: backups/expense-<local time>-manual.dump
+make backup                                       # Safe: dump now (...-manual.dump), copy to Drive
+make backup-status                                # Safe: newest dumps, last upload, schedule on or off
 ls -lt backups/ | head                            # Safe: list, newest first
-docker compose logs --tail=20 backup              # Safe: automatic backup log ("backup written: ...")
+make backup-list-drive                            # Safe: the copies in Google Drive
+tail -n 20 backups/backup.log                     # Safe: what the last runs did
+```
+
+Daily schedule and Drive, once per Mac (see the [backup guide](backup-guide.md#set-up-the-drive-copy-once-per-mac)):
+
+```sh
+brew install rclone
+make backup-drive-setup                           # browser sign-in; save the passphrase and salt in Bitwarden
+make backup-schedule                              # hourly check, daily dump; make backup-unschedule turns it off
 ```
 
 Check a dump:
@@ -100,23 +110,10 @@ docker compose exec -T db sh -c 'psql -U "$POSTGRES_USER" -d restore_check -Atc 
 docker compose exec -T db sh -c 'dropdb -U "$POSTGRES_USER" restore_check'
 ```
 
-Encrypt and copy off the machine. This is an example that needs confirming:
-
-```sh
-openssl enc -aes-256-cbc -pbkdf2 -salt -in "$f" -out "$f.enc"         # asks for a passphrase
-cp "$f.enc" <offsite-dir>/ && rm "$f.enc"                              # Your values
-```
-
-Config backup: save `.env`'s values (a password manager, or the encrypted off-machine
-location). Code and `config/seed.yaml` are in git. There is no infrastructure state to back
+Config backup: save `.env`'s values and the Drive passphrase and salt in Bitwarden. Code and `config/seed.yaml` are in git. There is no infrastructure state to back
 up.
 
-Freshness:
-
-```sh
-find backups -name 'expense-*.dump' -mtime -1     # Safe: empty output means no dump in 24 hours
-find backups -name 'expense-*.dump' -size 0       # Safe: failed manual dumps (delete them)
-```
+Freshness: `make backup-status` says "DUE" when no daily dump was taken in the last 23 hours.
 
 ## 4. Restore a backup
 
@@ -127,7 +124,8 @@ Prepare the target:
 ```sh
 hostname; echo "${COMPOSE_PROJECT_NAME:-expense-tracker}"   # Safe: the right machine and stack?
 make up                                                      # if the volume is gone or the machine is new (no create-admin)
-openssl enc -d -aes-256-cbc -pbkdf2 -in <offsite-dir>/<file>.dump.enc -out backups/<file>.dump   # Your values, if encrypted
+make backup-drive-setup                                      # new machine: answer y, paste the passphrase and salt from Bitwarden
+make backup-fetch FILE=<file>.dump                            # Your values: from Drive into backups/fetched/<file>.dump
 ```
 
 Restore. **Destructive:** this replaces ALL data in this stack's database.
@@ -240,14 +238,14 @@ curl -s http://localhost:8000/readyz              # Safe: backend can reach the 
 | `port is already allocated` | `lsof -iTCP:8080 -sTCP:LISTEN` | Free the port, or change `FRONTEND_PORT` / `BACKEND_PORT` |
 | `/readyz` returns 503 | `docker compose logs db` | Start `db`; put back the original `POSTGRES_PASSWORD` if it was changed |
 | `502 Bad Gateway` in the app | `make ps` | Backend down: `docker compose logs backend`, then `make up` |
-| No new automatic backup | `docker compose logs backup` | Expected after sleep or restarts; run `make backup` |
-| `make backup` made a 0-byte file | `docker compose ps db` | Start `db`, delete the empty file, run again |
+| No new daily backup | `make backup-status`, `tail backups/backup.log` | Schedule OFF: `make backup-schedule`. Docker not running: start it; the next hourly check catches up |
+| Upload to Drive fails | `tail backups/backup.log` | Sign-in expired: `rclone config reconnect expense-gdrive:`. The next run retries |
 | Build fails at `pip`, `uv` or `npm` | the build output | Network or registry problem; retry. The running app is unaffected |
 
 Final check after any deploy, restore or migration:
 
-- [ ] `make ps`: `db`, `backend` and `frontend` healthy; `migrate` and `seed` `Exited (0)`; `backup` `Up`.
+- [ ] `make ps`: `db`, `backend` and `frontend` healthy; `migrate` and `seed` `Exited (0)`; `make backup-status` shows the schedule on.
 - [ ] `/readyz` is `{"status":"ok"}`, and `/api/v1/auth/me` through `:8080` returns 401.
 - [ ] Alembic revision = the newest file in `backend/alembic/versions/`.
 - [ ] Row counts as expected; you can log in; this month's Dashboard looks right.
-- [ ] `make backup` makes a non-empty file; a copy is off the machine.
+- [ ] `make backup` writes a dump and `make backup-status` shows a fresh Drive upload.
