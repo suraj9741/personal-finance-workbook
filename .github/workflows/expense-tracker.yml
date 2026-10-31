@@ -14,24 +14,24 @@ on:
 
 jobs:
   test-and-lint:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     defaults:
       run:
         working-directory: expense-tracker
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Lint (ruff, mypy, ESLint)
         run: make lint
       - name: Test (pytest against Postgres 16, vitest)
         run: make test
 
   backup-script:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     defaults:
       run:
         working-directory: expense-tracker
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Install rclone and shellcheck
         run: sudo apt-get update && sudo apt-get install -y rclone shellcheck
       - name: Shellcheck
