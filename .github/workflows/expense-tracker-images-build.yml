@@ -1,0 +1,90 @@
+name: Expense tracker images
+
+# Builds the app images and pushes them to Docker Hub, so the server only pulls them (see
+# expense-tracker/docker-compose.deploy.yml). Runs only when started by hand: Actions tab >
+# Expense tracker images > Run workflow. Only from main, whose code already passed the
+# lint and test checks in its pull request.
+#
+# Needs the repository variable DOCKERHUB_USERNAME and the repository secret
+# DOCKERHUB_TOKEN (a Docker Hub access token with Read & Write), under Settings > Secrets
+# and variables > Actions. Pushes two public repos, linux/amd64 only (the server is
+# Ubuntu on x86-64), each tagged sha-<commit> and latest:
+#   <username>/expense-tracker-backend, <username>/expense-tracker-frontend
+# Nothing private is in them: the code is this public repo, and .env and the database
+# stay on the server.
+on:
+  workflow_dispatch:
+
+# A second run waits for the first, so "latest" always ends on the newer commit.
+concurrency:
+  group: expense-tracker-images
+  cancel-in-progress: false
+
+jobs:
+  images:
+    runs-on: ubuntu-24.04
+    env:
+      NAMESPACE: ${{ vars.DOCKERHUB_USERNAME }}
+      HAS_TOKEN: ${{ secrets.DOCKERHUB_TOKEN != '' }}
+    steps:
+      - name: Check the branch and the Docker Hub settings
+        run: |
+          if [ "$GITHUB_REF" != "refs/heads/main" ]; then
+            echo "::error::Run this from main. It was started on ${GITHUB_REF#refs/heads/}."
+            exit 1
+          fi
+          if [ -z "$NAMESPACE" ] || [ "$HAS_TOKEN" != "true" ]; then
+            echo "::error::Add the repository variable DOCKERHUB_USERNAME and the secret DOCKERHUB_TOKEN (Settings > Secrets and variables > Actions)."
+            exit 1
+          fi
+      - uses: actions/checkout@v6
+      - name: Short commit id
+        run: echo "SHORT_SHA=${GITHUB_SHA::7}" >> "$GITHUB_ENV"
+      - uses: docker/setup-buildx-action@v4
+      - uses: docker/login-action@v4
+        with:
+          username: ${{ vars.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Backend image
+        uses: docker/build-push-action@v7
+        with:
+          context: expense-tracker/backend
+          # config/seed.yaml goes into the image, so the server needs no copy of the repo.
+          build-contexts: config=expense-tracker/config
+          target: runtime
+          platforms: linux/amd64
+          push: true
+          provenance: false
+          tags: |
+            ${{ env.NAMESPACE }}/expense-tracker-backend:sha-${{ env.SHORT_SHA }}
+            ${{ env.NAMESPACE }}/expense-tracker-backend:latest
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+          cache-from: type=gha,scope=backend
+          cache-to: type=gha,mode=max,scope=backend
+      - name: Frontend image
+        uses: docker/build-push-action@v7
+        with:
+          context: expense-tracker/frontend
+          target: runtime
+          platforms: linux/amd64
+          push: true
+          provenance: false
+          tags: |
+            ${{ env.NAMESPACE }}/expense-tracker-frontend:sha-${{ env.SHORT_SHA }}
+            ${{ env.NAMESPACE }}/expense-tracker-frontend:latest
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+          cache-from: type=gha,scope=frontend
+          cache-to: type=gha,mode=max,scope=frontend
+      - name: Summary
+        run: |
+          {
+            echo "### Images pushed"
+            echo "- \`${NAMESPACE}/expense-tracker-backend:sha-${SHORT_SHA}\` and \`:latest\`"
+            echo "- \`${NAMESPACE}/expense-tracker-frontend:sha-${SHORT_SHA}\` and \`:latest\`"
+            echo ""
+            echo "Pin this build on the server with \`IMAGE_TAG=sha-${SHORT_SHA}\` in its .env."
+          } >> "$GITHUB_STEP_SUMMARY"

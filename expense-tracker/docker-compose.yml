@@ -32,7 +32,10 @@ services:
   # One-shot: applies migrations, then exits. The backend starts only if this succeeds.
   # (In Kubernetes this becomes a Job / Helm hook, so replicas never race on migrations.)
   migrate:
-    build: { context: ./backend, target: runtime }
+    build:
+      context: ./backend
+      target: runtime
+      additional_contexts: { config: ./config }  # bakes config/seed.yaml into the image
     image: expense-tracker-backend:local
     pull_policy: build  # local image: build it, never look for it on Docker Hub
     command: ["alembic", "upgrade", "head"]

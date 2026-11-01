@@ -154,14 +154,38 @@ Nothing to install on the host. The backend image installs Python packages from
 
 ## 10. Build, packaging and artifacts
 
-`make up` builds both images locally as `expense-tracker-backend:local` and
-`expense-tracker-frontend:local`. There is no registry, no tag per release and no artifact
-store. The version that runs is the commit checked out on the machine:
+**On the Mac**, `make up` builds both images locally as `expense-tracker-backend:local` and
+`expense-tracker-frontend:local`. The version that runs is the commit checked out there:
 
 ```sh
 git log --oneline -1                                       # Safe: what is deployed
 docker image ls 'expense-tracker-*'                        # Safe: when the images were built
 ```
+
+**For servers**, CI builds the images, but only when you start it. In GitHub, open Actions ›
+Expense tracker images › Run workflow, on `main`
+(`.github/workflows/expense-tracker-images-build.yml`). Merges and pushes never start it. It
+refuses to run from another branch, because only main's code has passed the PR checks. It
+builds both images for `linux/amd64` (the server is Ubuntu on x86-64) and pushes them to
+two public Docker Hub repos:
+
+| Image | Tags |
+| --- | --- |
+| `<dockerhub-user>/expense-tracker-backend` | `sha-<7-char commit>`, `latest` |
+| `<dockerhub-user>/expense-tracker-frontend` | `sha-<7-char commit>`, `latest` |
+
+The backend image includes `config/seed.yaml`, so a server needs no copy of the repo. Nothing
+private is in the images: the code is already public, and `.env` and the data stay on the
+server.
+
+The job needs these, under the repo's Settings › Secrets and variables › Actions:
+
+| Name | Kind | Value |
+| --- | --- | --- |
+| `DOCKERHUB_USERNAME` | Variable | Your Docker Hub username |
+| `DOCKERHUB_TOKEN` | Secret | A Docker Hub personal access token with Read & Write |
+
+Without them the job fails with a message that names them.
 
 ## 11. Deploy the application
 
@@ -201,6 +225,50 @@ make up                             # rebuilds, migrates, seeds, restarts
 
 `make up` keeps the data volume. Only containers whose image or settings changed are
 recreated.
+
+### Deploy on a server from the CI images
+
+For a small server that can't build the images, such as a 512 MB droplet. Building needs far
+more memory than running. The server needs Docker Engine with the Compose plugin and nothing
+else: no clone, no `make`.
+
+1. Copy `docker-compose.deploy.yml` to a folder on the server, e.g. `~/expense-tracker/`.
+2. Create `.env` next to it (**Your values**; `chmod 600 .env`):
+
+   ```sh
+   COMPOSE_FILE=docker-compose.deploy.yml
+   IMAGE_NAMESPACE=<dockerhub-user>
+   IMAGE_TAG=latest
+   POSTGRES_USER=expense
+   POSTGRES_PASSWORD=<openssl rand -hex 24>
+   POSTGRES_DB=expense
+   ```
+
+   `COMPOSE_FILE` makes plain `docker compose` use the deploy file. The other variables in
+   [section 7](#7-environment-variables-and-secrets) work the same here.
+3. Start it (**Safe** on an empty server):
+
+   ```sh
+   docker compose pull && docker compose up -d
+   docker compose run --rm -it backend python -m app.cli create-admin --email <you@example.com> --name "<Your name>"
+   ```
+
+4. The app listens on `127.0.0.1:8080` only, because a server is on the public internet and
+   the app is plain HTTP. Until HTTPS is in front of it, use an SSH tunnel:
+   `ssh -L 8080:127.0.0.1:8080 <user>@<server>`, then open `http://localhost:8080`.
+
+To update, run `docker compose pull && docker compose up -d`. To pin or roll back to one build,
+set `IMAGE_TAG=sha-<commit>` (the job summary in Actions shows it) and run
+`docker compose up -d`. A migration that already ran still needs the
+[rollback steps](#18-rollback-if-a-deploy-fails).
+
+Memory: the app used about 170 MiB idle and 300 MiB at peak on the Mac. The deploy file
+shrinks Postgres and caps each container. On 512 MB, add swap first (1–2 GB), or use a 1 GB
+server. Backups (`scripts/backup.sh`) are scheduled by launchd on the Mac only, so a server
+has none until a Linux schedule is added.
+
+Never start `docker-compose.deploy.yml` on the Mac. It uses the same project name, so it would
+replace the running containers there.
 
 ## 12. Database migrations and initialization
 
