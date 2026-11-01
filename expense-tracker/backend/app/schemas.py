@@ -59,6 +59,13 @@ class PasswordChangeIn(Strict):
     new_password: Password
 
 
+class EmailChangeIn(Strict):
+    """Your own login email. The password proves it's you, not someone at your unlocked screen."""
+
+    new_email: Email
+    current_password: str
+
+
 class ResetIn(Strict):
     password: Password
 
@@ -134,6 +141,7 @@ class AdminUserPatchIn(Strict):
         Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=100)]
         | None
     ) = None
+    email: Email | None = None
     is_site_admin: bool | None = None
     is_active: bool | None = None
 

@@ -221,7 +221,17 @@ function Users({ meId }: { meId: string }) {
                         onSave={(display_name) => patch(`/admin/users/${u.id}`, { display_name }).then(refresh)}
                       />
                       <span className="admin-user-meta">
-                        <span className="muted small">{u.email}</span>
+                        <InlineRename
+                          className="admin-email"
+                          type="email"
+                          value={u.email}
+                          label={`New email for ${u.display_name}`}
+                          maxLength={254}
+                          action="Change email"
+                          empty="Enter an email."
+                          saved={(email) => `${u.display_name} now signs in with ${email}`}
+                          onSave={(email) => patch(`/admin/users/${u.id}`, { email }).then(refresh)}
+                        />
                         {u.is_site_admin && <span className="tag">admin</span>}
                         {isMe && <span className="tag">You</span>}
                       </span>

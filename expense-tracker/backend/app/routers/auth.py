@@ -16,7 +16,7 @@ from app.models import (
     User,
     UserSession,
 )
-from app.schemas import LoginIn, MeOut, PasswordChangeIn, ResetIn
+from app.schemas import EmailChangeIn, LoginIn, MeOut, PasswordChangeIn, ResetIn
 from app.security import hash_password, hash_token, new_token, verify_password
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -119,6 +119,27 @@ def change_password(
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Current password is wrong")
     user.password_hash = hash_password(body.new_password)
     db.commit()
+
+
+def email_taken(db: Session, email: str, user: User) -> bool:
+    """Another login already signs in with this email (emails are stored lower case)."""
+    return db.scalar(select(User.id).where(User.email == email, User.id != user.id)) is not None
+
+
+@router.post("/email", response_model=MeOut)
+def change_email(
+    body: EmailChangeIn, user: User = Depends(current_user), db: Session = Depends(get_db)
+) -> MeOut:
+    """Only you change your own email (a site admin can too, from Admin). You stay signed in."""
+    if not verify_password(user.password_hash, body.current_password):
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Current password is wrong")
+    if body.new_email == user.email:
+        raise HTTPException(status.HTTP_409_CONFLICT, "That's already your email")
+    if email_taken(db, body.new_email, user):
+        raise HTTPException(status.HTTP_409_CONFLICT, "Another login already uses that email")
+    user.email = body.new_email
+    db.commit()
+    return me_out(db, user)
 
 
 @router.post("/reset/{token}", status_code=status.HTTP_204_NO_CONTENT)

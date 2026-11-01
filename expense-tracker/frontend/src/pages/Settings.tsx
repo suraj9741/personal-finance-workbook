@@ -793,6 +793,9 @@ function You() {
   const [open, setOpen] = useState(false);
   const [changed, setChanged] = useState(false);
   const summaryRef = useRef<HTMLElement>(null);
+  const [emailOpen, setEmailOpen] = useState(false);
+  const [emailChanged, setEmailChanged] = useState("");
+  const emailSummaryRef = useRef<HTMLElement>(null);
   return (
     <SettingsSection id="you" title="You">
       <div className="card">
@@ -841,8 +844,94 @@ function You() {
         <p className="settings-status" role="status">
           {changed ? "Password changed. Your other devices stay signed in." : ""}
         </p>
+        <details
+          className="settings-disclosure"
+          open={emailOpen}
+          onToggle={(e) => {
+            setEmailOpen(e.currentTarget.open);
+            if (e.currentTarget.open) setEmailChanged("");
+          }}
+        >
+          <summary ref={emailSummaryRef}>Change email…</summary>
+          {emailOpen && (
+            <EmailForm
+              current={me?.email ?? ""}
+              onDone={(email) => {
+                setEmailOpen(false);
+                setEmailChanged(email);
+                emailSummaryRef.current?.focus();
+              }}
+            />
+          )}
+        </details>
+        <p className="settings-status" role="status">
+          {emailChanged ? `Email changed. Sign in with ${emailChanged} from now on. You stay signed in here.` : ""}
+        </p>
       </div>
     </SettingsSection>
+  );
+}
+
+const EMAIL_FIELDS = ["new_email", "current_password"];
+
+/** Your own login email: the new one plus your password, so nobody at your open screen can take the login. */
+function EmailForm({ current, onDone }: { current: string; onDone: (email: string) => void }) {
+  const client = useQueryClient();
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [errors, setErrors] = useState<FieldErrors>({});
+  const [error, setError] = useState("");
+  const formId = useId();
+  const change = useMutation({
+    mutationFn: () => post<{ email: string }>("/auth/email", { new_email: email, current_password: password }),
+    onSuccess: (me) => {
+      client.invalidateQueries({ queryKey: ["me"] });
+      client.invalidateQueries({ queryKey: ["members"] });
+      onDone(me.email);
+    },
+    onError: (e: Error) => {
+      if (e instanceof ApiError && e.status === 400) return setErrors({ current_password: e.message });
+      if (e instanceof ApiError && e.status === 409) return setErrors({ new_email: e.message });
+      const split = splitServerError(e, EMAIL_FIELDS);
+      setErrors(split.errors);
+      setError(split.general);
+    },
+  });
+
+  function submit(event: FormEvent) {
+    event.preventDefault();
+    if (change.isPending) return;
+    const found: FieldErrors = {};
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email.trim())) found.new_email = "Enter an email like name@example.com.";
+    else if (email.trim().toLowerCase() === current) found.new_email = "That's already your email.";
+    if (!password) found.current_password = "Enter your current password.";
+    setErrors(found);
+    setError("");
+    if (Object.keys(found).length === 0) change.mutate();
+  }
+
+  const field = (name: string) => invalidProps(errors, name, formId);
+  return (
+    <form className="settings-form password-form" aria-busy={change.isPending} noValidate onSubmit={submit}>
+      <label className="field">
+        New email
+        <input type="email" autoComplete="email" value={email} placeholder={current} onChange={(e) => setEmail(e.target.value)} {...field("new_email")} />
+        <FieldError errors={errors} name="new_email" formId={formId} />
+      </label>
+      <label className="field">
+        Current password
+        <input type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} {...field("current_password")} />
+        <FieldError errors={errors} name="current_password" formId={formId} />
+      </label>
+      <button type="submit" className="primary" disabled={change.isPending}>
+        <BusyLabel busy={change.isPending} idle="Change email" working="Changing…" />
+      </button>
+      {error && (
+        <p className="error form-line" role="alert">
+          {error}
+        </p>
+      )}
+    </form>
   );
 }
 
