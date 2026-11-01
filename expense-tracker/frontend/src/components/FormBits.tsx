@@ -31,7 +31,28 @@ export function BusyLabel({ busy, idle, working }: { busy: boolean; idle: string
  * Enter saves, Esc cancels, focus returns to Rename. Clicking away cancels only when nothing
  * was changed, so typing is never lost. A hidden status line says "Renamed to X" after a save.
  */
-export function InlineRename({ value, label, onSave, maxLength = 60 }: { value: string; label: string; onSave: (name: string) => Promise<unknown>; maxLength?: number }) {
+export function InlineRename({
+  value,
+  label,
+  onSave,
+  maxLength = 60,
+  type = "text",
+  action = "Rename",
+  empty = "Enter a name.",
+  saved = (v: string) => `Renamed to ${v}`,
+  className,
+}: {
+  value: string;
+  label: string;
+  onSave: (name: string) => Promise<unknown>;
+  maxLength?: number;
+  type?: "text" | "email";
+  /** The edit button's word, e.g. "Change" for an email. */
+  action?: string;
+  empty?: string;
+  saved?: (value: string) => string;
+  className?: string;
+}) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(value);
   const [busy, setBusy] = useState(false);
@@ -67,13 +88,13 @@ export function InlineRename({ value, label, onSave, maxLength = 60 }: { value: 
     const name = draft.trim();
     if (name === value) return stop();
     if (!name) {
-      setError("Enter a name.");
+      setError(empty);
       return inputRef.current?.focus();
     }
     setBusy(true);
     try {
       await onSave(name);
-      setStatus(`Renamed to ${name}`);
+      setStatus(saved(name));
       stop();
     } catch (e) {
       setError((e as Error).message);
@@ -84,7 +105,7 @@ export function InlineRename({ value, label, onSave, maxLength = 60 }: { value: 
   }
 
   return (
-    <div className="inline-rename">
+    <div className={className ? `inline-rename ${className}` : "inline-rename"}>
       {editing ? (
         <form
           onSubmit={save}
@@ -96,6 +117,7 @@ export function InlineRename({ value, label, onSave, maxLength = 60 }: { value: 
           <input
             ref={inputRef}
             aria-label={label}
+            type={type}
             value={draft}
             maxLength={maxLength}
             aria-invalid={error ? true : undefined}
@@ -126,8 +148,8 @@ export function InlineRename({ value, label, onSave, maxLength = 60 }: { value: 
       ) : (
         <>
           <span className="rename-name">{value}</span>
-          <button ref={renameRef} type="button" className="ghost small" aria-label={`Rename ${value}`} onClick={start}>
-            Rename
+          <button ref={renameRef} type="button" className="ghost small" aria-label={`${action} ${value}`} onClick={start}>
+            {action}
           </button>
         </>
       )}

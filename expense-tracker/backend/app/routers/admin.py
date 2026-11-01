@@ -21,6 +21,7 @@ from app.models import (
     User,
     UserSession,
 )
+from app.routers.auth import email_taken
 from app.routers.household import make_invite, members_of
 from app.schemas import (
     AdminHouseholdOut,
@@ -81,6 +82,8 @@ def patch_user(
     user = get_user(db, user_id)
     if user.id == admin.id and (body.is_active is False or body.is_site_admin is False):
         raise HTTPException(status.HTTP_409_CONFLICT, "You can't deactivate or demote yourself")
+    if body.email is not None and email_taken(db, body.email, user):
+        raise HTTPException(status.HTTP_409_CONFLICT, "Another login already uses that email")
     for field, value in body.model_dump(exclude_unset=True).items():
         if value is not None:
             setattr(user, field, value)
