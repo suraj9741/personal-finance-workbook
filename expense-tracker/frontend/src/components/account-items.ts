@@ -20,6 +20,6 @@ export function accountItems(accounts: Account[]): PickerItem[] {
       group: GROUP_PLURAL[group],
       icon: accountIcon(a.pay_type),
       logo: bankLogo(a),
-      hint: a.visibility === "shared" ? `${KIND[a.pay_type]} · shared` : KIND[a.pay_type],
+      hint: KIND[a.pay_type],
     }));
 }

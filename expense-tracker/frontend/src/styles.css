@@ -1768,3 +1768,6 @@ input.switch:checked::after { transform: translateX(18px); }
 input.switch:disabled { opacity: 0.5; cursor: default; }
 input.switch:focus-visible { outline: 2px solid var(--color-focus); outline-offset: 2px; }
 @media (prefers-reduced-motion: reduce) { input.switch, input.switch::after { transition: none; } }
+/* The form's labels stack their text over the field; these two sit side by side. */
+.tx-form label.check { display: flex; align-items: center; }
+.tx-form label.switch-row { display: flex; align-items: center; justify-content: space-between; }
