@@ -13,7 +13,7 @@ afterEach(() => {
 
 const ME = { id: "u1", email: "s@example.com", display_name: "Suraj", is_site_admin: true, household_id: "h1", household_name: "Home", role: "owner" };
 const account = (id: string, name: string, pay_type: string, extra: object = {}) => ({
-  id, name, pay_type, opening_balance: "0", visibility: "shared", owner_user_id: null, is_active: true,
+  id, name, pay_type, opening_balance: "0", visibility: "private", owner_user_id: "u1", is_active: true,
   institution: null, description: null, opening_date: null, credit_limit: null, statement_day: null, due_day: null,
   opening_invested: "0", current_value: null, valued_on: null, ...extra,
 });
