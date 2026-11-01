@@ -10,7 +10,8 @@ import { MonthPicker } from "../components/MonthPicker";
 import { SearchPicker, type PickerItem } from "../components/SearchPicker";
 import { useToasts } from "../components/toast-context";
 import { TransactionForm } from "../components/TransactionForm";
-import { TX_TYPE_LABEL, accountLabel, categoryKind, currentMonth, dayHeading, dayLabel, dayTotals, money, monthLabel, txSign } from "../format";
+import { ViewOnly } from "../components/ViewOnly";
+import { TX_TYPE_LABEL, accountLabel, categoryKind, categoryLabel, currentMonth, dayHeading, dayLabel, dayTotals, money, monthLabel, txSign } from "../format";
 import { useAccounts, useCategories, useMembers, useRefreshMoney } from "../hooks";
 import { Icon } from "../components/Icon";
 
@@ -321,7 +322,9 @@ export function Transactions() {
                         </td>
                         <td>
                           <span className="cat-cell">
-                            {categoryKind(t.type) ? (
+                            {categoryKind(t.type) && !t.can_edit ? (
+                              t.category_id ? categoryLabel(categories.find((c) => c.id === t.category_id)) : <span className="muted">Uncategorized</span>
+                            ) : categoryKind(t.type) ? (
                               <CategoryPicker plain categories={categories.filter((c) => c.is_active || c.id === t.category_id)} kind={categoryKind(t.type)!} value={t.category_id} onChange={(id) => recategorize.mutate({ id: t.id, category_id: id })} />
                             ) : (
                               <span className="muted">{TX_TYPE_LABEL[t.type]}</span>
@@ -364,9 +367,13 @@ export function Transactions() {
                               )}
                             </button>
                           )}
-                          <button type="button" className="ghost small" aria-label={`Edit ${label}`} onClick={() => setEditing(t)}>
-                            Edit
-                          </button>
+                          {t.can_edit ? (
+                            <button type="button" className="ghost small" aria-label={`Edit ${label}`} onClick={() => setEditing(t)}>
+                              Edit
+                            </button>
+                          ) : (
+                            <ViewOnly name={t.created_by_name} />
+                          )}
                         </td>
                       </tr>
                     );

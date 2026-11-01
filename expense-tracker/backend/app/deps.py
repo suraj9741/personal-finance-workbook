@@ -46,6 +46,19 @@ class Ctx:
             or_(Transaction.to_account_id.is_(None), Transaction.to_account_id.in_(ids)),  # type: ignore[arg-type]
         )
 
+    def editable_transaction(self) -> ColumnElement[bool]:
+        """Rows this user may change or delete: the ones they added. The household owner may
+        also change rows nobody can fix any more: no creator, or a deactivated one."""
+        mine = Transaction.created_by == self.user.id
+        if not self.is_owner:
+            return mine
+        inactive = select(User.id).where(User.is_active.is_(False)).scalar_subquery()
+        return or_(
+            mine,
+            Transaction.created_by.is_(None),
+            Transaction.created_by.in_(inactive),
+        )
+
     def just_me(self) -> ColumnElement[bool]:
         """Entries this user added, plus anything on their own private accounts."""
         mine = (

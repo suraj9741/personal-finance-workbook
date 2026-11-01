@@ -345,6 +345,8 @@ class TransactionOut(Orm):
     notes: str | None
     created_by: uuid.UUID | None
     created_by_name: str | None = None
+    # False on someone else's entry: the screens show it read-only.
+    can_edit: bool = False
     source: str
     statement_matched: bool
     created_at: datetime

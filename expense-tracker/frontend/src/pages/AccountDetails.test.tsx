@@ -27,7 +27,7 @@ const figures = {
 };
 const tx = (id: string, date: string, type: string, amount: string, extra: object = {}) => ({
   id, date, type, amount, description: id, account_id: "a4", to_account_id: null, category_id: null,
-  cost_basis: null, counterparty: null, notes: null, created_by: null, created_by_name: null, ...extra,
+  cost_basis: null, counterparty: null, notes: null, created_by: null, created_by_name: null, can_edit: true, ...extra,
 });
 
 const ITEMS = [tx("Card bill", "2026-10-05", "transfer", "21000.00", { account_id: "a1", to_account_id: "a4" }), tx("Swiggy", "2026-10-05", "expense", "300.00")];

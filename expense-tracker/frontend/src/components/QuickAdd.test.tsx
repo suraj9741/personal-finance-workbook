@@ -17,7 +17,7 @@ const SUGGESTIONS = [
 ];
 const tx = (id: string, date: string, description: string, amount: string) => ({
   id, date, description, amount, type: "expense", account_id: "a1", to_account_id: null, category_id: null,
-  cost_basis: null, counterparty: null, notes: null, created_by: "u1", created_by_name: "Suraj",
+  cost_basis: null, counterparty: null, notes: null, created_by: "u1", created_by_name: "Suraj", can_edit: true,
 });
 
 function setup(days: Record<string, object[]> = {}) {

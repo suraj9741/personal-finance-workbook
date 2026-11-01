@@ -10,6 +10,7 @@ import { Modal } from "../components/Modal";
 import { useToasts } from "../components/toast-context";
 import { MonthPicker } from "../components/MonthPicker";
 import { TransactionForm } from "../components/TransactionForm";
+import { ViewOnly } from "../components/ViewOnly";
 import {
   GROUP_LABEL,
   GROUP_PLURAL,
@@ -361,14 +362,18 @@ export function AccountDetails() {
                           <Amounts>{money(t.amount)}</Amounts>
                         </td>
                         <td className="actions">
-                          <button
-                            type="button"
-                            className="ghost small"
-                            aria-label={`Edit ${t.description || TX_TYPE_LABEL[t.type]}, ${dayLabel(t.date)}`}
-                            onClick={() => setEditing(t)}
-                          >
-                            Edit
-                          </button>
+                          {t.can_edit ? (
+                            <button
+                              type="button"
+                              className="ghost small"
+                              aria-label={`Edit ${t.description || TX_TYPE_LABEL[t.type]}, ${dayLabel(t.date)}`}
+                              onClick={() => setEditing(t)}
+                            >
+                              Edit
+                            </button>
+                          ) : (
+                            <ViewOnly name={t.created_by_name} />
+                          )}
                         </td>
                       </tr>
                     );
@@ -607,16 +612,19 @@ function PostedNote({ t, statementDay }: { t: Transaction; statementDay: number 
         <small className="muted">
           Posted {dayLabel(t.posted_on)}, so it counts on the {billName(lands)} bill.
         </small>
-        <button type="button" className="ghost small" disabled={move.isPending} onClick={() => move.mutate(null)}>
-          Undo
-        </button>
+        {t.can_edit && (
+          <button type="button" className="ghost small" disabled={move.isPending} onClick={() => move.mutate(null)}>
+            Undo
+          </button>
+        )}
       </span>
     );
   }
   const next = shiftDay(close, 1);
   // Only until the next bill is out: by then the real statement has settled it.
   const near = t.date >= shiftDay(close, -NEAR_STATEMENT_DAYS) && today() <= statementFor(next, statementDay);
-  if (!near) return null;
+  // Only the person who added it can move it.
+  if (!near || !t.can_edit) return null;
   return (
     <span className="posted-note warn-text">
       <small>Close to the statement day, so the bank may post it on the next bill.</small>
