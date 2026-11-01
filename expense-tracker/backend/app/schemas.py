@@ -255,7 +255,7 @@ class AccountIn(AccountFields):
     name: Name
     pay_type: PayType
     opening_balance: Money = Decimal("0")
-    visibility: Visibility = "shared"
+    visibility: Visibility = "private"
 
 
 class AccountPatchIn(AccountFields):
@@ -267,6 +267,7 @@ class AccountPatchIn(AccountFields):
     name: Name | None = None
     opening_balance: Money | None = None
     is_active: bool | None = None
+    visibility: Visibility | None = None
 
 
 class RuleOut(Orm):

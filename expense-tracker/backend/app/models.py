@@ -228,7 +228,8 @@ class Account(Base):
     # Broker: the latest value the user entered. Never fetched or estimated.
     current_value: Mapped[Decimal | None] = mapped_column(Numeric(14, 2))
     valued_on: Mapped[date | None] = mapped_column(Date)
-    visibility: Mapped[str] = mapped_column(String(10), default="shared")
+    # Private: only the owner sees it and its transactions. Shared: the whole household does.
+    visibility: Mapped[str] = mapped_column(String(10), default="private")
     owner_user_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL")
     )

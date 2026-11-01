@@ -1,5 +1,5 @@
 import { Amounts } from "../components/Amounts";
-import { keepPreviousData, useMutation, useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Fragment, useState, type ReactNode } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { api, ApiError, patch, type Account, type AccountFigures, type Transaction } from "../api";
@@ -11,6 +11,7 @@ import { useToasts } from "../components/toast-context";
 import { MonthPicker } from "../components/MonthPicker";
 import { TransactionForm } from "../components/TransactionForm";
 import { ViewOnly } from "../components/ViewOnly";
+import { ShareSwitch } from "../components/ShareSwitch";
 import {
   GROUP_LABEL,
   GROUP_PLURAL,
@@ -160,7 +161,8 @@ export function AccountDetails() {
   const s = summary.data;
   const account = s.account;
   const group = groupOf(account.pay_type);
-  const canManage = account.visibility === "private" ? account.owner_user_id === me?.id : me?.role === "owner";
+  // The owner manages their account, shared or not; one with no owner is the household owner's.
+  const canManage = account.owner_user_id ? account.owner_user_id === me?.id : me?.role === "owner";
   const loaded = list.data?.items ?? [];
   const items = loaded.filter((t) => !hidden.has(t.id));
   const total = (list.data?.total ?? 0) - (loaded.length - items.length);
@@ -194,7 +196,7 @@ export function AccountDetails() {
             <div className="detail-name">
               <h1>{account.name}</h1>
               {!account.is_active && <span className="tag">Inactive</span>}
-              {account.visibility === "private" && <span className="tag">Private</span>}
+              {account.visibility === "shared" && <span className="tag">Shared</span>}
             </div>
             <p className="muted small">{subtitle}</p>
             {account.description && <p className="small">{account.description}</p>}
@@ -211,6 +213,7 @@ export function AccountDetails() {
               Edit account
             </button>
           )}
+          {canManage && <ShareToggle account={account} />}
         </div>
       </div>
       {!account.is_active && (
@@ -633,4 +636,16 @@ function PostedNote({ t, statementDay }: { t: Transaction; statementDay: number 
       </button>
     </span>
   );
+}
+
+/** The owner's quick switch for sharing this account with the household. */
+function ShareToggle({ account }: { account: Account }) {
+  const refresh = useRefreshMoney();
+  const client = useQueryClient();
+  const share = useMutation({
+    mutationFn: (shared: boolean) => patch(`/accounts/${account.id}`, { visibility: shared ? "shared" : "private" }),
+    onSuccess: () => Promise.all([client.invalidateQueries({ queryKey: ["accounts"] }), refresh()]),
+  });
+  const shared = share.isPending ? share.variables : account.visibility === "shared";
+  return <ShareSwitch compact shared={shared} disabled={share.isPending} onChange={(next) => share.mutate(next)} />;
 }

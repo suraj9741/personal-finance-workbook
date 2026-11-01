@@ -103,8 +103,18 @@ def join_by_invite(
     return client
 
 
+def share_all(client: Api) -> None:
+    """Share every account this user owns with the household (they start private)."""
+    for a in client.get("/api/v1/accounts?include_inactive=true").json():
+        if a["visibility"] == "private":
+            shared = client.patch(f"/api/v1/accounts/{a['id']}", json={"visibility": "shared"})
+            assert shared.status_code == 200, shared.text
+
+
 @pytest.fixture
 def family_member(admin: Api) -> Api:
+    """A member of the admin's household, which has shared its seeded accounts."""
+    share_all(admin)
     return join_by_invite(admin, "pratiksha@example.com", "Pratiksha")
 
 

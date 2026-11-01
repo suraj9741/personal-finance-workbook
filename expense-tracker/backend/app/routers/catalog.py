@@ -180,14 +180,16 @@ def get_account(db: Session, ctx: Ctx, account_id: uuid.UUID) -> Account:
 
 
 def can_manage(ctx: Ctx, account: Account) -> bool:
-    if account.visibility == "private":
-        return account.owner_user_id == ctx.user.id
-    return ctx.is_owner
+    """The account's owner edits, shares or deletes it, shared or not. An account with no
+    owner (its owner's user was deleted) falls to the household owner."""
+    if account.owner_user_id is None:
+        return ctx.is_owner
+    return account.owner_user_id == ctx.user.id
 
 
 CARD_FIELDS = ("credit_limit", "statement_day", "due_day")
 BROKER_FIELDS = ("opening_invested", "current_value", "valued_on")
-REQUIRED_FIELDS = ("name", "opening_balance", "is_active")
+REQUIRED_FIELDS = ("name", "opening_balance", "is_active", "visibility")
 
 
 def check_type_fields(pay_type: str, values: dict[str, object]) -> None:
@@ -249,11 +251,7 @@ def list_valuations(
 def create_account(
     body: AccountIn, ctx: Ctx = Depends(get_ctx), db: Session = Depends(get_db)
 ) -> Account:
-    # Anyone may add their own private account; shared accounts are the owner's call.
-    if body.visibility == "shared" and not ctx.is_owner:
-        raise HTTPException(
-            status.HTTP_403_FORBIDDEN, "Only the household owner adds shared accounts"
-        )
+    # Everyone owns the accounts they add and decides whether the household sees them.
     values = body.model_dump()
     check_type_fields(body.pay_type, values)
     values["opening_invested"] = values["opening_invested"] or 0

@@ -70,7 +70,7 @@ export function Accounts() {
   const groups = only && ACCOUNT_GROUPS.includes(only) ? [only] : ACCOUNT_GROUPS;
   // While searching, groups with no match step aside.
   const shown = needle ? groups.filter((g) => visible.some((r) => groupOf(r.account.pay_type) === g)) : groups;
-  const canManage = (a: Account) => (a.visibility === "private" ? a.owner_user_id === me?.id : me?.role === "owner");
+  const canManage = (a: Account) => (a.owner_user_id ? a.owner_user_id === me?.id : me?.role === "owner");
 
   function setType(value: AccountGroup | "") {
     const next = new URLSearchParams(params);
@@ -181,11 +181,11 @@ export function Accounts() {
                       <span className="account-main">
                         <AccountMark account={r.account} />
                         <Link to={`/accounts/${r.account.id}`}>{r.account.name}</Link>
-                        {(r.account.institution || r.account.pay_type === "cash" || r.account.visibility === "private" || !r.account.is_active) && (
+                        {(r.account.institution || r.account.pay_type === "cash" || r.account.visibility === "shared" || !r.account.is_active) && (
                           <small className="account-sub">
                             {r.account.institution}
                             {r.account.pay_type === "cash" && <span className="tag">Cash</span>}
-                            {r.account.visibility === "private" && <span className="tag">Private</span>}
+                            {r.account.visibility === "shared" && <span className="tag">Shared</span>}
                             {!r.account.is_active && <span className="tag">Inactive</span>}
                           </small>
                         )}

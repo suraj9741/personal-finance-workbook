@@ -120,18 +120,21 @@ class _Log:
         return not exists
 
 
-def admin_household_ids(db: Session) -> list[uuid.UUID]:
-    return list(
-        db.scalars(
-            select(HouseholdMember.household_id)
-            .join(User, User.id == HouseholdMember.user_id)
-            .where(User.is_site_admin.is_(True))
-            .distinct()
-        )
-    )
+def admin_households(db: Session) -> dict[uuid.UUID, uuid.UUID]:
+    """Each household with a site admin in it, and that admin (the first one, if several)."""
+    rows = db.execute(
+        select(HouseholdMember.household_id, HouseholdMember.user_id)
+        .join(User, User.id == HouseholdMember.user_id)
+        .where(User.is_site_admin.is_(True))
+        .order_by(HouseholdMember.joined_at.desc())
+    ).all()
+    return {row.household_id: row.user_id for row in rows}
 
 
-def seed_household(db: Session, household_id: uuid.UUID, seed: HouseholdSeed) -> dict[str, int]:
+def seed_household(
+    db: Session, household_id: uuid.UUID, seed: HouseholdSeed, owner_id: uuid.UUID | None = None
+) -> dict[str, int]:
+    """Accounts are added private to owner_id (the admin); they share them from the app."""
     seen = _Log(db, str(household_id))
     added = {"accounts": 0, "categories": 0}
     have_accounts = {
@@ -147,6 +150,8 @@ def seed_household(db: Session, household_id: uuid.UUID, seed: HouseholdSeed) ->
                     name=account.name,
                     pay_type=pay_type,
                     opening_balance=account.opening_balance,
+                    owner_user_id=owner_id,
+                    visibility="private" if owner_id else "shared",
                 )
             )
             added["accounts"] += 1
@@ -207,8 +212,9 @@ def apply(db: Session, config: SeedConfig) -> dict[str, int]:
             db.add(AppSetting(key=key, value=value))
             totals["settings"] += 1
     totals["template_categories"] = seed_template(db, config.new_household)
-    for household_id in admin_household_ids(db):
-        for name, count in seed_household(db, household_id, config.admin_household).items():
+    for household_id, admin_id in admin_households(db).items():
+        added = seed_household(db, household_id, config.admin_household, admin_id)
+        for name, count in added.items():
             totals[name] += count
     db.commit()
     log.info("seed applied", **totals)

@@ -20,6 +20,7 @@
   --color-fill-elevated-hover: light-dark(#dcdce1, #48484a);
   /* The selected segment: white in light, a lighter grey in dark (as on iOS). */
   --color-segment-thumb: light-dark(#ffffff, #636366);
+  --color-switch-knob: #ffffff;
   --color-separator: light-dark(#d2d2d7, #38383a);
   --color-control-border: light-dark(#86868b, #8e8e93);
 
@@ -191,6 +192,7 @@
   --color-logo-tile: #ffffff;
   /* A hairline edge so the white tile still reads as a tile on a white card. */
   --shadow-logo-tile: inset 0 0 0 0.5px var(--color-separator);
+  --shadow-switch-knob: 0 1px 3px rgb(0 0 0 / 0.25);
   --logo-size: 1.125rem;
   --logo-tile-sm: 1.375rem;
   --logo-size-sm: 0.9375rem;

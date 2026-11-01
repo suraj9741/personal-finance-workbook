@@ -1,10 +1,10 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { ShareSwitch } from "./ShareSwitch";
 import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 import { api, del, patch, post, type Account, type PayType } from "../api";
 import { ACCOUNT_GROUPS, DECIMALS_HINT, GROUP_ICON, GROUP_LABEL, groupOf, tooManyDecimals, type AccountGroup } from "../format";
 import { forgetDraft, useDraft, useKeepDraft } from "../draft";
 import { focusFirstInvalid, invalidProps, splitServerError, type FieldErrors } from "../forms";
-import { useMe } from "../hooks";
 import { DateInput } from "./DateInput";
 import { BusyLabel, DraftNote, FieldError } from "./FormBits";
 import { useModal } from "./modal-context";
@@ -43,8 +43,6 @@ const orNull = (value: string) => (value.trim() === "" ? null : value.trim());
 
 /** Create or edit an account. The type is fixed once created: past entries depend on it. */
 export function AccountForm({ existing, group: initialGroup = "bank", onDone, onDeleted, focusField = "name" }: Props) {
-  const me = useMe().data;
-  const isOwner = me?.role === "owner";
   const client = useQueryClient();
   const draftKey = existing ? `account:${existing.id}` : "account:new";
   const { base, restored } = useDraft(draftKey, {
@@ -62,7 +60,7 @@ export function AccountForm({ existing, group: initialGroup = "bank", onDone, on
     opening_invested: existing?.opening_invested ?? "0",
     current_value: text(existing?.current_value),
     valued_on: text(existing?.valued_on),
-    visibility: (existing?.visibility ?? (isOwner ? "shared" : "private")) as "shared" | "private",
+    visibility: (existing?.visibility ?? "private") as "shared" | "private",
     },
   }, !!existing);
   const start = restored ?? (JSON.parse(base) as NonNullable<typeof restored>);
@@ -139,6 +137,7 @@ export function AccountForm({ existing, group: initialGroup = "bank", onDone, on
         description: orNull(form.description),
         opening_balance: form.opening_balance || "0",
         opening_date: orNull(form.opening_date),
+        visibility: form.visibility,
       };
       if (group === "credit_card") {
         body.credit_limit = orNull(form.credit_limit);
@@ -151,7 +150,7 @@ export function AccountForm({ existing, group: initialGroup = "bank", onDone, on
         body.valued_on = form.current_value.trim() ? orNull(form.valued_on) : null;
       }
       if (existing) return patch(`/accounts/${existing.id}`, body);
-      return post("/accounts", { ...body, pay_type: payType, visibility: form.visibility });
+      return post("/accounts", { ...body, pay_type: payType });
     },
     onSuccess: () => {
       forgetDraft(draftKey);
@@ -306,15 +305,7 @@ export function AccountForm({ existing, group: initialGroup = "bank", onDone, on
         Description (optional)
         <textarea rows={2} maxLength={500} value={form.description} onChange={(e) => set({ description: e.target.value })} />
       </label>
-      {!existing && (
-        <label>
-          Who can see it
-          <select value={form.visibility} onChange={(e) => set({ visibility: e.target.value as "shared" | "private" })}>
-            {isOwner && <option value="shared">Shared with household</option>}
-            <option value="private">Private (only me)</option>
-          </select>
-        </label>
-      )}
+      <ShareSwitch shared={form.visibility === "shared"} onChange={(shared) => set({ visibility: shared ? "shared" : "private" })} />
       <p className="muted small">Don't enter account or card numbers, CVVs or PINs. The app doesn't need them.</p>
       {error && (
         <p className="error" role="alert">
