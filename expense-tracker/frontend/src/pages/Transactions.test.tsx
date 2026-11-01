@@ -13,7 +13,7 @@ afterEach(() => {
 
 const tx = (id: string, date: string, type: string, amount: string, description = id) => ({
   id, date, type, amount, description, account_id: "a1", to_account_id: type === "transfer" ? "a2" : null, category_id: null,
-  cost_basis: null, counterparty: null, notes: null, created_by: "u1", created_by_name: "Suraj",
+  cost_basis: null, counterparty: null, notes: null, created_by: "u1", created_by_name: "Suraj", can_edit: true,
 });
 
 function renderWith(items: object[], total = items.length) {
@@ -110,4 +110,19 @@ it("filters by a whole category group as well as by one category", async () => {
   fireEvent.click(button);
   fireEvent.click(within(screen.getByRole("listbox")).getAllByRole("option")[4]);
   await vi.waitFor(() => expect(urls.at(-1)).toMatch(/category_group=Gotu.*category_kind=income|category_kind=income.*category_group=Gotu/));
+});
+
+it("shows someone else's entry as view only, with no edit or category change", async () => {
+  const now = today();
+  renderWith([
+    tx("mine", now, "expense", "100.00"),
+    { ...tx("theirs", now, "expense", "200.00"), created_by: "u2", created_by_name: "Pratiksha", can_edit: false },
+  ]);
+  await screen.findByRole("rowheader", { name: "Today" });
+  const theirs = screen.getByText("theirs").closest("tr")!;
+  expect(within(theirs).queryByRole("button", { name: /Edit/ })).toBeNull();
+  expect(within(theirs).getByText("View only").getAttribute("title")).toBe("Only Pratiksha can change this entry");
+  expect(within(theirs).getByText("Uncategorized")).toBeTruthy();
+  const mine = screen.getByText("mine").closest("tr")!;
+  expect(within(mine).getByRole("button", { name: /Edit mine/ })).toBeTruthy();
 });

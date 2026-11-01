@@ -229,7 +229,7 @@ it("shows the financial overview above the monthly dashboard", async () => {
 });
 
 it("shows an account's figures and history on its page", async () => {
-  const tx = { id: "t1", date: "2026-10-05", amount: "1000.00", type: "transfer", account_id: "a1", to_account_id: "a4", category_id: null, description: "Card bill", cost_basis: null, counterparty: null, notes: null, created_by: null, created_by_name: null };
+  const tx = { id: "t1", date: "2026-10-05", amount: "1000.00", type: "transfer", account_id: "a1", to_account_id: "a4", category_id: null, description: "Card bill", cost_basis: null, counterparty: null, notes: null, created_by: null, created_by_name: null, can_edit: true };
   mockApi((url) =>
     url.includes("/accounts/a4/summary") ? figures(ACCOUNTS[3], { outstanding: "25000.00", available_credit: "75000.00", next_due_date: "2026-11-05", month_expenses: "3000.00", month_transfers_in: "1000.00" })
     : url.includes("/transactions?account_id=a4") ? { items: [tx], total: 1 }

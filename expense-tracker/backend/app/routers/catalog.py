@@ -399,12 +399,13 @@ def delete_rule(
 
 @router.post("/rules/apply")
 def apply_rules(ctx: Ctx = Depends(get_ctx), db: Session = Depends(get_db)) -> dict[str, int]:
-    """Fill in categories on visible uncategorized expense/income rows."""
+    """Fill in categories on this user's uncategorized expense/income rows."""
     from app.services import match_rule
 
     rows = db.scalars(
         select(Transaction).where(
             ctx.visible_transaction(),
+            ctx.editable_transaction(),
             Transaction.category_id.is_(None),
             Transaction.type.in_(("expense", "income")),
         )

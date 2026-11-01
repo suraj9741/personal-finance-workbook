@@ -60,6 +60,8 @@ export interface Transaction {
   notes: string | null;
   created_by: string | null;
   created_by_name: string | null;
+  /** False on someone else's entry: shown read-only. */
+  can_edit: boolean;
 }
 export interface TransactionInput {
   date: string;

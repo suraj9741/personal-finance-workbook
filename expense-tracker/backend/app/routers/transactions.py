@@ -78,10 +78,22 @@ def validate(db: Session, ctx: Ctx, row: Transaction) -> None:
             raise HTTPException(422, f"Category is for {category.kind}, not {row.type}")
 
 
-def to_out(row: Transaction, names: dict[uuid.UUID, str]) -> TransactionOut:
+def to_out(
+    row: Transaction, names: dict[uuid.UUID, str], editable: set[uuid.UUID]
+) -> TransactionOut:
     out = TransactionOut.model_validate(row)
     out.created_by_name = names.get(row.created_by) if row.created_by else None
+    out.can_edit = row.id in editable
     return out
+
+
+def editable_ids(db: Session, ctx: Ctx, rows: list[Transaction]) -> set[uuid.UUID]:
+    if not rows:
+        return set()
+    query = select(Transaction.id).where(
+        Transaction.id.in_([r.id for r in rows]), ctx.editable_transaction()
+    )
+    return set(db.scalars(query))
 
 
 def user_names(db: Session, rows: list[Transaction]) -> dict[uuid.UUID, str]:
@@ -97,6 +109,16 @@ def get_visible(db: Session, ctx: Ctx, transaction_id: uuid.UUID) -> Transaction
     )
     if row is None:
         raise not_found("Transaction not found")
+    return row
+
+
+def get_editable(db: Session, ctx: Ctx, transaction_id: uuid.UUID) -> Transaction:
+    """404 when the row isn't visible, 403 when it is but someone else added it."""
+    row = get_visible(db, ctx, transaction_id)
+    if not editable_ids(db, ctx, [row]):
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN, "Only the person who added this entry can change it"
+        )
     return row
 
 
@@ -170,8 +192,8 @@ def list_transactions(
             .offset(offset)
         )
     )
-    names = user_names(db, rows)
-    return TransactionPage(items=[to_out(r, names) for r in rows], total=total)
+    names, editable = user_names(db, rows), editable_ids(db, ctx, rows)
+    return TransactionPage(items=[to_out(r, names, editable) for r in rows], total=total)
 
 
 @router.post("", response_model=TransactionOut, status_code=status.HTTP_201_CREATED)
@@ -191,7 +213,7 @@ def create_transaction(
     db.add(row)
     db.commit()
     CREATED.labels(row.type).inc()
-    return to_out(row, {ctx.user.id: ctx.user.display_name})
+    return to_out(row, {ctx.user.id: ctx.user.display_name}, {row.id})
 
 
 @router.get("/suggest", response_model=list[SuggestionOut])
@@ -231,7 +253,7 @@ def get_transaction(
     transaction_id: uuid.UUID, ctx: Ctx = Depends(get_ctx), db: Session = Depends(get_db)
 ) -> TransactionOut:
     row = get_visible(db, ctx, transaction_id)
-    return to_out(row, user_names(db, [row]))
+    return to_out(row, user_names(db, [row]), editable_ids(db, ctx, [row]))
 
 
 @router.patch("/{transaction_id}", response_model=TransactionOut)
@@ -241,7 +263,7 @@ def patch_transaction(
     ctx: Ctx = Depends(get_ctx),
     db: Session = Depends(get_db),
 ) -> TransactionOut:
-    row = get_visible(db, ctx, transaction_id)
+    row = get_editable(db, ctx, transaction_id)
     changes = body.model_dump(exclude_unset=True)
     for field, value in changes.items():
         if value is None and field in {"date", "amount", "type", "account_id", "description"}:
@@ -261,14 +283,14 @@ def patch_transaction(
     validate(db, ctx, row)
     db.commit()
     db.refresh(row)
-    return to_out(row, user_names(db, [row]))
+    return to_out(row, user_names(db, [row]), {row.id})
 
 
 @router.delete("/{transaction_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_transaction(
     transaction_id: uuid.UUID, ctx: Ctx = Depends(get_ctx), db: Session = Depends(get_db)
 ) -> None:
-    db.delete(get_visible(db, ctx, transaction_id))
+    db.delete(get_editable(db, ctx, transaction_id))
     db.commit()
 
 

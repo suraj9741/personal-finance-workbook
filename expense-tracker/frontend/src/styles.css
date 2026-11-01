@@ -826,6 +826,7 @@ td.buy { color: var(--color-transfer); }
 .num.expense { color: var(--color-expense); }
 td.transfer { color: var(--color-transfer); }
 .actions { white-space: nowrap; text-align: right; }
+.view-only { padding: 0 8px; cursor: default; }
 
 /* One <tbody> per day; its heading row carries the date and the day's net. */
 .day-head th, .day-head td {
