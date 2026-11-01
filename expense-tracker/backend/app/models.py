@@ -183,7 +183,15 @@ class Category(Base):
 class Account(Base):
     __tablename__ = "accounts"
     __table_args__ = (
-        UniqueConstraint("household_id", "name", "pay_type", name="uq_accounts_name"),
+        # Per owner: two family members can each have an "SBI".
+        UniqueConstraint(
+            "household_id",
+            "owner_user_id",
+            "name",
+            "pay_type",
+            name="uq_accounts_name",
+            postgresql_nulls_not_distinct=True,
+        ),
         CheckConstraint(_in("pay_type", PAY_TYPES), name="pay_type_valid"),
         CheckConstraint("visibility IN ('shared', 'private')", name="visibility_valid"),
         CheckConstraint(

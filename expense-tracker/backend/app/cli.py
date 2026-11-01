@@ -113,7 +113,10 @@ def seed_demo(db: Session) -> None:
             db.add(category)
             cats[(parent, sub)] = category
         bank, card, cash = (
-            Account(household_id=household_id, name=name, pay_type=pay_type)
+            # Accounts start private, so each needs its owner.
+            Account(
+                household_id=household_id, name=name, pay_type=pay_type, owner_user_id=author.id
+            )
             for name, pay_type in (("HDFC", "bank"), ("Yes Bank", "credit_card"), ("Cash", "cash"))
         )
         db.add_all([bank, card, cash])

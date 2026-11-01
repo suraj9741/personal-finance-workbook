@@ -53,14 +53,21 @@ class Ctx:
             return true()
         return Transaction.created_by == self.user.id
 
+    def owns_account(self) -> ColumnElement[bool]:
+        """Accounts that are this user's: theirs, shared or private. One with no owner is the
+        household owner's."""
+        mine = Account.owner_user_id == self.user.id
+        return or_(mine, Account.owner_user_id.is_(None)) if self.is_owner else mine
+
     def just_me(self) -> ColumnElement[bool]:
-        """Entries this user added, plus anything on their own private accounts."""
+        """Entries on this user's own accounts only, never a family member's, even a shared one.
+        Household is where everyone's shared accounts add up."""
         mine = (
             select(Account.id)
-            .where(Account.owner_user_id == self.user.id, Account.visibility == "private")
+            .where(Account.household_id == self.household_id, self.owns_account())
             .scalar_subquery()
         )
-        return or_(Transaction.created_by == self.user.id, Transaction.account_id.in_(mine))
+        return or_(Transaction.account_id.in_(mine), Transaction.to_account_id.in_(mine))
 
 
 def not_found(what: str = "Not found") -> HTTPException:

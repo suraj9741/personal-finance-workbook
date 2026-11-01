@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, expect, it, vi } from "vitest";
 import { Dashboard } from "./Dashboard";
@@ -33,11 +33,11 @@ const OVERVIEW = {
   }],
 };
 
-function renderWith({ household = month("household"), me = month("me"), overview = OVERVIEW, uncategorized = 0 }: { household?: object; me?: object; overview?: object; uncategorized?: number } = {}) {
+function renderWith({ household = month("household"), me = month("me"), overview = OVERVIEW, overviewMe = overview, uncategorized = 0 }: { household?: object; me?: object; overview?: object; overviewMe?: object; uncategorized?: number } = {}) {
   vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
     const url = String(input);
     const body = url.includes("/stats/month") ? (url.includes("scope=me") ? me : household)
-      : url.includes("/stats/overview") ? overview
+      : url.includes("/stats/overview") ? (url.includes("scope=me") ? overviewMe : overview)
       : url.includes("/stats/attention") ? { month: "2026-10", uncategorized, over_budget: [], old_loans: [], no_income: false, credit_card_category_used: 0 }
       : [];
     return new Response(JSON.stringify(body), { status: 200 });
@@ -96,8 +96,11 @@ it("offers to set budgets when there is no spending budget", async () => {
   expect(hero().querySelector(".hero-meter")).toBeNull();
 });
 
-it("switches Spent and Saved to Just me, hides budgets and keeps Net cash household", async () => {
-  renderWith({ me: month("me", { spend: "2000", saved: "98000", savings_rate: 0.98, categories: [line("Food", "spend", "10000", "2000"), line("Rent", "spend", "20000", "0")] }) });
+it("switches Spent, Saved and Net cash to Just me and hides budgets", async () => {
+  renderWith({
+    me: month("me", { spend: "2000", saved: "98000", savings_rate: 0.98, categories: [line("Food", "spend", "10000", "2000"), line("Rent", "spend", "20000", "0")] }),
+    overviewMe: { ...OVERVIEW, totals: { ...OVERVIEW.totals, net_cash: "30000" } },
+  });
   await screen.findByText(amountText("₹90,500.00"));
   const household = screen.getByRole("radio", { name: "Household" });
   expect(household.getAttribute("aria-checked")).toBe("true");
@@ -113,10 +116,11 @@ it("switches Spent and Saved to Just me, hides budgets and keeps Net cash househ
 
   expect(await screen.findByText(amountText("₹98,000.00"))).toBeTruthy();
   expect(value("Spent this month")).toBe("₹2,000.00");
-  expect(value("Net cash")).toBe("₹42,000.00");
+  // Your own accounts only: a family member's shared accounts stay in Household.
+  await waitFor(() => expect(value("Net cash")).toBe("₹30,000.00"));
   expect(within(hero()).getByText("Budgets are household-wide")).toBeTruthy();
   expect(hero().querySelector(".hero-meter")).toBeNull();
-  expect(screen.getByText("Just me · entries you added and your private accounts")).toBeTruthy();
+  expect(screen.getByText("Just me · only your own accounts, never a family member's")).toBeTruthy();
   expect(screen.getByRole("heading", { name: /^This month by category/ }).textContent).toBe("This month by category · Just me");
   expect(screen.getByText("Budgets are household-wide, so they're hidden in Just me.")).toBeTruthy();
   // Bars show your own spending only, with no budget figures.

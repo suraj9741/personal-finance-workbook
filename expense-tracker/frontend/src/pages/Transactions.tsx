@@ -13,7 +13,7 @@ import { useToasts } from "../components/toast-context";
 import { TransactionForm } from "../components/TransactionForm";
 import { ViewOnly } from "../components/ViewOnly";
 import { TX_TYPE_LABEL, accountLabel, categoryKind, categoryLabel, currentMonth, dayHeading, dayLabel, dayTotals, money, monthLabel, txSign } from "../format";
-import { useAccounts, useCategories, useMembers, useRefreshMoney } from "../hooks";
+import { useAccounts, useCategories, useMembers, useOwnerName, useRefreshMoney } from "../hooks";
 import { Icon } from "../components/Icon";
 
 const PAGE = 100;
@@ -57,6 +57,7 @@ export function Transactions() {
   const month = params.get("month") ?? currentMonth();
   const accounts = useAccounts(true).data ?? [];
   const logoOf = useBankLogo();
+  const ownerName = useOwnerName();
   const categories = useCategories(true).data ?? [];
   const members = useMembers().data ?? [];
   const refresh = useRefreshMoney();
@@ -209,7 +210,7 @@ export function Transactions() {
           label="Account filter"
           none="All accounts"
           icon="bank"
-          items={accountItems(accounts, logoOf)}
+          items={accountItems(accounts, logoOf, ownerName)}
           value={params.get("account_id") || null}
           onChange={(id) => setFilter("account_id", id ?? "")}
         />

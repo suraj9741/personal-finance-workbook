@@ -633,16 +633,21 @@ def today() -> date:
 @router.get("/stats/overview", response_model=OverviewOut)
 def overview(
     month: Month = Query(default_factory=this_month),
+    scope: str = Query("household", pattern="^(household|me)$"),
     ctx: Ctx = Depends(get_ctx),
     db: Session = Depends(get_db),
 ) -> OverviewOut:
     """Every visible account with its balance and the month's activity, plus the totals.
 
     Inactive accounts are listed (flagged) so history stays visible; balance totals skip them.
-    The month only changes the month figures, never a balance.
+    The month only changes the month figures, never a balance. Just me: only your own accounts
+    (the household owner also has any account left without an owner).
     """
     start, end = month_range(month)
-    accounts = list(db.scalars(select(Account).where(ctx.visible_account()).order_by(Account.name)))
+    where = [ctx.visible_account()]
+    if scope == "me":
+        where.append(ctx.owns_account())
+    accounts = list(db.scalars(select(Account).where(*where).order_by(Account.name)))
     rows = balances.figures(db, accounts, start, end, today())
     return OverviewOut(month=month, totals=balances.totals(rows), accounts=rows)
 

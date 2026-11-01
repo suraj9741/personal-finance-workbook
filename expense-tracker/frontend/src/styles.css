@@ -1784,3 +1784,11 @@ input.switch:focus-visible { outline: 2px solid var(--color-focus); outline-offs
 /* The form's labels stack their text over the field; these two sit side by side. */
 .tx-form label.check { display: flex; align-items: center; }
 .tx-form label.switch-row { display: flex; align-items: center; justify-content: space-between; }
+
+/* ---- whose account (two members can each have an "SBI") ---- */
+.owner-tag { display: inline-flex; align-items: center; gap: var(--space-1); color: var(--color-text-secondary); font-size: var(--text-caption-size); font-weight: var(--text-caption-weight); white-space: nowrap; }
+.owner-initial { display: inline-grid; place-items: center; width: 1.25rem; height: 1.25rem; border-radius: 50%; background: var(--color-accent-tint); color: var(--color-accent); font-size: 0.6875rem; font-weight: 600; }
+.overview-owner th { padding-top: var(--space-3); text-align: left; font-weight: 600; color: var(--color-text); }
+.overview-owner th .muted { font-weight: 400; margin-left: var(--space-2); }
+.overview-subtotal td { color: var(--color-text-secondary); font-weight: 500; }
+.account-group-figure { display: grid; justify-items: end; gap: var(--space-0); text-align: right; }

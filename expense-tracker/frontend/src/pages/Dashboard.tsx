@@ -18,8 +18,8 @@ type Scope = MonthStats["scope"];
 const SCOPES: Scope[] = ["household", "me"];
 const SCOPE_LABEL: Record<Scope, string> = { household: "Household", me: "Just me" };
 const SCOPE_CAPTION: Record<Scope, string> = {
-  household: "Household · shared accounts plus your private ones",
-  me: "Just me · entries you added and your private accounts",
+  household: "Household · everyone's shared accounts plus your private ones",
+  me: "Just me · only your own accounts, never a family member's",
 };
 
 /** Household / Just me: a radio group, so arrows move and Tab enters once. */
@@ -134,7 +134,7 @@ function MonthDashboard({ scope, setScope, view, onView }: { scope: Scope; setSc
         {SCOPE_CAPTION[scope]}
       </p>
 
-      <DashboardHero month={month} stats={stats} />
+      <DashboardHero month={month} scope={scope} stats={stats} />
 
       <div className={`card attention-card ${allClear ? "quiet" : ""}`}>
         <div className="card-head">
@@ -222,7 +222,7 @@ function MonthDashboard({ scope, setScope, view, onView }: { scope: Scope; setSc
         </div>
       </section>
 
-      <FinancialOverview month={month} />
+      <FinancialOverview month={month} scope={scope} />
     </section>
   );
 }
