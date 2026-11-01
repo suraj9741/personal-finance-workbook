@@ -270,6 +270,17 @@ class AccountPatchIn(AccountFields):
     visibility: Visibility | None = None
 
 
+class InstitutionOut(Orm):
+    id: uuid.UUID
+    name: str
+
+
+class InstitutionIn(Strict):
+    name: Name
+    # A data URL (data:image/png;base64,...) of a PNG, JPEG or WebP logo.
+    logo: Annotated[str, StringConstraints(max_length=400_000)]
+
+
 class RuleOut(Orm):
     id: uuid.UUID
     pattern: str

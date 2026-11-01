@@ -26,6 +26,13 @@ export interface Category {
   /** Shown on the year view's Family cards; ticked per group in Settings. */
   is_family: boolean;
 }
+/** A bank, card issuer or broker someone added with its own logo (site-wide). */
+export interface Institution {
+  id: string;
+  name: string;
+}
+export const institutionLogoUrl = (id: string) => `/api/v1/institutions/${id}/logo`;
+
 export interface Account {
   id: string;
   name: string;

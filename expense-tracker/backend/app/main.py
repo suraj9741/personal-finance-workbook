@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 from app.config import get_settings
 from app.db import get_db
 from app.logging_setup import configure_logging
-from app.routers import admin, auth, catalog, household, stats, transactions
+from app.routers import admin, auth, catalog, household, institutions, stats, transactions
 
 API_PREFIX = "/api/v1"
 UNSAFE_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
@@ -96,7 +96,7 @@ def create_app() -> FastAPI:
             return JSONResponse({"status": "unavailable"}, status_code=503)
         return JSONResponse({"status": "ok"})
 
-    for module in (auth, household, catalog, transactions, stats, admin):
+    for module in (auth, household, catalog, institutions, transactions, stats, admin):
         app.include_router(module.router, prefix=API_PREFIX)
 
     Instrumentator(

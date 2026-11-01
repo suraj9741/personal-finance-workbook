@@ -1768,6 +1768,19 @@ input.switch:checked::after { transform: translateX(18px); }
 input.switch:disabled { opacity: 0.5; cursor: default; }
 input.switch:focus-visible { outline: 2px solid var(--color-focus); outline-offset: 2px; }
 @media (prefers-reduced-motion: reduce) { input.switch, input.switch::after { transition: none; } }
+
+/* ---- bank picker: add a bank with its logo ---- */
+.bank-picker { display: grid; gap: var(--space-2); }
+.add-bank { display: grid; gap: var(--space-2); padding: var(--space-3); border-radius: 12px; background: var(--color-fill); color: var(--color-text); }
+.add-bank-title { margin: 0; font-weight: 600; }
+.add-bank-row { display: flex; gap: var(--space-3); align-items: end; }
+.add-bank-name { flex: 1; min-width: 0; }
+.logo-drop {
+  flex: none; display: grid; place-items: center; width: 56px; height: 56px; border-radius: 12px;
+  background: var(--color-surface); box-shadow: var(--shadow-logo-tile); cursor: pointer; overflow: hidden;
+}
+.logo-drop:focus-within { outline: 2px solid var(--color-focus); outline-offset: 2px; }
+.logo-drop img { width: 100%; height: 100%; object-fit: contain; }
 /* The form's labels stack their text over the field; these two sit side by side. */
 .tx-form label.check { display: flex; align-items: center; }
 .tx-form label.switch-row { display: flex; align-items: center; justify-content: space-between; }

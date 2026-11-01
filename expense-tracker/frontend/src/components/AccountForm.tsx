@@ -1,5 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { ShareSwitch } from "./ShareSwitch";
+import { BankPicker } from "./BankPicker";
 import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 import { api, del, patch, post, type Account, type PayType } from "../api";
 import { ACCOUNT_GROUPS, DECIMALS_HINT, GROUP_ICON, GROUP_LABEL, groupOf, tooManyDecimals, type AccountGroup } from "../format";
@@ -242,10 +243,10 @@ export function AccountForm({ existing, group: initialGroup = "bank", onDone, on
         {err("name")}
       </label>
       {!(group === "bank" && isCash) && (
-        <label>
-          {INSTITUTION_LABEL[group]} (optional)
-          <input maxLength={60} value={form.institution} onChange={(e) => set({ institution: e.target.value })} />
-        </label>
+        <div className="field">
+          <span className="field-label">{INSTITUTION_LABEL[group]} (optional)</span>
+          <BankPicker label={INSTITUTION_LABEL[group]} value={form.institution} onChange={(name) => set({ institution: name })} />
+        </div>
       )}
       <div className="form-pair">
         <label>

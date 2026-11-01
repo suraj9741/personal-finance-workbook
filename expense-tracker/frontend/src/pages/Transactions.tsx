@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { api, patch, post, type Category, type Transaction } from "../api";
 import { accountItems } from "../components/account-items";
+import { useBankLogo } from "../components/bank-logos";
 import { CategoryPicker } from "../components/CategoryPicker";
 import { Modal } from "../components/Modal";
 import { MonthPicker } from "../components/MonthPicker";
@@ -55,6 +56,7 @@ export function Transactions() {
   const [params, setParams] = useSearchParams();
   const month = params.get("month") ?? currentMonth();
   const accounts = useAccounts(true).data ?? [];
+  const logoOf = useBankLogo();
   const categories = useCategories(true).data ?? [];
   const members = useMembers().data ?? [];
   const refresh = useRefreshMoney();
@@ -207,7 +209,7 @@ export function Transactions() {
           label="Account filter"
           none="All accounts"
           icon="bank"
-          items={accountItems(accounts)}
+          items={accountItems(accounts, logoOf)}
           value={params.get("account_id") || null}
           onChange={(id) => setFilter("account_id", id ?? "")}
         />
