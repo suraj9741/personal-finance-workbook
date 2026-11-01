@@ -4,7 +4,7 @@ from datetime import UTC, datetime, timedelta
 
 import structlog
 from fastapi import Depends, HTTPException, Request, status
-from sqlalchemy import ColumnElement, and_, or_, select
+from sqlalchemy import ColumnElement, and_, or_, select, true
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
@@ -48,16 +48,10 @@ class Ctx:
 
     def editable_transaction(self) -> ColumnElement[bool]:
         """Rows this user may change or delete: the ones they added. The household owner may
-        also change rows nobody can fix any more: no creator, or a deactivated one."""
-        mine = Transaction.created_by == self.user.id
-        if not self.is_owner:
-            return mine
-        inactive = select(User.id).where(User.is_active.is_(False)).scalar_subquery()
-        return or_(
-            mine,
-            Transaction.created_by.is_(None),
-            Transaction.created_by.in_(inactive),
-        )
+        change any visible row (always used together with visible_transaction)."""
+        if self.is_owner:
+            return true()
+        return Transaction.created_by == self.user.id
 
     def just_me(self) -> ColumnElement[bool]:
         """Entries this user added, plus anything on their own private accounts."""

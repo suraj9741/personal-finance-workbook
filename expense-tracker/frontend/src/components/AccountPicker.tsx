@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { Account } from "../api";
 import { ACCOUNT_GROUPS, GROUP_ICON, GROUP_LABEL, groupOf, type AccountGroup } from "../format";
 import { accountItems } from "./account-items";
+import { useBankLogo } from "./bank-logos";
 import { Icon } from "./Icon";
 import { SearchPicker } from "./SearchPicker";
 import { SegmentedRadio } from "./SegmentedRadio";
@@ -22,6 +23,7 @@ interface Props {
 /** Saves the account id. The full form asks for the type first; quick add searches all accounts at once. */
 export function AccountPicker({ accounts, value, onChange, label, groups = ACCOUNT_GROUPS, exclude, variant = "buttons" }: Props) {
   const selected = accounts.find((a) => a.id === value);
+  const logoOf = useBankLogo();
   const [chosen, setChosen] = useState<AccountGroup | null>(null);
   const group: AccountGroup = selected ? groupOf(selected.pay_type) : (chosen ?? groups[0]);
   const allowed = accounts.filter((a) => groups.includes(groupOf(a.pay_type)) && a.id !== exclude);
@@ -60,7 +62,7 @@ export function AccountPicker({ accounts, value, onChange, label, groups = ACCOU
         <SearchPicker
           label={accountLabelText}
           icon={variant === "buttons" ? GROUP_ICON[group] : "bank"}
-          items={accountItems(options)}
+          items={accountItems(options, logoOf)}
           value={selected && options.includes(selected) ? value : null}
           onChange={(id) => onChange(id ?? "")}
         />

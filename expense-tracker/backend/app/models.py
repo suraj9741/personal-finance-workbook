@@ -11,6 +11,7 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Integer,
+    LargeBinary,
     Numeric,
     SmallInteger,
     String,
@@ -18,6 +19,7 @@ from sqlalchemy import (
     UniqueConstraint,
     false,
     func,
+    text,
     true,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
@@ -228,11 +230,37 @@ class Account(Base):
     # Broker: the latest value the user entered. Never fetched or estimated.
     current_value: Mapped[Decimal | None] = mapped_column(Numeric(14, 2))
     valued_on: Mapped[date | None] = mapped_column(Date)
-    visibility: Mapped[str] = mapped_column(String(10), default="shared")
+    # Private: only the owner sees it and its transactions. Shared: the whole household does.
+    visibility: Mapped[str] = mapped_column(String(10), default="private")
     owner_user_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL")
     )
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = created_at()
+
+
+class Institution(Base):
+    """A bank, card issuer or broker someone added from the account form, with its logo.
+
+    Site-wide: a bank's name and logo say nothing private, so one upload serves every
+    household. The logos bundled with the app aren't stored here.
+    """
+
+    __tablename__ = "institutions"
+    __table_args__ = (
+        Index("uq_institutions_name", text("lower(name)"), unique=True),
+        CheckConstraint(
+            "logo_type IN ('image/png', 'image/jpeg', 'image/webp')", name="logo_type_valid"
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = uuid_pk()
+    name: Mapped[str] = mapped_column(String(60))
+    logo: Mapped[bytes] = mapped_column(LargeBinary)
+    logo_type: Mapped[str] = mapped_column(String(20))
+    created_by: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL")
+    )
     created_at: Mapped[datetime] = created_at()
 
 

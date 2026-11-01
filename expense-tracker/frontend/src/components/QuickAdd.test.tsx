@@ -10,6 +10,7 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+const ME = { id: "u1", email: "s@example.com", display_name: "Suraj", is_site_admin: true, household_id: "h1", household_name: "Home", role: "owner" };
 const HDFC = { id: "a1", name: "HDFC", pay_type: "bank", opening_balance: "0", visibility: "shared", owner_user_id: null, is_active: true };
 const SUGGESTIONS = [
   { description: "Swiggy", type: "expense", category_id: null, account_id: "a1", amount: "585.00" },
@@ -33,6 +34,7 @@ function setup(days: Record<string, object[]> = {}) {
     const body = url.includes("/suggest") ? SUGGESTIONS
       : url.includes("/transactions") ? { items: days[day] ?? [], total: 0 }
       : url.includes("/accounts") ? [HDFC]
+      : url.includes("/auth/me") ? ME
       : [];
     return new Response(JSON.stringify(body), { status: 200 });
   });

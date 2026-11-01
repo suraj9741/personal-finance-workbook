@@ -1,5 +1,20 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { api, ApiError, type Account, type Category, type Me, type Member, type Overview, type Rule } from "./api";
+import { api, ApiError, type Account, type Category, type Institution, type Me, type Member, type Overview, type Rule } from "./api";
+
+/**
+ * The account is yours: you manage it and only you add entries on it. Shared accounts are for
+ * the household to see. One with no owner is the household owner's.
+ */
+export function ownsAccount(account: Pick<Account, "owner_user_id">, me: Me | null | undefined): boolean {
+  if (!me) return false;
+  return account.owner_user_id ? account.owner_user_id === me.id : me.role === "owner";
+}
+
+/** Accounts you can add entries on, from a list of the ones you can see. */
+export function useOwnAccounts(accounts: Account[]): Account[] {
+  const me = useMe().data;
+  return accounts.filter((a) => ownsAccount(a, me));
+}
 
 export function useMe() {
   return useQuery({
@@ -21,6 +36,13 @@ export const useCategories = (includeInactive = false) =>
     queryKey: ["categories", includeInactive],
     queryFn: () => api<Category[]>(`/categories${includeInactive ? "?include_inactive=true" : ""}`),
     staleTime: 60_000,
+  });
+
+export const useInstitutions = () =>
+  useQuery({
+    queryKey: ["institutions"],
+    queryFn: () => api<Institution[]>("/institutions"),
+    staleTime: 5 * 60_000,
   });
 
 export const useAccounts = (includeInactive = false) =>

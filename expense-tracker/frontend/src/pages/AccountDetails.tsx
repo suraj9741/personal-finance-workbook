@@ -1,5 +1,5 @@
 import { Amounts } from "../components/Amounts";
-import { keepPreviousData, useMutation, useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Fragment, useState, type ReactNode } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { api, ApiError, patch, type Account, type AccountFigures, type Transaction } from "../api";
@@ -11,6 +11,7 @@ import { useToasts } from "../components/toast-context";
 import { MonthPicker } from "../components/MonthPicker";
 import { TransactionForm } from "../components/TransactionForm";
 import { ViewOnly } from "../components/ViewOnly";
+import { ShareSwitch } from "../components/ShareSwitch";
 import {
   GROUP_LABEL,
   GROUP_PLURAL,
@@ -32,7 +33,7 @@ import {
   today,
   type AccountGroup,
 } from "../format";
-import { useAccounts, useCategories, useMe, useRefreshMoney } from "../hooks";
+import { ownsAccount, useAccounts, useCategories, useMe, useRefreshMoney } from "../hooks";
 
 const PAGE = 100;
 const NO_FILTERS = { type: "", category_id: "" };
@@ -160,7 +161,8 @@ export function AccountDetails() {
   const s = summary.data;
   const account = s.account;
   const group = groupOf(account.pay_type);
-  const canManage = account.visibility === "private" ? account.owner_user_id === me?.id : me?.role === "owner";
+  // Your own account, shared or not: you manage it and add its entries. Others only see it.
+  const canManage = ownsAccount(account, me);
   const loaded = list.data?.items ?? [];
   const items = loaded.filter((t) => !hidden.has(t.id));
   const total = (list.data?.total ?? 0) - (loaded.length - items.length);
@@ -194,14 +196,14 @@ export function AccountDetails() {
             <div className="detail-name">
               <h1>{account.name}</h1>
               {!account.is_active && <span className="tag">Inactive</span>}
-              {account.visibility === "private" && <span className="tag">Private</span>}
+              {account.visibility === "shared" && <span className="tag">Shared</span>}
             </div>
             <p className="muted small">{subtitle}</p>
             {account.description && <p className="small">{account.description}</p>}
           </div>
         </div>
         <div className="detail-actions">
-          {account.is_active && (
+          {account.is_active && canManage && (
             <button type="button" className="primary" data-return-focus onClick={() => setEditing("new")}>
               Add transaction
             </button>
@@ -211,6 +213,7 @@ export function AccountDetails() {
               Edit account
             </button>
           )}
+          {canManage && <ShareToggle account={account} />}
         </div>
       </div>
       {!account.is_active && (
@@ -282,7 +285,7 @@ export function AccountDetails() {
             ) : (
               <>
                 <p>{allDates ? "No entries on this account yet." : `No entries in ${monthLabel(month)}.`}</p>
-                {account.is_active && (
+                {account.is_active && canManage && (
                   <button type="button" className="tinted" onClick={() => setEditing("new")}>
                     Add transaction
                   </button>
@@ -633,4 +636,16 @@ function PostedNote({ t, statementDay }: { t: Transaction; statementDay: number 
       </button>
     </span>
   );
+}
+
+/** The owner's quick switch for sharing this account with the household. */
+function ShareToggle({ account }: { account: Account }) {
+  const refresh = useRefreshMoney();
+  const client = useQueryClient();
+  const share = useMutation({
+    mutationFn: (shared: boolean) => patch(`/accounts/${account.id}`, { visibility: shared ? "shared" : "private" }),
+    onSuccess: () => Promise.all([client.invalidateQueries({ queryKey: ["accounts"] }), refresh()]),
+  });
+  const shared = share.isPending ? share.variables : account.visibility === "shared";
+  return <ShareSwitch compact shared={shared} disabled={share.isPending} onChange={(next) => share.mutate(next)} />;
 }

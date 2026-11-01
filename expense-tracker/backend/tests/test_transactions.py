@@ -133,10 +133,9 @@ def test_accounts(admin: Api, family_member: Api) -> None:
     assert created.status_code == 201
     dup = admin.post("/api/v1/accounts", json={"name": "Kotak", "pay_type": "bank"})
     assert dup.status_code == 409
-    shared_by_member = family_member.post(
-        "/api/v1/accounts", json={"name": "Joint", "pay_type": "bank"}
-    )
-    assert shared_by_member.status_code == 403
+    by_member = family_member.post("/api/v1/accounts", json={"name": "Joint", "pay_type": "bank"})
+    assert by_member.status_code == 201
+    assert by_member.json()["visibility"] == "private"
     hdfc = account_id(admin, "HDFC")
     add_tx(admin)
     assert admin.delete(f"/api/v1/accounts/{hdfc}").status_code == 409

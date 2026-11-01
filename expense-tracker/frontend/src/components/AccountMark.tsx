@@ -1,6 +1,6 @@
 import type { Account } from "../api";
 import { accountIcon } from "../format";
-import { bankLogo } from "./bank-logos";
+import { useBankLogo } from "./bank-logos";
 import { Icon } from "./Icon";
 
 /**
@@ -8,7 +8,7 @@ import { Icon } from "./Icon";
  * light background, so the tile stays white in dark mode), or the type icon (₹ for cash) when there's no logo.
  */
 export function AccountMark({ account, className }: { account: Pick<Account, "name" | "institution" | "pay_type">; className?: string }) {
-  const logo = bankLogo(account);
+  const logo = useBankLogo()(account);
   const classes = ["account-mark", logo ? "has-logo" : "", className ?? ""].filter(Boolean).join(" ");
   return (
     <span className={classes} aria-hidden="true">

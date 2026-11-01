@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 from app.db import get_db
 from app.deps import Ctx, get_ctx, not_found
 from app.models import Account, Category, CategoryRule, Transaction, User
-from app.routers.catalog import ensure_unique_pattern, get_account, get_category
+from app.routers.catalog import can_manage, ensure_unique_pattern, get_account, get_category
 from app.schemas import (
     Kind,
     Month,
@@ -47,6 +47,21 @@ CATEGORY_KIND = {
 
 def posted_on_allowed(account: Account, tx_type: str) -> bool:
     return account.pay_type == "credit_card" and tx_type in ("expense", "refund")
+
+
+def check_own_accounts(
+    db: Session, ctx: Ctx, row: Transaction, before: tuple[object, object] = (None, None)
+) -> None:
+    """Entries go only on your own accounts: a shared account is for the household to see,
+    not to write on for its owner. Accounts an edit leaves as they were aren't checked, so
+    the household owner can still fix a member's entry on the member's account."""
+    for account_id, old in ((row.account_id, before[0]), (row.to_account_id, before[1])):
+        if account_id is None or account_id == old:
+            continue
+        if not can_manage(ctx, get_account(db, ctx, account_id)):
+            raise HTTPException(
+                status.HTTP_403_FORBIDDEN, "You can only add entries on your own accounts"
+            )
 
 
 def validate(db: Session, ctx: Ctx, row: Transaction) -> None:
@@ -210,6 +225,7 @@ def create_transaction(
         category = match_rule(db, ctx.household_id, row.description, CATEGORY_KIND[row.type])
         row.category_id = category.id if category else None
     validate(db, ctx, row)
+    check_own_accounts(db, ctx, row)
     db.add(row)
     db.commit()
     CREATED.labels(row.type).inc()
@@ -264,6 +280,7 @@ def patch_transaction(
     db: Session = Depends(get_db),
 ) -> TransactionOut:
     row = get_editable(db, ctx, transaction_id)
+    before = (row.account_id, row.to_account_id)
     changes = body.model_dump(exclude_unset=True)
     for field, value in changes.items():
         if value is None and field in {"date", "amount", "type", "account_id", "description"}:
@@ -281,6 +298,7 @@ def patch_transaction(
         if not posted_on_allowed(account, row.type) or row.posted_on < row.date:
             row.posted_on = None
     validate(db, ctx, row)
+    check_own_accounts(db, ctx, row, before)
     db.commit()
     db.refresh(row)
     return to_out(row, user_names(db, [row]), {row.id})

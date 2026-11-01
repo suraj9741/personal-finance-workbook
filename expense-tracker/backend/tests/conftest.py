@@ -103,9 +103,23 @@ def join_by_invite(
     return client
 
 
+def share_all(client: Api) -> None:
+    """Share every account this user owns with the household (they start private)."""
+    for a in client.get("/api/v1/accounts?include_inactive=true").json():
+        if a["visibility"] == "private":
+            shared = client.patch(f"/api/v1/accounts/{a['id']}", json={"visibility": "shared"})
+            assert shared.status_code == 200, shared.text
+
+
 @pytest.fixture
 def family_member(admin: Api) -> Api:
-    return join_by_invite(admin, "pratiksha@example.com", "Pratiksha")
+    """A member of the admin's household, which has shared its seeded accounts, with a bank
+    account of their own."""
+    share_all(admin)
+    member = join_by_invite(admin, "pratiksha@example.com", "Pratiksha")
+    bank = {"name": "Pratiksha SBI", "pay_type": "bank", "visibility": "shared"}
+    assert member.post("/api/v1/accounts", json=bank).status_code == 201
+    return member
 
 
 @pytest.fixture
@@ -129,8 +143,22 @@ def account_id(client: Api, name: str, pay_type: str | None = None) -> str:
     raise AssertionError(f"account {name} not found")
 
 
+def own_bank(client: Api) -> str:
+    """The client's own HDFC, else their first own bank: entries go on your own accounts."""
+    me = client.get("/api/v1/auth/me").json()["id"]
+    mine = [
+        a
+        for a in client.get("/api/v1/accounts").json()
+        if a["owner_user_id"] == me and a["pay_type"] == "bank"
+    ]
+    mine.sort(key=lambda a: a["name"] != "HDFC")
+    if not mine:
+        raise AssertionError("no bank account of your own")
+    return str(mine[0]["id"])
+
+
 def add_tx(client: Api, **fields: object) -> dict:  # type: ignore[type-arg]
-    body = {"date": "2026-10-05", "amount": "100.00", "account_id": account_id(client, "HDFC")}
+    body = {"date": "2026-10-05", "amount": "100.00", "account_id": own_bank(client)}
     body.update(fields)
     response = client.post("/api/v1/transactions", json=body)
     assert response.status_code == 201, response.text

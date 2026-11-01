@@ -4,7 +4,7 @@ import { useEffect, useId, useRef, useState, type FormEvent, type KeyboardEvent 
 import { Link } from "react-router-dom";
 import { api, post, type Suggestion, type Transaction, type TransactionInput } from "../api";
 import { DECIMALS_HINT, categoryLabel, money, shiftDay, today, tooManyDecimals } from "../format";
-import { useAccounts, useCategories, useRefreshMoney } from "../hooks";
+import { useAccounts, useCategories, useOwnAccounts, useRefreshMoney } from "../hooks";
 import { stillToRepeat } from "../repeat";
 import { AccountPicker } from "./AccountPicker";
 import { DateInput } from "./DateInput";
@@ -31,7 +31,8 @@ const entries = (n: number) => `${n} entr${n === 1 ? "y" : "ies"}`;
 /** The main way money gets in: amount, description, account, Enter. */
 export function QuickAdd() {
   const accountsQuery = useAccounts();
-  const accounts = accountsQuery.data ?? [];
+  // Entries go only on your own accounts; shared ones are for seeing.
+  const accounts = useOwnAccounts(accountsQuery.data ?? []);
   const categories = useCategories().data ?? [];
   const refresh = useRefreshMoney();
   const amountRef = useRef<HTMLInputElement>(null);
