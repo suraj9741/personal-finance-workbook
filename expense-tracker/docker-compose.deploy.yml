@@ -1,0 +1,117 @@
+# Expense tracker for a server: pulls the public images CI pushes to Docker Hub and never
+# builds. The server needs only Docker, this file and a .env next to it (no clone of the
+# repo). The Mac keeps using docker-compose.yml and `make up`.
+#
+# The server's .env (see .env.example for the rest):
+#   COMPOSE_FILE=docker-compose.deploy.yml   # so plain `docker compose` uses this file
+#   IMAGE_NAMESPACE=<dockerhub-user>
+#   IMAGE_TAG=latest                         # or sha-<commit> to pin one build
+# then: docker compose pull && docker compose up -d
+#
+# The project name matches docker-compose.yml, so scripts/backup.sh finds the database.
+# Don't start this file on the Mac: it would replace the running containers there.
+# Never run `docker compose down -v`: -v deletes the volume and all your data.
+name: expense-tracker
+
+x-backend-env: &backend-env
+  DATABASE_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+  APP_ENV: ${APP_ENV:-production}
+  LOG_LEVEL: ${LOG_LEVEL:-INFO}
+  LOG_FORMAT: ${LOG_FORMAT:-json}
+  SESSION_TTL_DAYS: ${SESSION_TTL_DAYS:-30}
+  COOKIE_SECURE: ${COOKIE_SECURE:-false}
+  PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-http://localhost:8080}
+  CORS_ORIGINS: ${CORS_ORIGINS:-}
+  SEED_CONFIG: /config/seed.yaml
+
+# Docker keeps container logs forever by default; a small disk fills up.
+x-logging: &logging
+  driver: json-file
+  options: { max-size: "10m", max-file: "3" }
+
+x-backend-image: &backend-image ${IMAGE_NAMESPACE:?set IMAGE_NAMESPACE in .env}/expense-tracker-backend:${IMAGE_TAG:-latest}
+
+# Memory limits are sized for a 512 MB to 1 GB machine. The app used about 170 MiB idle
+# and 300 MiB at peak on the Mac. A limit decides which container is killed when memory
+# runs out, so one runaway process can't take Postgres down with it. Add swap on the host.
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    # Smaller than Postgres' defaults (128MB shared_buffers, 100 connections). The backend
+    # pool is 5 connections plus overflow, so 30 is plenty.
+    command:
+      - postgres
+      - -c
+      - shared_buffers=48MB
+      - -c
+      - max_connections=30
+      - -c
+      - work_mem=2MB
+      - -c
+      - maintenance_work_mem=32MB
+      - -c
+      - effective_cache_size=128MB
+    mem_limit: 256m
+    logging: *logging
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?set POSTGRES_USER in .env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:?set POSTGRES_DB in .env}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  # One-shot: applies migrations, then exits. The backend starts only if this succeeds.
+  migrate:
+    image: *backend-image
+    command: ["alembic", "upgrade", "head"]
+    environment: *backend-env
+    mem_limit: 320m
+    logging: *logging
+    depends_on:
+      db: { condition: service_healthy }
+    restart: "no"
+
+  # One-shot: adds what's missing from config/seed.yaml (baked into the image).
+  # Add-only, so edits made in the app win.
+  seed:
+    image: *backend-image
+    command: ["python", "-m", "app.cli", "seed-config"]
+    environment: *backend-env
+    mem_limit: 320m
+    logging: *logging
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+    restart: "no"
+
+  # Not published on the host: nginx in the frontend container proxies /api to it.
+  backend:
+    image: *backend-image
+    restart: unless-stopped
+    environment: *backend-env
+    mem_limit: 320m
+    logging: *logging
+    depends_on:
+      db: { condition: service_healthy }
+      seed: { condition: service_completed_successfully }
+
+  # 127.0.0.1 only: a server is on the public internet and the app is plain HTTP.
+  # Reach it with an SSH tunnel for now (ssh -L 8080:127.0.0.1:8080 <server>);
+  # HTTPS in front of it comes with the deploy work.
+  frontend:
+    image: ${IMAGE_NAMESPACE:?set IMAGE_NAMESPACE in .env}/expense-tracker-frontend:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    mem_limit: 64m
+    logging: *logging
+    depends_on:
+      backend: { condition: service_healthy }
+    ports:
+      - "127.0.0.1:${FRONTEND_PORT:-8080}:8080"
+
+volumes:
+  pgdata:

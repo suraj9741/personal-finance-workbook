@@ -24,6 +24,9 @@ COPY --from=deps /opt/venv /opt/venv
 COPY --chown=app:app alembic.ini ./
 COPY --chown=app:app alembic ./alembic
 COPY --chown=app:app app ./app
+# The default seed config (config/seed.yaml, passed in as the "config" build context).
+# docker-compose.yml mounts ./config over it, so on the Mac the file on disk still wins.
+COPY --from=config seed.yaml /config/seed.yaml
 USER app
 EXPOSE 8000
 HEALTHCHECK --interval=15s --timeout=3s --start-period=10s --retries=5 \
