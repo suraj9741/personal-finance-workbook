@@ -1,5 +1,6 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { NavLink, Navigate, Outlet, Route, Routes, useNavigate } from "react-router-dom";
+import { useEffect } from "react";
+import { NavLink, Navigate, Outlet, Route, Routes, useLocation, useNavigate, useNavigationType } from "react-router-dom";
 import { post } from "./api";
 import { QuickAdd } from "./components/QuickAdd";
 import { ThemeSwitch } from "./components/ThemeSwitch";
@@ -15,7 +16,20 @@ import { Dashboard } from "./pages/Dashboard";
 import { Settings } from "./pages/Settings";
 import { Transactions } from "./pages/Transactions";
 
+/** A new page opens at its top. Back and Forward (POP) and links to a section (#hash) are left
+ * to the browser, which puts you where you were. */
+function useTopOfNewPage() {
+  const { pathname, hash } = useLocation();
+  const navigation = useNavigationType();
+  useEffect(() => {
+    if (navigation !== "POP" && !hash) window.scrollTo(0, 0);
+    // Only a change of page counts: filters and months change the search, not the path.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pathname]);
+}
+
 function Shell() {
+  useTopOfNewPage();
   const { data: me, isLoading } = useMe();
   const client = useQueryClient();
   const navigate = useNavigate();
