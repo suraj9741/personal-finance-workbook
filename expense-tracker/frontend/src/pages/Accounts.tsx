@@ -53,6 +53,9 @@ export function Accounts() {
   const me = useMe().data;
   const ownerName = useOwnerName();
   const overview = useOverview(currentMonth());
+  // A group's headline is your own money; family members' shared accounts only add the note.
+  const mine = useOverview(currentMonth(), "me");
+  const othersShown = (overview.data?.accounts ?? []).some((r) => ownerName(r.account));
   const [search, setSearch] = useState("");
   const [showInactive, setShowInactive] = useState(false);
   const [editing, setEditing] = useState<Account | AccountGroup | null>(null);
@@ -168,7 +171,18 @@ export function Accounts() {
                     {count} {count === 1 ? "account" : "accounts"}
                   </p>
                 </div>
-                {count > 0 && <span className="num account-group-total"><Amounts>{groupTotal(g, overview.data.totals)}</Amounts></span>}
+                {count > 0 && (
+                  <span className="account-group-figure">
+                    <span className="num account-group-total">
+                      <Amounts>{groupTotal(g, (othersShown && mine.data?.totals) || overview.data.totals)}</Amounts>
+                    </span>
+                    {othersShown && mine.data && groupTotal(g, mine.data.totals) !== groupTotal(g, overview.data.totals) && (
+                      <small className="muted">
+                        Yours · household <Amounts>{groupTotal(g, overview.data.totals)}</Amounts>
+                      </small>
+                    )}
+                  </span>
+                )}
               </div>
               {items.length === 0 ? (
                 <p className="muted account-empty">

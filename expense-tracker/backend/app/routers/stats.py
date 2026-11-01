@@ -646,8 +646,7 @@ def overview(
     start, end = month_range(month)
     where = [ctx.visible_account()]
     if scope == "me":
-        mine = Account.owner_user_id == ctx.user.id
-        where.append(or_(mine, Account.owner_user_id.is_(None)) if ctx.is_owner else mine)
+        where.append(ctx.owns_account())
     accounts = list(db.scalars(select(Account).where(*where).order_by(Account.name)))
     rows = balances.figures(db, accounts, start, end, today())
     return OverviewOut(month=month, totals=balances.totals(rows), accounts=rows)

@@ -50,3 +50,17 @@ def test_overview_just_me_lists_only_your_accounts(admin: Api) -> None:
     assert ("SBI", ravi) not in me
     assert len(me) == len(household) - 1
     assert names(member, "me") == [("SBI", ravi)]
+
+
+def test_just_me_is_your_own_accounts_only(admin: Api) -> None:
+    member = join_by_invite(admin, "ravi@example.com", "Ravi")
+    sbi = member.post("/api/v1/accounts", json={**SBI, "visibility": "shared"}).json()
+    body = {"date": "2026-10-05", "amount": "300.00", "type": "expense", "account_id": sbi["id"]}
+    tx = member.post("/api/v1/transactions", json=body).json()
+    # The household owner fixes Ravi's entry: it is still Ravi's money, not theirs.
+    assert admin.patch(f"/api/v1/transactions/{tx['id']}", json={"amount": "350.00"}).is_success
+    month = "/api/v1/stats/month?month=2026-10"
+    assert admin.get(month).json()["spend"] == "350.00"
+    assert admin.get(month + "&scope=me").json()["spend"] == "0"
+    assert member.get(month + "&scope=me").json()["spend"] == "350.00"
+    assert admin.get("/api/v1/transactions?scope=me").json()["total"] == 0

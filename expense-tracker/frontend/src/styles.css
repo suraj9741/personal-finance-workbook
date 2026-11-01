@@ -1791,3 +1791,4 @@ input.switch:focus-visible { outline: 2px solid var(--color-focus); outline-offs
 .overview-owner th { padding-top: var(--space-3); text-align: left; font-weight: 600; color: var(--color-text); }
 .overview-owner th .muted { font-weight: 400; margin-left: var(--space-2); }
 .overview-subtotal td { color: var(--color-text-secondary); font-weight: 500; }
+.account-group-figure { display: grid; justify-items: end; gap: var(--space-0); text-align: right; }

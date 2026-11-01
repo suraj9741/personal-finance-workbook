@@ -16,14 +16,14 @@ function Skeleton() {
 
 /**
  * The month at a glance: three big numbers, the smaller figures under them, and how they add up.
- * Spent and Saved follow the Household / Just me switch (stats); Net cash is always household
- * (overview balances, as of today).
+ * Everything follows the Household / Just me switch: Spent and Saved from stats, Net cash from
+ * the overview balances (as of today). Just me never counts a family member's accounts.
  */
-export function DashboardHero({ month, stats }: { month: string; stats: UseQueryResult<MonthStats> }) {
+export function DashboardHero({ month, scope, stats }: { month: string; scope: "household" | "me"; stats: UseQueryResult<MonthStats> }) {
   // Same key as useOverview in FinancialOverview, so one request. The old month stays (dimmed) while the next loads.
   const overview = useQuery({
-    queryKey: ["overview", month],
-    queryFn: () => api<Overview>(`/stats/overview?month=${month}`),
+    queryKey: ["overview", month, scope],
+    queryFn: () => api<Overview>(`/stats/overview?month=${month}${scope === "me" ? "&scope=me" : ""}`),
     placeholderData: keepPreviousData,
   });
   const s = stats.data ?? undefined;
@@ -62,7 +62,7 @@ export function DashboardHero({ month, stats }: { month: string; stats: UseQuery
                 {netCash < 0 && <dd className="hero-detail neg-text">Cards owe more than the bank holds</dd>}
                 <dd className="hero-detail">
                   Bank &amp; cash <Amounts>{money(o.totals.bank_balance)}</Amounts>{" "}
-                  <Amounts>{cardDues >= 0 ? `− card dues ${money(cardDues)}` : `+ card credit ${money(-cardDues)}`}</Amounts> · household, today
+                  <Amounts>{cardDues >= 0 ? `− card dues ${money(cardDues)}` : `+ card credit ${money(-cardDues)}`}</Amounts> · {me ? "your accounts" : "household"}, today
                   {month !== currentMonth() && `, not end of ${monthLabel(month)}`}
                 </dd>
               </>
@@ -124,17 +124,16 @@ export function DashboardHero({ month, stats }: { month: string; stats: UseQuery
           <dd><Amounts>{money(s?.repaid)}</Amounts></dd>
         </div>
       </dl>
-      {/* The account tables count every entry by type and are household-wide; these sums say how that relates. */}
+      {/* The account tables count every entry on the accounts in view; these sums say how that relates. */}
       <p className="figures-note">
         Transfers between your accounts aren't counted.
-        {s && o && !me && (
+        {s && o && (
           <>
             {" "}
             All expense entries: <Amounts>{money(o.totals.month_expenses)}</Amounts> = spent + invested + lent. All income entries:{" "}
             <Amounts>{money(o.totals.month_income)}</Amounts> = income + repaid.
           </>
         )}
-        {me && " The account figures below are for the whole household."}
       </p>
     </section>
   );
