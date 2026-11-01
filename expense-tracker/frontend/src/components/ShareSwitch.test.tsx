@@ -16,5 +16,5 @@ it("is off for a private account and says only you see it", () => {
 
 it("explains what sharing means when on", () => {
   render(<ShareSwitch shared onChange={() => {}} />);
-  expect(screen.getByText(/Only you can change or delete it/)).toBeTruthy();
+  expect(screen.getByText(/Only you add entries to it, change it or delete it/)).toBeTruthy();
 });
