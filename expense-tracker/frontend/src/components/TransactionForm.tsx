@@ -4,7 +4,7 @@ import { del, patch, post, type Account, type Transaction, type TransactionInput
 import { DECIMALS_HINT, TX_TYPE_LABEL, categoryKind, groupOf, money, today, tooManyDecimals } from "../format";
 import { forgetDraft, useDraft, useKeepDraft } from "../draft";
 import { focusFirstInvalid, invalidProps, splitServerError, type FieldErrors } from "../forms";
-import { useAccounts, useCategories, useRefreshMoney } from "../hooks";
+import { useAccounts, useCategories, useOwnAccounts, useRefreshMoney } from "../hooks";
 import { AccountPicker } from "./AccountPicker";
 import { CategoryPicker } from "./CategoryPicker";
 import { DateInput } from "./DateInput";
@@ -53,10 +53,11 @@ interface Props {
 /** Every field: type, account (type first), transfers, lending (person), notes. Add or edit. */
 export function TransactionForm({ existing, accountId, onDone }: Props) {
   const allAccounts = useAccounts(true).data ?? [];
-  // Active accounts, plus inactive ones this entry already uses so editing doesn't lose them.
-  const accounts = allAccounts.filter(
-    (a) => a.is_active || a.id === existing?.account_id || a.id === existing?.to_account_id,
-  );
+  const own = new Set(useOwnAccounts(allAccounts).map((a) => a.id));
+  // Your own active accounts, plus the ones this entry already uses so editing doesn't lose
+  // them (an inactive one, or a member's account when the household owner fixes their entry).
+  const used = (a: Account) => a.id === existing?.account_id || a.id === existing?.to_account_id;
+  const accounts = allAccounts.filter((a) => (a.is_active && own.has(a.id)) || used(a));
   const categories = useCategories().data ?? [];
   const refresh = useRefreshMoney();
   // What you typed last time comes back: per entry when editing, per account page when adding.

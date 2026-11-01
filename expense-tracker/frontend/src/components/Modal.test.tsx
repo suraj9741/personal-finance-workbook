@@ -11,6 +11,7 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+const ME = { id: "u1", email: "s@example.com", display_name: "Suraj", is_site_admin: true, household_id: "h1", household_name: "Home", role: "owner" };
 const HDFC = { id: "a1", name: "HDFC", pay_type: "bank", opening_balance: "0", visibility: "shared", owner_user_id: null, is_active: true };
 
 function Page() {
@@ -31,7 +32,8 @@ function Page() {
 
 function setup() {
   vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
-    const body = String(input).includes("/accounts") ? [HDFC] : [];
+    const url = String(input);
+    const body = url.includes("/accounts") ? [HDFC] : url.includes("/auth/me") ? ME : [];
     return new Response(JSON.stringify(body), { status: 200 });
   });
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });

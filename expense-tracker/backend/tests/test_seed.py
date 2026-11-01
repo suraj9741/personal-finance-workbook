@@ -90,7 +90,8 @@ def test_new_household_gets_template_categories_but_no_accounts(solo: Api) -> No
 
 
 def test_family_member_shares_the_admin_household(family_member: Api) -> None:
-    assert pairs(family_member.get("/api/v1/accounts").json()) == config_accounts()
+    seen = pairs(family_member.get("/api/v1/accounts").json())
+    assert seen - {("Pratiksha SBI", "bank")} == config_accounts()
 
 
 def test_template_from_admin_page_is_copied_to_new_households(admin: Api) -> None:

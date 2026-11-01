@@ -33,7 +33,7 @@ import {
   today,
   type AccountGroup,
 } from "../format";
-import { useAccounts, useCategories, useMe, useRefreshMoney } from "../hooks";
+import { ownsAccount, useAccounts, useCategories, useMe, useRefreshMoney } from "../hooks";
 
 const PAGE = 100;
 const NO_FILTERS = { type: "", category_id: "" };
@@ -161,8 +161,8 @@ export function AccountDetails() {
   const s = summary.data;
   const account = s.account;
   const group = groupOf(account.pay_type);
-  // The owner manages their account, shared or not; one with no owner is the household owner's.
-  const canManage = account.owner_user_id ? account.owner_user_id === me?.id : me?.role === "owner";
+  // Your own account, shared or not: you manage it and add its entries. Others only see it.
+  const canManage = ownsAccount(account, me);
   const loaded = list.data?.items ?? [];
   const items = loaded.filter((t) => !hidden.has(t.id));
   const total = (list.data?.total ?? 0) - (loaded.length - items.length);
@@ -203,7 +203,7 @@ export function AccountDetails() {
           </div>
         </div>
         <div className="detail-actions">
-          {account.is_active && (
+          {account.is_active && canManage && (
             <button type="button" className="primary" data-return-focus onClick={() => setEditing("new")}>
               Add transaction
             </button>
@@ -285,7 +285,7 @@ export function AccountDetails() {
             ) : (
               <>
                 <p>{allDates ? "No entries on this account yet." : `No entries in ${monthLabel(month)}.`}</p>
-                {account.is_active && (
+                {account.is_active && canManage && (
                   <button type="button" className="tinted" onClick={() => setEditing("new")}>
                     Add transaction
                   </button>

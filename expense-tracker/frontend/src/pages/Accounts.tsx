@@ -18,7 +18,7 @@ import {
   signedPercent,
   type AccountGroup,
 } from "../format";
-import { useMe, useOverview } from "../hooks";
+import { ownsAccount, useMe, useOverview } from "../hooks";
 import { Icon } from "../components/Icon";
 import { SegmentedRadio } from "../components/SegmentedRadio";
 
@@ -70,7 +70,7 @@ export function Accounts() {
   const groups = only && ACCOUNT_GROUPS.includes(only) ? [only] : ACCOUNT_GROUPS;
   // While searching, groups with no match step aside.
   const shown = needle ? groups.filter((g) => visible.some((r) => groupOf(r.account.pay_type) === g)) : groups;
-  const canManage = (a: Account) => (a.owner_user_id ? a.owner_user_id === me?.id : me?.role === "owner");
+  const canManage = (a: Account) => ownsAccount(a, me);
 
   function setType(value: AccountGroup | "") {
     const next = new URLSearchParams(params);
