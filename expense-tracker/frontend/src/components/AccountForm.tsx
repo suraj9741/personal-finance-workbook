@@ -79,6 +79,7 @@ export function AccountForm({ existing, group: initialGroup = "bank", onDone, on
   const done = modal?.close ?? onDone;
   const set = (changes: Partial<typeof form>) => {
     setForm((f) => ({ ...f, ...changes }));
+    setError("");
     setErrors((e) => (Object.keys(changes).some((k) => e[k]) ? Object.fromEntries(Object.entries(e).filter(([k]) => !(k in changes))) : e));
   };
   const payType: PayType = group === "bank" && isCash ? "cash" : group;
@@ -219,7 +220,10 @@ export function AccountForm({ existing, group: initialGroup = "bank", onDone, on
             label="Account type"
             className="segmented wrap"
             value={group}
-            onChange={setGroup}
+            onChange={(next) => {
+              setGroup(next);
+              setError("");
+            }}
             options={ACCOUNT_GROUPS.map((g) => ({
               value: g,
               label: (
@@ -231,7 +235,14 @@ export function AccountForm({ existing, group: initialGroup = "bank", onDone, on
           />
           {group === "bank" && (
             <label className="check">
-              <input type="checkbox" checked={isCash} onChange={(e) => setIsCash(e.target.checked)} />
+              <input
+                type="checkbox"
+                checked={isCash}
+                onChange={(e) => {
+                  setIsCash(e.target.checked);
+                  setError("");
+                }}
+              />
               This is cash (a wallet), not a bank account
             </label>
           )}

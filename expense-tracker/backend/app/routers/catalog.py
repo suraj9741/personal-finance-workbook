@@ -33,6 +33,10 @@ router = APIRouter(tags=["catalog"])
 DEFAULT_GROUP = {"expense": "spend", "income": "earned", "transfer": "transfer"}
 
 
+# Names repeat only across owners, so the clash is always with one of your own accounts.
+SAME_NAME = "You already have an account with that name and type"
+
+
 def conflict(message: str) -> HTTPException:
     return HTTPException(status.HTTP_409_CONFLICT, message)
 
@@ -261,9 +265,9 @@ def create_account(
         db.flush()
     except IntegrityError as exc:
         db.rollback()
-        raise conflict("An account with that name and type already exists") from exc
+        raise conflict(SAME_NAME) from exc
     record_valuation(db, account)
-    commit_or_conflict(db, "An account with that name and type already exists")
+    commit_or_conflict(db, SAME_NAME)
     return account
 
 
@@ -289,7 +293,7 @@ def patch_account(
         setattr(account, field, value)
     if (account.current_value, account.valued_on) != before:
         record_valuation(db, account)
-    commit_or_conflict(db, "An account with that name and type already exists")
+    commit_or_conflict(db, SAME_NAME)
     return account
 
 

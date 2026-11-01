@@ -222,7 +222,7 @@ function MonthDashboard({ scope, setScope, view, onView }: { scope: Scope; setSc
         </div>
       </section>
 
-      <FinancialOverview month={month} />
+      <FinancialOverview month={month} scope={scope} />
     </section>
   );
 }

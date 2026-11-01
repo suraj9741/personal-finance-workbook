@@ -2,7 +2,8 @@ import { Amounts } from "./Amounts";
 import { Link } from "react-router-dom";
 import type { AccountFigures, Overview } from "../api";
 import { GROUP_ICON, currentMonth, dayLabel, dayRange, groupOf, money, monthName, paise, signedMoney, today } from "../format";
-import { useOverview } from "../hooks";
+import { useOverview, useOwnerName } from "../hooks";
+import { OwnerTag } from "./OwnerTag";
 import { Kpi } from "./Kpi";
 import { Icon } from "./Icon";
 
@@ -41,12 +42,13 @@ function StatementDates({ row }: { row: AccountFigures }) {
 }
 
 /** The account's name opens it, and so does the rest of its row (a stretched link, as on Accounts). */
-function AccountLink({ row }: { row: AccountFigures }) {
+function AccountLink({ row, owner }: { row: AccountFigures; owner?: string }) {
   return (
     <>
       <Link className="row-link" to={`/accounts/${row.account.id}`}>
         {row.account.name}
       </Link>
+      {owner && <> <OwnerTag name={owner} /></>}
       {row.account.pay_type === "cash" && <small className="tag">cash</small>}
       {!row.account.is_active && <small className="tag">inactive</small>}
     </>
@@ -72,9 +74,20 @@ function Signed({ value }: { value: string | number | null }) {
   return <span className={n < 0 ? "neg-text" : n > 0 ? "pos-text" : ""}>{n > 0 ? "+" : ""}<Amounts>{money(n)}</Amounts></span>;
 }
 
+/** Bank rows by whose they are: yours first, then each family member's shared accounts. */
+function byOwner(rows: AccountFigures[], ownerOf: (r: AccountFigures) => string | undefined) {
+  const groups = new Map<string, AccountFigures[]>();
+  for (const r of rows) {
+    const key = ownerOf(r) ?? "";
+    groups.set(key, [...(groups.get(key) ?? []), r]);
+  }
+  return [...groups.entries()].sort(([a], [b]) => (a === "" ? -1 : b === "" ? 1 : a.localeCompare(b)));
+}
+
 /** Where all the money is: cards for totals, then a table per account type. */
-export function FinancialOverview({ month }: { month: string }) {
-  const overview = useOverview(month);
+export function FinancialOverview({ month, scope = "household" }: { month: string; scope?: "household" | "me" }) {
+  const overview = useOverview(month, scope);
+  const ownerName = useOwnerName();
   if (overview.isLoading) return <p className="muted">Loading accounts…</p>;
   if (overview.isError) return <p className="error">Couldn't load the account overview: {overview.error.message}</p>;
   const data = overview.data;
@@ -89,6 +102,14 @@ export function FinancialOverview({ month }: { month: string }) {
     );
   const t = data.totals;
   const banks = shown(data, "bank");
+  const ownerOf = (r: AccountFigures) => ownerName(r.account);
+  const bankOwners = byOwner(banks, ownerOf);
+  // Someone else's shared accounts are in view: split the bank table and its total by person.
+  const split = bankOwners.length > 1;
+  const activeSum = (rows: AccountFigures[], pick: (r: AccountFigures) => string | null) => sum(rows.filter((r) => r.account.is_active), pick);
+  const bankNote = split
+    ? bankOwners.map(([who, rows]) => `${who || "Yours"} ${money(activeSum(rows, (r) => r.balance))}`).join(" · ")
+    : "Active bank and cash accounts";
   const cards = shown(data, "credit_card");
   const brokers = shown(data, "share_broker");
   const current = month === currentMonth();
@@ -103,7 +124,7 @@ export function FinancialOverview({ month }: { month: string }) {
         <Kpi
           label="Total bank balance"
           value={money(t.bank_balance)}
-          note="Active bank and cash accounts"
+          note={bankNote}
           tone={balanceTone(t.bank_balance)}
         />
         <Kpi
@@ -154,10 +175,20 @@ export function FinancialOverview({ month }: { month: string }) {
                   <th className="row-chevron" />
                 </tr>
               </thead>
-              <tbody>
-                {banks.map((r) => (
+              {bankOwners.map(([who, rows]) => (
+              <tbody key={who || "mine"}>
+                {split && (
+                  <tr className="overview-owner">
+                    <th colSpan={8} scope="rowgroup">
+                      {who ? <OwnerTag name={who} /> : "Your accounts"}
+                      {who && <span className="muted">shared with you · view only</span>}
+                    </th>
+                  </tr>
+                )}
+                {rows.map((r) => (
                   <tr key={r.account.id} className="link-row">
-                    <td><AccountLink row={r} /></td>
+                    {/* Under a person's heading the name already says whose it is. */}
+                    <td><AccountLink row={r} owner={split ? undefined : ownerOf(r)} /></td>
                     <td data-label={`Start of ${short}`} className={`num ${belowZero(r.balance_month_start)}`}><Amounts>{money(r.balance_month_start)}</Amounts></td>
                     <td data-label="Income" className="num"><Amounts>{money(r.month_income)}</Amounts></td>
                     <td data-label="Expenses" className="num"><Amounts>{money(r.month_expenses)}</Amounts></td>
@@ -167,10 +198,23 @@ export function FinancialOverview({ month }: { month: string }) {
                     <Chevron />
                   </tr>
                 ))}
+                {split && (
+                  <tr className="overview-subtotal">
+                    <td>{who ? `${who}'s total` : "Your total"}</td>
+                    <td data-label={`Start of ${short}`} className="num"><Amounts>{money(activeSum(rows, (r) => r.balance_month_start))}</Amounts></td>
+                    <td data-label="Income" className="num"><Amounts>{money(sum(rows, (r) => r.month_income))}</Amounts></td>
+                    <td data-label="Expenses" className="num"><Amounts>{money(sum(rows, (r) => r.month_expenses))}</Amounts></td>
+                    <td data-label="Transfers" className="num"><Amounts>{signedMoney(sum(rows, (r) => String(transfersOf(r))))}</Amounts></td>
+                    <td data-label={`End of ${short}`} className="num"><Amounts>{money(activeSum(rows, (r) => r.balance_month_end))}</Amounts></td>
+                    <td data-label="Current balance" className="num today-col"><Amounts>{money(activeSum(rows, (r) => r.balance))}</Amounts></td>
+                    <td className="row-chevron" />
+                  </tr>
+                )}
               </tbody>
+              ))}
               <tfoot>
                 <tr>
-                  <th>Total</th>
+                  <th>{split ? "Household total" : "Total"}</th>
                   <th data-label={`Start of ${short}`} className="num"><Amounts>{money(t.bank_balance_month_start)}</Amounts></th>
                   <th data-label="Income" className="num"><Amounts>{money(sum(banks, (r) => r.month_income))}</Amounts></th>
                   <th data-label="Expenses" className="num"><Amounts>{money(sum(banks, (r) => r.month_expenses))}</Amounts></th>
@@ -225,7 +269,7 @@ export function FinancialOverview({ month }: { month: string }) {
                 <tbody>
                   {cards.map((r) => (
                     <tr key={r.account.id} className="link-row">
-                      <td><AccountLink row={r} /></td>
+                      <td><AccountLink row={r} owner={ownerOf(r)} /></td>
                       <td data-label="Credit limit" className="num"><Amounts>{money(r.account.credit_limit)}</Amounts></td>
                       <td data-label="Outstanding" className="num"><Amounts>{money(r.outstanding)}</Amounts></td>
                       <td data-label="Available credit" className="num"><Amounts>{money(r.available_credit)}</Amounts></td>
@@ -298,7 +342,7 @@ export function FinancialOverview({ month }: { month: string }) {
                 <tbody>
                   {brokers.map((r) => (
                     <tr key={r.account.id} className="link-row">
-                      <td><AccountLink row={r} /></td>
+                      <td><AccountLink row={r} owner={ownerOf(r)} /></td>
                       <td data-label="Deposited" className="num"><Amounts>{money(r.deposited)}</Amounts></td>
                       <td data-label="Withdrawn" className="num"><Amounts>{money(r.withdrawn)}</Amounts></td>
                       <td data-label="Cash in account" className="num"><Amounts>{money(r.balance)}</Amounts></td>

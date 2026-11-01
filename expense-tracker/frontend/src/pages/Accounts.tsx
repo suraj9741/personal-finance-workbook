@@ -18,7 +18,8 @@ import {
   signedPercent,
   type AccountGroup,
 } from "../format";
-import { ownsAccount, useMe, useOverview } from "../hooks";
+import { ownsAccount, useMe, useOverview, useOwnerName } from "../hooks";
+import { OwnerTag } from "../components/OwnerTag";
 import { Icon } from "../components/Icon";
 import { SegmentedRadio } from "../components/SegmentedRadio";
 
@@ -50,6 +51,7 @@ export function Accounts() {
   const [params, setParams] = useSearchParams();
   const only = params.get("type") as AccountGroup | null;
   const me = useMe().data;
+  const ownerName = useOwnerName();
   const overview = useOverview(currentMonth());
   const [search, setSearch] = useState("");
   const [showInactive, setShowInactive] = useState(false);
@@ -66,7 +68,8 @@ export function Accounts() {
         (showInactive || r.account.is_active) &&
         (!needle || `${r.account.name} ${r.account.institution ?? ""}`.toLowerCase().includes(needle)),
     )
-    .sort((a, b) => Number(b.account.is_active) - Number(a.account.is_active));
+    // Yours first, then family members' shared accounts; inactive ones last.
+    .sort((a, b) => Number(b.account.is_active) - Number(a.account.is_active) || Number(!!ownerName(a.account)) - Number(!!ownerName(b.account)));
   const groups = only && ACCOUNT_GROUPS.includes(only) ? [only] : ACCOUNT_GROUPS;
   // While searching, groups with no match step aside.
   const shown = needle ? groups.filter((g) => visible.some((r) => groupOf(r.account.pay_type) === g)) : groups;
@@ -183,9 +186,10 @@ export function Accounts() {
                         <Link to={`/accounts/${r.account.id}`}>{r.account.name}</Link>
                         {(r.account.institution || r.account.pay_type === "cash" || r.account.visibility === "shared" || !r.account.is_active) && (
                           <small className="account-sub">
+                            <OwnerTag name={ownerName(r.account)} />
                             {r.account.institution}
                             {r.account.pay_type === "cash" && <span className="tag">Cash</span>}
-                            {r.account.visibility === "shared" && <span className="tag">Shared</span>}
+                            {r.account.visibility === "shared" && !ownerName(r.account) && <span className="tag">Shared</span>}
                             {!r.account.is_active && <span className="tag">Inactive</span>}
                           </small>
                         )}
@@ -196,7 +200,8 @@ export function Accounts() {
                           Edit
                         </button>
                       ) : (
-                        <span />
+                        // Same slot as Edit, so it hides with it on a phone and the chevron stays put.
+                        <span className="account-edit" aria-hidden="true" />
                       )}
                       <Icon name="chevron-right" className="account-chevron" />
                     </li>

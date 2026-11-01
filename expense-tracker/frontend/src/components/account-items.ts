@@ -10,7 +10,11 @@ const KIND: Record<Account["pay_type"], string> = { bank: "bank", cash: "cash", 
  * account is, so "SBI" the bank and "SBI" the card can't be mixed up, and shows its bank's logo
  * when there is one.
  */
-export function accountItems(accounts: Account[], logoOf: (a: Account) => string | undefined = (a) => bankLogo(a)): PickerItem[] {
+export function accountItems(
+  accounts: Account[],
+  logoOf: (a: Account) => string | undefined = (a) => bankLogo(a),
+  ownerOf: (a: Account) => string | undefined = () => undefined,
+): PickerItem[] {
   return accounts
     .map((a) => ({ a, group: groupOf(a.pay_type) }))
     .sort((x, y) => ACCOUNT_GROUPS.indexOf(x.group) - ACCOUNT_GROUPS.indexOf(y.group))
@@ -20,6 +24,7 @@ export function accountItems(accounts: Account[], logoOf: (a: Account) => string
       group: GROUP_PLURAL[group],
       icon: accountIcon(a.pay_type),
       logo: logoOf(a),
-      hint: KIND[a.pay_type],
+      // Someone else's: whose it is, so your "SBI" and Ravi's "SBI" read apart.
+      hint: ownerOf(a) ? `${ownerOf(a)}'s ${KIND[a.pay_type]}` : KIND[a.pay_type],
     }));
 }
