@@ -56,7 +56,8 @@ function ViewSwitch({ view, onChange }: { view: View; onChange: (next: View) => 
 
 export function Dashboard() {
   const [params, setParams] = useSearchParams();
-  const [scope, setScope] = useState<Scope>("household");
+  // Your own money first; Household is one tap away.
+  const [scope, setScope] = useState<Scope>("me");
   const view: View = params.get("view") === "year" ? "year" : "month";
   const thisYear = Number(currentMonth().slice(0, 4));
   const year = Number(params.get("year")) || thisYear;

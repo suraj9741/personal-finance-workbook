@@ -33,7 +33,8 @@ const OVERVIEW = {
   }],
 };
 
-function renderWith({ household = month("household"), me = month("me"), overview = OVERVIEW, overviewMe = overview, uncategorized = 0 }: { household?: object; me?: object; overview?: object; overviewMe?: object; uncategorized?: number } = {}) {
+// The Dashboard opens in Just me; most tests look at Household, so they switch to it first.
+function renderWith({ household = month("household"), me = month("me"), overview = OVERVIEW, overviewMe = overview, uncategorized = 0, scope = "household" }: { household?: object; me?: object; overview?: object; overviewMe?: object; uncategorized?: number; scope?: "household" | "me" } = {}) {
   vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
     const url = String(input);
     const body = url.includes("/stats/month") ? (url.includes("scope=me") ? me : household)
@@ -50,6 +51,7 @@ function renderWith({ household = month("household"), me = month("me"), overview
       </MemoryRouter>
     </QueryClientProvider>,
   );
+  if (scope === "household") fireEvent.click(screen.getByRole("radio", { name: "Household" }));
 }
 
 const hero = () => screen.getByRole("region", { name: /at a glance/ });
@@ -96,23 +98,15 @@ it("offers to set budgets when there is no spending budget", async () => {
   expect(hero().querySelector(".hero-meter")).toBeNull();
 });
 
-it("switches Spent, Saved and Net cash to Just me and hides budgets", async () => {
+it("opens in Just me, with your own Spent, Saved and Net cash and no budgets", async () => {
   renderWith({
+    scope: "me",
     me: month("me", { spend: "2000", saved: "98000", savings_rate: 0.98, categories: [line("Food", "spend", "10000", "2000"), line("Rent", "spend", "20000", "0")] }),
     overviewMe: { ...OVERVIEW, totals: { ...OVERVIEW.totals, net_cash: "30000" } },
   });
-  await screen.findByText(amountText("₹90,500.00"));
-  const household = screen.getByRole("radio", { name: "Household" });
-  expect(household.getAttribute("aria-checked")).toBe("true");
-  expect(screen.getByRole("radiogroup", { name: "Show figures for" })).toBeTruthy();
-
-  // Arrow keys move the choice and the focus (roving tabIndex).
-  fireEvent.keyDown(household, { key: "ArrowRight" });
   const justMe = screen.getByRole("radio", { name: "Just me" });
   expect(justMe.getAttribute("aria-checked")).toBe("true");
-  expect(document.activeElement).toBe(justMe);
-  expect(justMe.tabIndex).toBe(0);
-  expect(household.tabIndex).toBe(-1);
+  expect(screen.getByRole("radiogroup", { name: "Show figures for" })).toBeTruthy();
 
   expect(await screen.findByText(amountText("₹98,000.00"))).toBeTruthy();
   expect(value("Spent this month")).toBe("₹2,000.00");
@@ -129,6 +123,15 @@ it("switches Spent, Saved and Net cash to Just me and hides budgets", async () =
   expect(within(bars).queryByText(/Rent/)).toBeNull();
   // Needs attention stays household.
   expect(screen.getByText("Household", { selector: ".card-caption" })).toBeTruthy();
+
+  // Arrow keys move the choice and the focus (roving tabIndex).
+  fireEvent.keyDown(justMe, { key: "ArrowLeft" });
+  const household = screen.getByRole("radio", { name: "Household" });
+  expect(household.getAttribute("aria-checked")).toBe("true");
+  expect(document.activeElement).toBe(household);
+  expect(household.tabIndex).toBe(0);
+  expect(justMe.tabIndex).toBe(-1);
+  expect(await screen.findByText(amountText("₹90,500.00"))).toBeTruthy();
 });
 
 it("marks negative numbers with a minus sign and words, not just red", async () => {
