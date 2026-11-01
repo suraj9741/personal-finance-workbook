@@ -1,4 +1,5 @@
 // Thin typed client for /api/v1. Same origin (nginx or the Vite proxy), session cookie auth.
+import { announceChange } from "./sync";
 
 export type Kind = "expense" | "income" | "transfer";
 /** Refund takes spend back off an expense category; buy and sell are broker trades. */
@@ -315,6 +316,8 @@ export async function api<T>(path: string, init: { method?: string; body?: unkno
     // Lets a delete still reach the server when it's sent as the page closes.
     ...(init.keepalive ? { keepalive: true } : {}),
   });
+  // Every save, delete, login and logout goes through here, so other open tabs refresh.
+  if (response.ok && init.method && init.method !== "GET") announceChange();
   if (response.status === 204) return undefined as T;
   const body: unknown = await response.json().catch(() => null);
   if (!response.ok) {
