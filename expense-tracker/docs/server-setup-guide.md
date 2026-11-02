@@ -7,10 +7,12 @@ one-click deploys from GitHub Actions. Follow it top to bottom for a new server,
 - **Part A** sets up the server, one time.
 - **Part B** connects GitHub, one time.
 - **Part C** is every deploy after that, plus rollback.
+- **Part D** adds HTTPS with a free DuckDNS name, one time.
 
 The server never builds anything. GitHub Actions builds the images and pushes them to Docker
 Hub; the server pulls them and runs `docker compose` with `docker-compose.deploy.yml` and a
-`.env` file. The app runs at `http://<server-ip>` over plain HTTP until HTTPS is added. Background
+`.env` file. The app runs at `http://<server-ip>` over plain HTTP until Part D adds HTTPS at
+`https://<name>.duckdns.org`. Background
 and design choices are in the [deployment guide](deployment-guide.md#11-deploy-the-application).
 
 ## Before you start
@@ -122,8 +124,8 @@ Sizing: 1 vCPU and 512 MB RAM works only with swap (step 3). 1 GB is more comfor
    grep POSTGRES_PASSWORD .env               # save it in your password manager; never change it
    ```
 
-   `FRONTEND_BIND=0.0.0.0`, port 80 and `COOKIE_SECURE=false` are the plain-HTTP stopgap. With
-   HTTPS they change (see [Still to do](#still-to-do)).
+   `FRONTEND_BIND=0.0.0.0`, port 80 and `COOKIE_SECURE=false` are the plain-HTTP stopgap.
+   [Part D](#part-d-https-with-a-duckdns-name-one-time) changes them for HTTPS.
 
 7. **Data and first start. Choose 7A or 7B, not both.**
 
@@ -323,8 +325,77 @@ This loses anything entered after that deploy started.
 `docker compose down -v`, `docker volume rm`, `docker system prune --volumes`. A plain
 `docker compose down` is safe.
 
-**When your home IP changes**, the app stops loading. Edit the firewall's HTTP rule in
-DigitalOcean (Networking › Firewalls) and put in the new IP.
+**When your home IP changes** (plain HTTP only), the app stops loading. Edit the firewall's
+HTTP rule in DigitalOcean (Networking › Firewalls) and put in the new IP. After Part D the
+firewall is open to everyone, so this no longer applies.
+
+## Part D: HTTPS with a DuckDNS name (one time)
+
+Caddy, a small web server, sits in front of the app on ports 80 and 443. It gets a free
+Let's Encrypt certificate for your DuckDNS name, renews it before it expires, and sends
+`http://` visitors to `https://`. It is the `caddy` service in `docker-compose.deploy.yml`,
+off until `.env` turns it on. It uses about 15 MB of memory.
+
+1. **Get the name. Browser.** Sign in at https://www.duckdns.org (GitHub or Google), add a
+   subdomain such as `<name>`, type the server's IP in **current ip** and press **update ip**.
+   The droplet's IP never changes, so DuckDNS needs no updater on the server. Check it from
+   the **Mac**; it must print the server's IP:
+
+   ```sh
+   dig +short <name>.duckdns.org
+   ```
+
+2. **Open the firewall to everyone. Browser.** Let's Encrypt checks the name by connecting
+   to the server, from addresses nobody publishes, so a firewall limited to your IP blocks
+   the certificate. In Networking › Firewalls, set:
+
+   | Type | Port | Sources |
+   | --- | --- | --- |
+   | SSH | 22 | All IPv4, All IPv6 (unchanged) |
+   | HTTP | 80 | All IPv4, All IPv6 |
+   | HTTPS | 443 | All IPv4, All IPv6 |
+
+   The login page is now reachable by anyone. Passwords travel encrypted, but 5 wrong tries
+   lock an email for 15 minutes, so a stranger who knows your email could keep you out for a
+   while.
+
+3. **Settings. deploy**, in `~/expense-tracker`. Replace `<name>` and run:
+
+   ```sh
+   cp .env .env.before-https
+   sed -i -e '/^COMPOSE_PROFILES=/d' -e '/^CADDY_DOMAIN=/d' \
+     -e 's|^FRONTEND_BIND=.*|FRONTEND_BIND=127.0.0.1|' \
+     -e 's|^FRONTEND_PORT=.*|FRONTEND_PORT=8080|' \
+     -e 's|^PUBLIC_BASE_URL=.*|PUBLIC_BASE_URL=https://<name>.duckdns.org|' \
+     -e 's|^COOKIE_SECURE=.*|COOKIE_SECURE=true|' .env
+   printf 'COMPOSE_PROFILES=https\nCADDY_DOMAIN=<name>.duckdns.org\n' >> .env
+   grep -E '^(COMPOSE_PROFILES|CADDY_DOMAIN|FRONTEND_[A-Z]+|PUBLIC_BASE_URL|COOKIE_SECURE)=' .env
+   ```
+
+   The frontend now listens only on the server itself (`127.0.0.1:8080`), and Caddy is the
+   only thing the internet reaches.
+
+4. **Start it. Browser.** Actions › Expense tracker deploy › Run workflow, branch `main`,
+   tick **build**, leave **tag** empty. The deploy fetches the new compose file and starts
+   Caddy with the rest. (By hand instead, as **deploy**: fetch `docker-compose.deploy.yml` as
+   in Part A step 5, then `docker compose up -d --remove-orphans --wait`.)
+
+5. **Check it. deploy:**
+
+   ```sh
+   docker compose ps caddy                                   # Up
+   docker compose logs caddy | grep -i "certificate obtained"
+   curl -sI http://<name>.duckdns.org | head -n 3            # 308, Location: https://...
+   curl -s -o /dev/null -w '%{http_code}\n' https://<name>.duckdns.org/api/v1/auth/me   # 401
+   ```
+
+   In the **Browser**, open `https://<name>.duckdns.org` and log in again (the old plain-HTTP
+   session doesn't carry over). `http://<server-ip>` stops working: use the name from now on.
+   Invite links and password-reset links now use the `https://` address.
+
+**Undo**, as **deploy**: `cp .env.before-https .env && docker compose up -d --remove-orphans`, then
+set the firewall's HTTP source back to your IP. Caddy's container is removed; its certificates
+stay in the `caddy_data` volume for next time.
 
 ## Move to another server
 
@@ -334,7 +405,9 @@ retire the old one. Downtime is the few minutes between the final backup and the
 1. **New server: Part A steps 1 to 6.** Attach the new droplet to the same firewall (or make one
    as in step 1). In `.env`, use the new `PUBLIC_BASE_URL`; a fresh `POSTGRES_PASSWORD` is fine,
    because the restore doesn't depend on it. Set `IMAGE_TAG` to the tag the old server runs
-   (`grep IMAGE_TAG ~/expense-tracker/.env` there).
+   (`grep IMAGE_TAG ~/expense-tracker/.env` there). With HTTPS, copy the Part D lines too, and
+   at the cutover (step 7) point the DuckDNS name at the new IP: Caddy gets a new certificate
+   by itself within a minute.
 2. **New server: rclone (Part A step 9, without the cron line yet).** Copy the config from the
    old server instead of the Mac:
 
@@ -392,10 +465,6 @@ retire the old one. Downtime is the few minutes between the final backup and the
 | Workflow: `Missing settings. Needs the variable DOCKERHUB_USERNAME and the secrets …` | A `DEPLOY_*` value is under Variables, or missing | Add it on the Secrets tab (Part B step 4) |
 | Workflow: `… is not on Docker Hub` | No images for that commit | Tick **build**, or run the images workflow first |
 | Workflow: `Host key verification failed` | `DEPLOY_KNOWN_HOSTS` is wrong, or the server was rebuilt | Redo Part B step 3 and update the secret |
-
-## Still to do
-
-HTTPS. Until then the password and session cookie cross the internet unencrypted, so don't log
-in from public Wi-Fi. A free route is a DuckDNS name plus Caddy in front of the frontend; with
-it, `.env` changes to `FRONTEND_BIND=127.0.0.1`, `FRONTEND_PORT=8080`,
-`PUBLIC_BASE_URL=https://<name>`, `COOKIE_SECURE=true`, and the firewall opens 443 to all.
+| Browser: the HTTPS page doesn't load, `docker compose logs caddy` shows `challenge failed` or `timeout` | Let's Encrypt can't reach the server | Ports 80 and 443 open to All (Part D step 2), and `dig +short <name>.duckdns.org` prints the server's IP |
+| `caddy` logs say `too many certificates` | Let's Encrypt's weekly limit, after many fresh starts with a deleted `caddy_data` volume | Wait; never delete `caddy_data` |
+| Login over HTTPS flashes back to the login page | `COOKIE_SECURE`/`PUBLIC_BASE_URL` still hold the HTTP values | Part D step 3, then `docker compose up -d` |

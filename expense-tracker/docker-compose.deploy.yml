@@ -101,9 +101,9 @@ services:
       seed: { condition: service_completed_successfully }
 
   # 127.0.0.1 by default: a server is on the public internet and the app is plain HTTP.
-  # Reach it through Tailscale (tailscale serve) or an SSH tunnel, or later a reverse proxy
-  # with HTTPS. FRONTEND_BIND=0.0.0.0 publishes it on the server's public IP over plain
-  # HTTP: passwords then cross the internet unencrypted, so use that only as a stopgap.
+  # With HTTPS (the caddy service below) it stays on 127.0.0.1 and Caddy is the only thing
+  # the internet reaches. FRONTEND_BIND=0.0.0.0 publishes it on the server's public IP over
+  # plain HTTP: passwords then cross the internet unencrypted, so use that only as a stopgap.
   frontend:
     image: ${IMAGE_NAMESPACE:?set IMAGE_NAMESPACE in .env}/expense-tracker-frontend:${IMAGE_TAG:-latest}
     restart: unless-stopped
@@ -114,5 +114,34 @@ services:
     ports:
       - "${FRONTEND_BIND:-127.0.0.1}:${FRONTEND_PORT:-8080}:8080"
 
+  # HTTPS in front of the frontend, on only when .env has COMPOSE_PROFILES=https and
+  # CADDY_DOMAIN=<name>. Caddy gets a Let's Encrypt certificate for that name by itself, renews
+  # it, and redirects http:// to https://. Let's Encrypt checks the name over ports 80 and 443,
+  # so both must be open to everyone in the firewall. Certificates live in the caddy_data
+  # volume, so a restart doesn't ask for new ones (Let's Encrypt limits how often you may).
+  caddy:
+    image: caddy:2.10-alpine
+    profiles: [https]
+    restart: unless-stopped
+    command:
+      - caddy
+      - reverse-proxy
+      - --from
+      - ${CADDY_DOMAIN:-set-CADDY_DOMAIN-in-.env}
+      - --to
+      - frontend:8080
+    mem_limit: 64m
+    logging: *logging
+    depends_on:
+      frontend: { condition: service_started }
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - caddy_data:/data
+      - caddy_config:/config
+
 volumes:
   pgdata:
+  caddy_data:
+  caddy_config:
