@@ -2,8 +2,8 @@ name: Expense tracker images
 
 # Builds the app images and pushes them to Docker Hub, so the server only pulls them (see
 # expense-tracker/docker-compose.deploy.yml). Runs only when started by hand: Actions tab >
-# Expense tracker images > Run workflow. Only from main, whose code already passed the
-# lint and test checks in its pull request.
+# Expense tracker images > Run workflow, or Expense tracker deploy with "build" ticked.
+# Only from main, whose code already passed the lint and test checks in its pull request.
 #
 # Needs the repository variable DOCKERHUB_USERNAME and the repository secret
 # DOCKERHUB_TOKEN (a Docker Hub access token with Read & Write), under Settings > Secrets
@@ -14,15 +14,16 @@ name: Expense tracker images
 # stay on the server.
 on:
   workflow_dispatch:
-
-# A second run waits for the first, so "latest" always ends on the newer commit.
-concurrency:
-  group: expense-tracker-images
-  cancel-in-progress: false
+  # Also run by the deploy workflow when its "build" box is ticked.
+  workflow_call:
 
 jobs:
   images:
     runs-on: ubuntu-24.04
+    # A second run waits for the first, so "latest" always ends on the newer commit.
+    concurrency:
+      group: expense-tracker-images
+      cancel-in-progress: false
     env:
       NAMESPACE: ${{ vars.DOCKERHUB_USERNAME }}
       HAS_TOKEN: ${{ secrets.DOCKERHUB_TOKEN != '' }}
