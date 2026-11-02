@@ -191,7 +191,11 @@ Sizing: 1 vCPU and 512 MB RAM works only with swap (step 3). 1 GB is more comfor
 
 9. **Backups to Google Drive.** The rclone config (with the Drive token and the encryption
    passphrase) comes from the machine that already has it, so the server writes to the same
-   encrypted Drive folder. See the [backup guide](backup-guide.md) for how that was set up.
+   encrypted Drive folder. The same file carries the client ID and secret of your own Google
+   Cloud app, so the server needs no browser sign-in. See the [backup guide](backup-guide.md)
+   for how that was set up, and
+   [Your own Google Cloud app](backup-guide.md#your-own-google-cloud-app-for-the-drive-sign-in)
+   to recreate the app.
 
    **root:**
 

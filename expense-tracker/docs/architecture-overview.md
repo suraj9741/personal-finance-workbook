@@ -260,6 +260,7 @@ monitor), and a look at `backups/backup.log` or `scripts/backup.sh status` now a
 | --- | --- |
 | `POSTGRES_PASSWORD` | The server's `.env` (mode 600) and your password manager |
 | rclone config, Drive token, backup passphrase and salt | The server's `rclone.conf` (mode 600); passphrase and salt also in Bitwarden |
+| Google OAuth client ID and secret (Google Cloud project `expense-backups`) | The server's `rclone.conf`, and Bitwarden. Recreating the app: [backup guide](backup-guide.md#your-own-google-cloud-app-for-the-drive-sign-in) |
 | `DOCKERHUB_TOKEN` | GitHub Actions secret (with the variable `DOCKERHUB_USERNAME`) |
 | `DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_SSH_KEY`, `DEPLOY_KNOWN_HOSTS` | GitHub Actions secrets. GitHub holds the only copy of the deploy key |
 | Your own SSH key for root | Your Mac |

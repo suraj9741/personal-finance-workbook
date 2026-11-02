@@ -53,7 +53,8 @@ Source: [diagrams/backup-restore-architecture.drawio.svg](diagrams/backup-restor
 | Database roles, permissions, extensions | No separate step | There is one role, the container's superuser, created from `.env`. No extensions are used. Restores use `--no-owner`, so the target's own user owns everything | covered by the dump plus `.env` |
 | `expense-tracker/.env` | **Yes, once, and after each change** | Ports, `PUBLIC_BASE_URL`, `COOKIE_SECURE`, the `BACKUP_*` settings. The password in it isn't needed to restore a dump onto a new machine | copy it to Bitwarden |
 | Drive passphrase and salt | **Yes, once** | Without them the Drive copies can't be decrypted. There is no reset | saved in Bitwarden by `make backup-drive-setup` (you copy them in) |
-| `~/.config/rclone/rclone.conf` | No | The Drive sign-in token and the passphrase in obscured (not encrypted) form. Recreated by `make backup-drive-setup` | not applicable |
+| Google OAuth client ID and secret | **Yes, once** | rclone signs in to Drive through your own Google Cloud app. Google shows the secret only when it is created | Bitwarden (see [Your own Google Cloud app](#your-own-google-cloud-app-for-the-drive-sign-in)) |
+| `~/.config/rclone/rclone.conf` | No | The Drive sign-in token, the OAuth client ID and secret, and the passphrase in obscured (not encrypted) form. Recreated from Bitwarden by the steps in [Set up the Drive copy](#set-up-the-drive-copy-once-per-mac) | not applicable |
 | Code, migrations, `config/seed.yaml`, compose and nginx config | No | In git on GitHub | note the deployed commit (`git log --oneline -1`) with each backup |
 | Docker images | No | On Docker Hub as `sha-<commit>`, rebuilt from any commit by the images workflow; the Mac rebuilds its own with `make up` | not applicable |
 | Tailscale setup | No | Lives in the Tailscale app and admin console, not in the repo | sign in again on a new machine |
@@ -144,16 +145,82 @@ steps 2 to 5 above. Manual dumps are counted separately from daily ones, so a bu
 | After a large data-entry session | `make backup` |
 | Daily | Automatic, once `make backup-schedule` has been run |
 
+## Your own Google Cloud app (for the Drive sign-in)
+
+rclone signs in to Google Drive through a Google Cloud OAuth app that you own (the project
+`expense-backups`), not through rclone's built-in client. rclone's built-in client is shared by
+every rclone user, so Google rate-limits it, and Google can change or block it. Your own app
+needs no review, because `drive.file` is a non-sensitive scope.
+
+You need this app once. Its client ID and secret then live in `rclone.conf` on every machine
+that backs up, and in Bitwarden.
+
+Recreate it only if it was deleted, or to rotate the secret. Everything happens in the
+**Browser**, in the Google Cloud console, signed in as the Google account that owns the
+backups:
+
+1. **Project.** Create a project, for example `expense-backups`.
+2. **Drive API.** APIs & Services > Library > Google Drive API > Enable.
+3. **Home and privacy pages.** Google asks for both before the app can be published. They are
+   static pages in the public GitHub Pages repository `<github-user>/<github-user>.github.io`:
+   `https://<github-user>.github.io/` says what the app is, and
+   `https://<github-user>.github.io/privacy.html` says it only stores encrypted backups of your
+   own data in your own Drive and shares nothing. Push those two pages first, and check that
+   both open.
+4. **Branding** (Google Auth Platform > Branding, called "OAuth consent screen" in older
+   consoles):
+   - App name `expense-backups`, user support email and developer contact: your address.
+   - Application home page: `https://<github-user>.github.io/`.
+   - Privacy policy link: `https://<github-user>.github.io/privacy.html`.
+   - Authorised domains: `<github-user>.github.io`.
+5. **Audience.** User type **External**. Then **Publish app**, so the status reads "In
+   production". While an External app is in "Testing", Google expires its sign-ins after 7
+   days, and the hourly backups would quietly stop uploading every week. With only
+   `drive.file`, publishing needs no verification.
+6. **Data access.** Add the scope `.../auth/drive.file` and nothing else.
+7. **Client.** Clients > Create client > Application type **Desktop app**, name `rclone`.
+   Copy the client ID and the client secret into Bitwarden at once: Google shows the secret
+   only now. To rotate it later, add a new secret to the same client, update rclone (below),
+   then delete the old secret.
+
+To point an existing rclone remote at a new client ID or secret, run on the Mac (**Your
+values**). `read -s` keeps the secret out of your shell history:
+
+```sh
+read -r CID && read -rs CSECRET
+rclone config update expense-gdrive client_id="$CID" client_secret="$CSECRET"
+rclone config reconnect expense-gdrive:       # browser sign-in again, through the new client
+rclone config show expense-gdrive | grep client_id    # Safe: shows which client is in use
+```
+
+Then copy the Mac's `rclone.conf` to the server again
+([server setup guide, Part A step 9](server-setup-guide.md#part-a-the-server-one-time)).
+The server never needs a browser: its config carries the client ID, secret and token.
+
 ## Set up the Drive copy (once per Mac)
 
-**Your values**, on the Mac, from `expense-tracker/`:
+**Your values**, on the Mac, from `expense-tracker/`. Create the Drive sign-in through your
+own Google Cloud app first (client ID and secret from Bitwarden; see
+[Your own Google Cloud app](#your-own-google-cloud-app-for-the-drive-sign-in)). Skip this
+first block if `rclone listremotes` already shows `expense-gdrive:`.
 
 ```sh
 brew install rclone
+read -r CID && read -rs CSECRET
+rclone config create expense-gdrive drive scope=drive.file client_id="$CID" client_secret="$CSECRET"
+```
+
+Then:
+
+```sh
 make backup-drive-setup
 ```
 
-1. A browser opens. Sign in to Google and allow access. rclone asks only for `drive.file`,
+`make backup-drive-setup` on its own would create `expense-gdrive` with rclone's built-in
+client. It keeps an `expense-gdrive` remote that already exists, which is why the block above
+comes first.
+
+1. A browser opens (only when `expense-gdrive` didn't exist yet). Sign in to Google and allow access. rclone asks only for `drive.file`,
    so it can see the files it creates and nothing else in your Drive.
 2. Answer `N` to "Reuse a passphrase and salt from Bitwarden?". The script makes a random
    passphrase and salt, creates the encrypted remote `expense-drive-crypt:` over the Drive
