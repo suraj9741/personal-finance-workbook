@@ -256,6 +256,10 @@ else: no clone, no `make`.
 4. The app listens on `127.0.0.1:8080` only, because a server is on the public internet and
    the app is plain HTTP. Until HTTPS is in front of it, use an SSH tunnel:
    `ssh -L 8080:127.0.0.1:8080 <user>@<server>`, then open `http://localhost:8080`.
+   As a stopgap you can publish it on the public IP: `FRONTEND_BIND=0.0.0.0`,
+   `FRONTEND_PORT=80`, `PUBLIC_BASE_URL=http://<server-ip>` and `COOKIE_SECURE=false` in `.env`,
+   plus a firewall rule for TCP 80. Passwords and session cookies then travel unencrypted,
+   and anyone can reach the login page, so move to HTTPS soon.
 
 To update, run `docker compose pull && docker compose up -d`. To pin or roll back to one build,
 set `IMAGE_TAG=sha-<commit>` (the job summary in Actions shows it) and run

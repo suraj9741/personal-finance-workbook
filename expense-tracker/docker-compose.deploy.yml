@@ -100,9 +100,10 @@ services:
       db: { condition: service_healthy }
       seed: { condition: service_completed_successfully }
 
-  # 127.0.0.1 only: a server is on the public internet and the app is plain HTTP.
-  # Reach it with an SSH tunnel for now (ssh -L 8080:127.0.0.1:8080 <server>);
-  # HTTPS in front of it comes with the deploy work.
+  # 127.0.0.1 by default: a server is on the public internet and the app is plain HTTP.
+  # Reach it through Tailscale (tailscale serve) or an SSH tunnel, or later a reverse proxy
+  # with HTTPS. FRONTEND_BIND=0.0.0.0 publishes it on the server's public IP over plain
+  # HTTP: passwords then cross the internet unencrypted, so use that only as a stopgap.
   frontend:
     image: ${IMAGE_NAMESPACE:?set IMAGE_NAMESPACE in .env}/expense-tracker-frontend:${IMAGE_TAG:-latest}
     restart: unless-stopped
@@ -111,7 +112,7 @@ services:
     depends_on:
       backend: { condition: service_healthy }
     ports:
-      - "127.0.0.1:${FRONTEND_PORT:-8080}:8080"
+      - "${FRONTEND_BIND:-127.0.0.1}:${FRONTEND_PORT:-8080}:8080"
 
 volumes:
   pgdata:
