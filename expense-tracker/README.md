@@ -19,9 +19,9 @@ and an encrypted copy goes to Google Drive. The Mac runs the same app with `make
 ![Production architecture: browser, DuckDNS, Let's Encrypt, the DigitalOcean droplet with Caddy, nginx (React + Vite), FastAPI and Postgres 16 in Docker Compose, GitHub Actions and Docker Hub for builds and deploys, and encrypted backups to Google Drive](docs/diagrams/production-architecture.drawio.svg)
 
 How each part works: [architecture overview](docs/architecture-overview.md). Setting it up
-step by step: [server setup guide](docs/server-setup-guide.md). Diagram source:
-[`docs/diagrams/production-architecture.drawio`](docs/diagrams/production-architecture.drawio)
-(also as [PNG](docs/diagrams/production-architecture.png)).
+step by step: [server setup guide](docs/server-setup-guide.md). To edit the diagram, open
+[`docs/diagrams/production-architecture.drawio.svg`](docs/diagrams/production-architecture.drawio.svg)
+in draw.io.
 
 ## Run it on your Mac
 

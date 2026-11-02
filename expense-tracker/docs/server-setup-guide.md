@@ -26,8 +26,9 @@ What you end up with after all four parts:
 | C | The deploy path itself: Actions › Expense tracker deploy |
 | D | DuckDNS, Caddy and the Let's Encrypt certificate; the frontend moves to `127.0.0.1` |
 
-Each part is explained in the [architecture overview](architecture-overview.md). The diagram's
-source is [`diagrams/production-architecture.drawio`](diagrams/production-architecture.drawio).
+Each part is explained in the [architecture overview](architecture-overview.md). To edit the
+diagram, open [`diagrams/production-architecture.drawio.svg`](diagrams/production-architecture.drawio.svg)
+in draw.io.
 
 ## Before you start
 
