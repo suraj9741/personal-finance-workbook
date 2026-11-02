@@ -228,6 +228,9 @@ recreated.
 
 ### Deploy on a server from the CI images
 
+The step-by-step runbook for this, from an empty droplet to one-click GitHub deploys, is the
+[server setup guide](server-setup-guide.md). This section explains how it works.
+
 For a small server that can't build the images, such as a 512 MB droplet. Building needs far
 more memory than running. The server needs Docker Engine with the Compose plugin and nothing
 else: no clone, no `make`.

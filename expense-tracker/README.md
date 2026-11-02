@@ -125,6 +125,7 @@ dump, and restoring from Drive.
 | --- | --- |
 | [Architecture overview](docs/architecture-overview.md) | understand the components, data, network, and single points of failure |
 | [Deployment guide](docs/deployment-guide.md) | set up a new machine from scratch, and deploy updates |
+| [Server setup guide](docs/server-setup-guide.md) | run it on a DigitalOcean droplet with one-click GitHub deploys, step by step, and move it to another server |
 | [Backup guide](docs/backup-guide.md) | take, check, encrypt and store backups |
 | [Restore guide](docs/restore-guide.md) | recover from lost data, a broken database, a lost Mac or a bad deploy |
 | [Environment migration guide](docs/environment-migration-guide.md) | move the app and its data to a new machine, with cutover and rollback |
