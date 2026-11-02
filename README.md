@@ -7,10 +7,10 @@ My personal finance tooling. Two products live in this repo, each in its own fol
 | What it is | Google Apps Script that builds the yearly finance workbook ("2027 Finance") in Google Sheets | Web app for daily expense entry, budgets and dashboards, with households and multiple users |
 | Folder | `finance-sheet/` | `expense-tracker/` |
 | Stack | Apps Script (V8), clasp, Node tests | FastAPI, Postgres 16, React + Vite, Docker Compose |
-| Runs on | Google Sheets (the "google finance sheet" script) | Docker on your Mac (http://localhost:8080) |
-| Deploy | `cd finance-sheet && clasp push` | `cd expense-tracker && make up` |
+| Runs on | Google Sheets (the "google finance sheet" script) | A DigitalOcean droplet with Docker Compose, over HTTPS ([architecture](expense-tracker/docs/architecture-overview.md)); `make up` on the Mac for development |
+| Deploy | `cd finance-sheet && clasp push` | Actions › Expense tracker deploy › Run workflow ([server setup guide](expense-tracker/docs/server-setup-guide.md)) |
 | Test | `cd finance-sheet && npm test` | `cd expense-tracker && make test` |
-| CI | Tests, Push to Apps Script (manual) | Expense tracker |
+| CI | Tests, Push to Apps Script (manual) | Expense tracker; Expense tracker images and Expense tracker deploy (manual) |
 
 The expense tracker is meant to replace the finance sheet; until then, both are kept working.
 

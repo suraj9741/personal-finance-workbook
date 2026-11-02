@@ -15,6 +15,20 @@ Hub; the server pulls them and runs `docker compose` with `docker-compose.deploy
 `https://<name>.duckdns.org`. Background
 and design choices are in the [deployment guide](deployment-guide.md#11-deploy-the-application).
 
+What you end up with after all four parts:
+
+![The finished setup: browser to Caddy over HTTPS (DuckDNS name, Let's Encrypt certificate) on the DigitalOcean droplet, Caddy to nginx to FastAPI to Postgres in Docker Compose; GitHub Actions builds images to Docker Hub and deploys over SSH with a key locked to deploy-gate.sh; cron runs backup.sh hourly, which copies encrypted dumps to Google Drive](diagrams/production-architecture.drawio.svg)
+
+| Part | Adds to the picture |
+| --- | --- |
+| A | The droplet, its firewall, swap, Docker, the `deploy` user and its folder, the Compose services, cron and the Drive copy |
+| B | The deploy key locked to `deploy-gate.sh`, and the GitHub secrets |
+| C | The deploy path itself: Actions › Expense tracker deploy |
+| D | DuckDNS, Caddy and the Let's Encrypt certificate; the frontend moves to `127.0.0.1` |
+
+Each part is explained in the [architecture overview](architecture-overview.md). The diagram's
+source is [`diagrams/production-architecture.drawio`](diagrams/production-architecture.drawio).
+
 ## Before you start
 
 Who runs each command. **Check your prompt before every block**: `root@` or `deploy@` must match
