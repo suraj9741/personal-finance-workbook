@@ -15,6 +15,7 @@ import { Budgets } from "./pages/Budgets";
 import { Dashboard } from "./pages/Dashboard";
 import { Settings } from "./pages/Settings";
 import { Transactions } from "./pages/Transactions";
+import { Logo } from "./components/Logo";
 
 /** A new page opens at its top. Back and Forward (POP) and links to a section (#hash) are left
  * to the browser, which puts you where you were. */
@@ -48,7 +49,10 @@ function Shell() {
   return (
     <div className="app">
       <header className="topbar">
-        <span className="brand">₹ Expense Tracker</span>
+        <span className="brand">
+          <Logo />
+          Expense Tracker
+        </span>
         <nav>
           <NavLink to="/" end>
             Dashboard

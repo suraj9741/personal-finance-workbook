@@ -197,6 +197,9 @@
   --logo-tile-sm: 1.375rem;
   --logo-size-sm: 0.9375rem;
   --logo-tile-lg: 3rem;
+  /* The app's own mark (Logo.tsx): header and login page. */
+  --logo-app-size: 1.5rem;
+  --logo-app-size-lg: 4rem;
   --logo-size-lg: 1.875rem;
   /* The faint underline on links inside sentences. */
   --link-underline: color-mix(in srgb, var(--color-accent) 40%, transparent);
