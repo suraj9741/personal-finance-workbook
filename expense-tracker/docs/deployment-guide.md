@@ -50,8 +50,10 @@ db (healthy) ──► migrate (exits 0) ──► seed (exits 0) ──► back
 db (healthy) ──► backup
 ```
 
-If `migrate` or `seed` fails, the backend and frontend do not start. See the
-[system architecture diagram](diagrams/system-architecture.drawio.svg).
+If `migrate` or `seed` fails, the backend and frontend do not start. On the server,
+`caddy` starts after `frontend`, and backups run from cron instead of a container. See the
+[production architecture diagram](diagrams/production-architecture.drawio.svg) (server) and
+the [system architecture diagram](diagrams/system-architecture.drawio.svg) (Mac).
 
 ## 3. Permissions, tools, runtime versions and system requirements
 
@@ -109,8 +111,8 @@ Expect a `personal-finance-workbook/` folder. Check with `git log --oneline -1`.
 | Ports | `8080` (app) and `8000` (API) must be free on the host. Change them with `FRONTEND_PORT` and `BACKEND_PORT` in `.env` |
 | Who can reach the app | `docker-compose.yml` binds the app to `0.0.0.0`: the host, the tailnet **and the local Wi-Fi**. To limit it to the host, change the frontend port line to `"127.0.0.1:${FRONTEND_PORT:-8080}:8080"` (a tracked file, so do it in a pull request) |
 | Firewall | macOS: if the application firewall is on and other devices can't connect, allow Docker under System Settings › Network › Firewall › Options. Linux: published Docker ports skip `ufw` rules, so use the bind address above rather than `ufw` |
-| DNS | Not used. Other devices use Tailscale MagicDNS (see the [README](../README.md#reach-it-from-other-devices-tailscale)) |
-| TLS | Not used; the app is plain HTTP. For HTTPS on the tailnet, use `tailscale serve` as the README describes, then set `COOKIE_SECURE=true` |
+| DNS | On the Mac: none, or Tailscale MagicDNS (see the [README](../README.md#reach-it-from-other-devices-tailscale)). On the server: a DuckDNS name ([server setup guide, Part D](server-setup-guide.md#part-d-https-with-a-duckdns-name-one-time)) |
+| TLS | On the Mac: none, plain HTTP. On the server: Caddy with a Let's Encrypt certificate, `COOKIE_SECURE=true` (Part D) |
 
 ## 7. Environment variables and secrets
 
@@ -271,8 +273,9 @@ set `IMAGE_TAG=sha-<commit>` (the job summary in Actions shows it) and run
 
 Memory: the app used about 170 MiB idle and 300 MiB at peak on the Mac. The deploy file
 shrinks Postgres and caps each container. On 512 MB, add swap first (1–2 GB), or use a 1 GB
-server. Backups (`scripts/backup.sh`) are scheduled by launchd on the Mac only, so a server
-has none until a Linux schedule is added.
+server. On a server, `scripts/backup.sh auto` runs from the deploy user's crontab every hour
+([server setup guide, Part A step 9](server-setup-guide.md#part-a-the-server-one-time)); launchd
+is the Mac's schedule.
 
 Never start `docker-compose.deploy.yml` on the Mac. It uses the same project name, so it would
 replace the running containers there.
@@ -404,9 +407,10 @@ docker volume inspect expense-tracker_pgdata --format '{{.Mountpoint}}'   # Safe
 
 ## 14. Reverse proxy, load balancer and ingress
 
-nginx inside the `frontend` container is the only proxy: it serves the app and forwards
-`/api/` to the backend (`frontend/nginx.conf`). There is no load balancer or ingress. For
-HTTPS, `tailscale serve` sits in front of it on the host (optional, not in the repository).
+nginx inside the `frontend` container serves the app and forwards `/api/` to the backend
+(`frontend/nginx.conf`). On the server, the `caddy` service in `docker-compose.deploy.yml`
+sits in front of it on ports 80 and 443 and handles HTTPS. There is no load balancer or
+ingress. See the [production diagram](diagrams/production-architecture.drawio.svg).
 
 ## 15. Startup and service configuration
 

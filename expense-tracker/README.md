@@ -8,6 +8,21 @@ share one household, and anyone can keep their own private tracker.
 Phase 1 is manual entry. Statement import (Excel/CSV, then PDF for card statements) is
 Phase 2.
 
+## Where it runs
+
+Production runs on a small DigitalOcean droplet at `https://<name>.duckdns.org`: Caddy with a
+Let's Encrypt certificate in front of nginx, FastAPI and Postgres 16 in Docker Compose. GitHub
+Actions builds the images, pushes them to Docker Hub and deploys over SSH when you start it
+(Actions › Expense tracker deploy). A backup is taken every day and before every deploy,
+and an encrypted copy goes to Google Drive. The Mac runs the same app with `make up` for development.
+
+![Production architecture: browser, DuckDNS, Let's Encrypt, the DigitalOcean droplet with Caddy, nginx (React + Vite), FastAPI and Postgres 16 in Docker Compose, GitHub Actions and Docker Hub for builds and deploys, and encrypted backups to Google Drive](docs/diagrams/production-architecture.drawio.svg)
+
+How each part works: [architecture overview](docs/architecture-overview.md). Setting it up
+step by step: [server setup guide](docs/server-setup-guide.md). Diagram source:
+[`docs/diagrams/production-architecture.drawio`](docs/diagrams/production-architecture.drawio)
+(also as [PNG](docs/diagrams/production-architecture.png)).
+
 ## Run it on your Mac
 
 You need Docker Desktop running. Everything else runs in containers.
@@ -42,7 +57,7 @@ family groups). They add their own accounts on the Accounts page.
 ### Reach it from other devices (Tailscale)
 
 With Tailscale on the Mac and on your phone or other laptop, open
-http://apples-macbook-air.minmi-saiph.ts.net:8080 from any device on the tailnet.
+`http://<mac-name>.<tailnet>.ts.net:8080` from any device on the tailnet.
 
 Two settings make this work:
 
@@ -50,7 +65,7 @@ Two settings make this work:
    With `127.0.0.1:` in front, Docker accepts connections from the Mac only. A request
    arriving on the Mac's Tailscale address (`100.x.x.x`) finds nothing listening and is
    refused.
-2. **`PUBLIC_BASE_URL`** in `.env`: `http://apples-macbook-air.minmi-saiph.ts.net:8080`.
+2. **`PUBLIC_BASE_URL`** in `.env`: `http://<mac-name>.<tailnet>.ts.net:8080`.
    The backend builds invite and password-reset links from it. With the default
    `http://localhost:8080`, a link opened on a phone points at the phone itself and fails.
 
@@ -62,7 +77,7 @@ Settings › Network › Firewall › Options.
 
 To keep the app off your Wi-Fi, put `127.0.0.1:` back in the port binding and use
 `tailscale serve --bg 8080` instead. Tailscale then forwards
-`https://apples-macbook-air.minmi-saiph.ts.net` to localhost for tailnet devices only, over
+`https://<mac-name>.<tailnet>.ts.net` to localhost for tailnet devices only, over
 HTTPS. In that case set `PUBLIC_BASE_URL` to the `https://` address and `COOKIE_SECURE=true`.
 
 ### Adding people
@@ -103,6 +118,10 @@ only to them.
 
 ## Your data
 
+The real data lives on the server, in its `expense-tracker_pgdata` volume, and the server's
+cron job backs it up (see the [backup guide](docs/backup-guide.md)). What follows is the Mac,
+where the same commands apply to the development copy.
+
 Data lives in the Docker volume `expense-tracker_pgdata`.
 
 - `make down` stops the app and keeps the data.
@@ -132,7 +151,8 @@ dump, and restoring from Drive.
 | [Quick reference](docs/quick-reference-commands.md) | copy the commands without the explanations |
 
 The diagrams for these guides are in [`docs/diagrams/`](docs/diagrams):
-[system architecture](docs/diagrams/system-architecture.drawio.svg),
+[production architecture](docs/diagrams/production-architecture.drawio.svg),
+[system architecture (Mac)](docs/diagrams/system-architecture.drawio.svg),
 [deployment flow](docs/diagrams/deployment-flow.drawio.svg),
 [backup and restore](docs/diagrams/backup-restore-architecture.drawio.svg) and
 [environment migration](docs/diagrams/environment-migration.drawio.svg).
@@ -158,6 +178,9 @@ make fmt           auto-format backend code
 ```
 
 ## How it is built
+
+On the server, Caddy (HTTPS, ports 80 and 443) sits in front of the same chain and the
+frontend listens on `127.0.0.1:8080` only; see [Where it runs](#where-it-runs). On the Mac:
 
 ```
 browser ──► frontend (nginx, :8080) ──/api──► backend (FastAPI, :8000) ──► db (Postgres 16)

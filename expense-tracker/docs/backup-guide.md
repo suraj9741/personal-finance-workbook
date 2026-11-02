@@ -10,6 +10,15 @@ Commands run from `expense-tracker/` on the machine that runs the app. Marks: **
 
 ## The short version
 
+> **On the server (production)**, the same `scripts/backup.sh` runs from the deploy user's
+> crontab every hour at minute 17 instead of launchd, keeps its dumps in
+> `/home/deploy/expense-tracker/backups`, and writes to the same encrypted Drive folder. Every
+> deploy takes a manual dump first. Setup is in the
+> [server setup guide, Part A step 9](server-setup-guide.md#part-a-the-server-one-time), and
+> the [architecture overview](architecture-overview.md#backup-and-restore) shows where it
+> fits. The `make` commands below are for the Mac; on the server, call
+> `scripts/backup.sh manual`, `status`, `list-drive` or `fetch <file>` directly.
+
 - Everything that matters is in one Postgres database. A `pg_dump` file is a complete
   backup of it.
 - A launchd job on the Mac checks every hour and takes a daily dump when the newest one is
@@ -46,9 +55,10 @@ Source: [diagrams/backup-restore-architecture.drawio.svg](diagrams/backup-restor
 | Drive passphrase and salt | **Yes, once** | Without them the Drive copies can't be decrypted. There is no reset | saved in Bitwarden by `make backup-drive-setup` (you copy them in) |
 | `~/.config/rclone/rclone.conf` | No | The Drive sign-in token and the passphrase in obscured (not encrypted) form. Recreated by `make backup-drive-setup` | not applicable |
 | Code, migrations, `config/seed.yaml`, compose and nginx config | No | In git on GitHub | note the deployed commit (`git log --oneline -1`) with each backup |
-| Docker images | No | Rebuilt from source by `make up`. There is no registry | not applicable |
+| Docker images | No | On Docker Hub as `sha-<commit>`, rebuilt from any commit by the images workflow; the Mac rebuilds its own with `make up` | not applicable |
 | Tailscale setup | No | Lives in the Tailscale app and admin console, not in the repo | sign in again on a new machine |
-| Uploaded files, object storage, Kubernetes, Helm, IaC state, DNS, load balancers, certificates, monitoring config | Not applicable | None of them exist | none |
+| TLS certificates (`caddy_data` volume) | No | Caddy asks Let's Encrypt for new ones on a new server | none |
+| Uploaded files, object storage, Kubernetes, Helm, IaC state, load balancers, monitoring config | Not applicable | None of them exist | none |
 
 ## How backups are taken
 
