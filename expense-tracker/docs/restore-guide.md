@@ -5,6 +5,10 @@ machine or a failed deploy. Backups themselves are covered in the
 [backup guide](backup-guide.md), and the commands alone are in the
 [quick reference](quick-reference-commands.md#4-restore-a-backup).
 
+> **The live app runs on the server.** For a restore there, use
+> [On the server (production)](#on-the-server-production). The rest of this guide is
+> written for the Mac, where `make` and a clone of the repository exist.
+
 Commands run from `expense-tracker/` unless stated. Marks: **Safe** (read-only or
 repeatable), **Your values** (replace `<placeholders>`), **Destructive** (deletes or
 replaces data).
@@ -32,6 +36,176 @@ hostname; pwd                                   # the machine and folder you exp
 echo "${COMPOSE_PROJECT_NAME:-expense-tracker}" # expense-tracker is the live app
 docker compose ps --format '{{.Name}} {{.Status}}'
 ```
+
+## On the server (production)
+
+The live app runs on the droplet. The server has no clone of the repository and no `make`,
+so `make restore` and the other `make` commands in this guide don't exist there. Use the
+steps below instead. They do what `make restore` does, plus a few safety steps the server
+needs. Server setup and the meaning of **root** and **deploy** are in the
+[server setup guide](server-setup-guide.md).
+
+| Situation | Use |
+| --- | --- |
+| Entries deleted or changed by mistake, or the data is wrong | [Restore on the running server](#restore-on-the-running-server) |
+| A deploy's migration broke the app | [Server setup guide, Part C, "Roll back"](server-setup-guide.md#part-c-every-deploy-after-that): the same restore, then `scripts/deploy.sh` with the previous tag |
+| The droplet is lost or won't boot | [The server is lost](#the-server-is-lost) |
+| Moving on purpose to a new droplet | [Server setup guide, Move to another server](server-setup-guide.md#move-to-another-server) |
+
+### Restore on the running server
+
+**Destructive.** This replaces all data in the server's database, for every member of the
+household. Everything entered after the dump was taken is gone. Run everything as
+**deploy** (from **root**: `su - deploy`), in `~/expense-tracker`. `.env` there sets
+`COMPOSE_FILE=docker-compose.deploy.yml`, so plain `docker compose` talks to the live stack.
+
+1. **Check where you are (Safe).**
+
+   ```sh
+   cd ~/expense-tracker && hostname && docker compose ps --format '{{.Name}} {{.Status}}'
+   ```
+
+   Expect the droplet's name, and `expense-tracker-db-1`, `-backend-1`, `-frontend-1` and
+   `-caddy-1` up.
+
+2. **Pick a dump (Safe).** The server keeps its own copies, so most of the time nothing needs
+   downloading:
+
+   ```sh
+   ls -lt backups/expense-*.dump | head            # on the server, newest first
+   scripts/backup.sh list-drive                    # the encrypted copies in Google Drive
+   ```
+
+   Take the newest dump from **before** the problem started. Names are in UTC
+   (`expense-YYYYMMDD-HHMMSSZ[-manual].dump`). Every deploy writes a `-manual` dump just
+   before it starts.
+
+3. **Put the chosen dump out of the pruning's reach.** Step 5 takes another manual dump, and
+   only the newest 3 manual dumps are kept, so the one you picked could be deleted.
+   `backups/fetched/` is never pruned.
+
+   ```sh
+   mkdir -p backups/fetched
+   cp backups/<file>.dump backups/fetched/          # from the server's own copies, or:
+   scripts/backup.sh fetch <file>.dump              # from Drive, decrypted into backups/fetched/
+   ```
+
+   `fetch` stops with "isn't a Postgres dump" when the passphrase or salt in `rclone.conf` is
+   wrong. "Drive isn't set up" means **deploy** can't read its `rclone.conf`
+   ([server setup guide, Part A step 9](server-setup-guide.md#part-a-the-server-one-time)).
+
+4. **Check the dump (Safe).** It goes into a scratch database, not the live one:
+
+   ```sh
+   f=backups/fetched/<file>.dump
+   ls -l "$f"; head -c 5 "$f"; echo                 # not 0 bytes; PGDMP
+   docker compose exec -T db sh -c 'createdb -U "$POSTGRES_USER" restore_check'
+   docker compose exec -T db sh -c 'pg_restore -U "$POSTGRES_USER" -d restore_check --no-owner --exit-on-error' < "$f"; echo $?   # 0
+   docker compose exec -T db sh -c 'psql -U "$POSTGRES_USER" -d restore_check -Atc "SELECT version_num FROM alembic_version; SELECT count(*) FROM users; SELECT count(*) FROM transactions; SELECT max(date) FROM transactions"'
+   docker compose exec -T db sh -c 'dropdb -U "$POSTGRES_USER" restore_check'
+   ```
+
+   Write down the revision and the counts. If `pg_restore` doesn't exit with `0`, pick the
+   next older dump. If the revision is newer than the one the server runs (`docker compose
+   exec -T db sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Atc "SELECT version_num FROM
+   alembic_version"'`), deploy newer code first: `migrate` can upgrade an older dump but not
+   downgrade a newer one.
+
+5. **Freeze and take the undo point.**
+
+   ```sh
+   crontab -l > ~/crontab.before-restore && crontab -r         # pause the hourly backup
+   docker compose stop backend frontend                        # the app goes offline
+   scripts/backup.sh manual                                    # the undo point, also copied to Drive
+   ls -t backups/expense-*-manual.dump | head -n 1             # note this name
+   ```
+
+   The hourly job is paused so it can't dump a half-restored database and count it as a good
+   daily backup. If `backup.sh manual` fails, stop here: start the app again with
+   `docker compose start backend frontend` and `crontab ~/crontab.before-restore`, then find
+   out why.
+
+6. **Restore. Destructive.**
+
+   ```sh
+   f=backups/fetched/<file>.dump                               # the file you checked in step 4
+   docker compose exec -T db sh -c 'psql -q -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public"'
+   docker compose exec -T db sh -c 'pg_restore -U "$POSTGRES_USER" -d "$POSTGRES_DB" --no-owner --exit-on-error' < "$f"; echo $?   # 0
+   docker compose up -d --wait                                 # re-runs migrate and seed, then starts the app
+   ```
+
+   `NOTICE: drop cascades to ... other objects` after the first line is expected. If
+   `pg_restore` fails, the app stays stopped and the database is partly restored: run the two
+   lines again with the same file or an older one. They start from an empty schema each time.
+   **Never** use `docker compose down -v` to "start clean": it deletes the database volume.
+
+7. **Check it (Safe).**
+
+   ```sh
+   docker compose ps -a                                        # db, backend, frontend, caddy healthy or up; migrate, seed Exited (0)
+   docker compose logs --tail=20 migrate seed backend          # no errors
+   curl -s http://127.0.0.1:8080/nginx-health                  # ok
+   curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8080/api/v1/auth/me   # 401
+   docker compose exec -T db sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Atc "SELECT version_num FROM alembic_version; SELECT count(*) FROM users; SELECT count(*) FROM transactions; SELECT max(date) FROM transactions"'
+   ```
+
+   The counts must match step 4. The revision may be newer than step 4's if `migrate`
+   upgraded the dump; that is expected. In the **Browser**, open `https://<name>.duckdns.org`,
+   log in, and check the Dashboard, the latest transactions and one bank balance you know.
+   Everyone logs in with the password they had when the dump was taken.
+
+8. **Turn the hourly backup back on and take a fresh dump.**
+
+   ```sh
+   crontab ~/crontab.before-restore && crontab -l              # the backup.sh line is back
+   scripts/backup.sh manual && scripts/backup.sh status
+   ```
+
+**Undo the restore. Destructive:** repeat steps 5 to 8 with the undo-point dump you noted in
+step 5 (copy it into `backups/fetched/` first, as in step 3).
+
+When it's done, delete the copies you no longer need from `backups/fetched/`, and re-enter
+anything made after the dump.
+
+### The server is lost
+
+The data is safe as long as Google Drive and the passphrase and salt in Bitwarden are. You
+lose everything entered after the newest copy in Drive: up to about a day, because the daily
+dump runs once every 23 hours (plus a manual dump on every deploy).
+
+1. **New droplet.** Either:
+   - **From a weekly droplet backup**, if those are turned on: on the droplet's Backups tab,
+     create a new droplet from the newest backup image. Docker, `.env`, `rclone.conf`, the
+     crontab and the deploy key come with it. Then restore the newest Drive dump onto it
+     with [Restore on the running server](#restore-on-the-running-server), because the
+     image can be a week old.
+   - **From scratch:** [server setup guide](server-setup-guide.md), Part A steps 1 to 6.
+     Use the same `IMAGE_TAG` the old server ran (the last successful deploy in GitHub
+     Actions shows it). A fresh `POSTGRES_PASSWORD` is fine: the dump doesn't depend on it.
+2. **rclone (from scratch only).** Part A step 9 without the cron line. Copy `rclone.conf`
+   from the Mac if it still has one. If no machine has it, recreate it as in the
+   [backup guide](backup-guide.md#set-up-the-drive-copy-once-per-mac), with the OAuth client
+   ID and secret and the passphrase and salt from Bitwarden, then copy it to
+   `/home/deploy/.config/rclone/rclone.conf` (mode 600, owned by deploy).
+3. **Data.** As **deploy**: `scripts/backup.sh list-drive`, then
+   `scripts/backup.sh fetch <newest>.dump`, then run the 7A restore block of
+   [Part A step 7](server-setup-guide.md#part-a-the-server-one-time) with
+   `backups/fetched/<newest>.dump` as the file.
+4. **Backups.** The crontab line from Part A step 9.
+5. **Name and GitHub.** Point the DuckDNS name at the new IP (Part D); Caddy gets a
+   certificate by itself. In GitHub, update the secrets `DEPLOY_HOST` and
+   `DEPLOY_KNOWN_HOSTS` (Part B step 3). From scratch, the old deploy key's private half is
+   only in GitHub, so do all of Part B again with a new key.
+6. **Deploy once from GitHub** with the current tag, to prove the path works.
+7. **Sign everyone out**, since the restored database still accepts old sessions. This
+   deletes logins only, not data:
+
+   ```sh
+   docker compose exec -T db sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "DELETE FROM sessions"'
+   ```
+
+8. **Destroy the old droplet** in DigitalOcean once the new one works, if it still exists,
+   so it can't come back up with stale data and the same name.
 
 ## Recovery scenarios
 

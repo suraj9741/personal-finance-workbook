@@ -326,6 +326,10 @@ scripts/deploy.sh sha-<previous>
 
 This loses anything entered after that deploy started.
 
+To restore an older dump for any other reason (entries deleted by mistake, wrong data), or if
+the server is lost, see the
+[restore guide, On the server](restore-guide.md#on-the-server-production).
+
 **Deploy by hand, if GitHub is down. deploy:** `cd ~/expense-tracker && scripts/deploy.sh sha-<commit>`
 
 **Look around. deploy**, in `~/expense-tracker`:

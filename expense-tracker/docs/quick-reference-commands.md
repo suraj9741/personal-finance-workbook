@@ -119,6 +119,23 @@ Freshness: `make backup-status` says "DUE" when no daily dump was taken in the l
 
 Full guide: [restore-guide.md](restore-guide.md).
 
+**On the server (production)**, as **deploy** in `~/expense-tracker`. **Destructive.** Full
+steps and checks: [restore guide, On the server](restore-guide.md#on-the-server-production).
+
+```sh
+ls -lt backups/expense-*.dump | head; scripts/backup.sh list-drive    # Safe: pick a dump
+mkdir -p backups/fetched && cp backups/<file>.dump backups/fetched/    # or: scripts/backup.sh fetch <file>.dump
+f=backups/fetched/<file>.dump
+crontab -l > ~/crontab.before-restore && crontab -r                   # pause the hourly backup
+docker compose stop backend frontend && scripts/backup.sh manual      # offline, then the undo point
+docker compose exec -T db sh -c 'psql -q -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public"'
+docker compose exec -T db sh -c 'pg_restore -U "$POSTGRES_USER" -d "$POSTGRES_DB" --no-owner --exit-on-error' < "$f"
+docker compose up -d --wait && docker compose ps -a
+crontab ~/crontab.before-restore && scripts/backup.sh manual
+```
+
+**On the Mac:**
+
 Prepare the target:
 
 ```sh
