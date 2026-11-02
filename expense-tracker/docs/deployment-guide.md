@@ -270,6 +270,79 @@ has none until a Linux schedule is added.
 Never start `docker-compose.deploy.yml` on the Mac. It uses the same project name, so it would
 replace the running containers there.
 
+### Deploy with GitHub Actions
+
+After the server is set up once (above, as the `deploy` user in `/home/deploy/expense-tracker`,
+with its first start done by hand), redeploys go through **Actions › Expense tracker deploy ›
+Run workflow** on `main`
+(`.github/workflows/expense-tracker-deploy.yml`). It runs only when started by hand:
+
+| Input | Meaning |
+| --- | --- |
+| `tag` | The image tag to deploy, e.g. `sha-9a7d13b`. Empty means the main commit the run started on |
+| `build` | Tick it to build and push that commit's images first (runs the images workflow) |
+
+The runner joins the tailnet for the length of the job, using Tailscale workload identity,
+so there is no long-lived Tailscale key. It then connects to the server over SSH through the
+tailnet, so port 22 can be closed to the internet. On the server it copies
+`docker-compose.deploy.yml`, `scripts/backup.sh` and `scripts/deploy.sh` from the commit, then
+runs `scripts/deploy.sh <tag>`, which:
+
+1. takes a backup (`scripts/backup.sh manual`; a failed Drive upload only warns),
+2. pulls the app images for the tag, and stops without changing anything if they don't exist,
+3. writes `IMAGE_TAG` to `.env` and runs `docker compose up -d --wait`, then checks nginx and the API,
+4. removes app images older than the previous tag.
+
+On failure it prints the logs and the command to roll back. There is no automatic rollback,
+because a migration may already have run ([section 18](#18-rollback-if-a-deploy-fails)). You
+can also run `scripts/deploy.sh <tag>` by hand on the server.
+
+**One-time setup (Your values):**
+
+1. Tailscale admin console › Access controls. Make two tags, let CI reach only the server's SSH
+   port, and keep your own devices' access:
+
+   ```json
+   "tagOwners": {"tag:ci": ["autogroup:admin"], "tag:prod": ["autogroup:admin"]},
+   "grants": [
+     {"src": ["autogroup:member"], "dst": ["*"], "ip": ["*"]},
+     {"src": ["tag:ci"], "dst": ["tag:prod"], "ip": ["tcp:22"]}
+   ]
+   ```
+
+2. Tailscale admin console › Settings › Trust credentials: add an OpenID Connect credential
+   for GitHub (issuer `https://token.actions.githubusercontent.com`), subject
+   `repo:suraj9741/personal-finance-workbook:ref:refs/heads/main`, scope Auth Keys (write) with
+   tag `tag:ci`. See [workload identity federation](https://tailscale.com/kb/1581/workload-identity-federation).
+3. On the server, as root: join the tailnet as `tag:prod` and create the `deploy` user:
+
+   ```sh
+   tailscale up --advertise-tags=tag:prod
+   adduser --disabled-password --gecos "" deploy && usermod -aG docker deploy
+   ```
+
+4. On the Mac, make a key that only GitHub uses, and pin the server's host key:
+
+   ```sh
+   ssh-keygen -t ed25519 -N "" -C github-deploy -f ~/.ssh/expense_deploy
+   ssh root@<server-tailscale-ip> "install -d -m 700 -o deploy -g deploy /home/deploy/.ssh && tee -a /home/deploy/.ssh/authorized_keys && chown deploy:deploy /home/deploy/.ssh/authorized_keys && chmod 600 /home/deploy/.ssh/authorized_keys" < ~/.ssh/expense_deploy.pub
+   ssh-keyscan -t ed25519 <server-tailscale-ip>      # the DEPLOY_KNOWN_HOSTS value
+   ```
+
+5. GitHub › Settings › Secrets and variables › Actions, as secrets:
+
+   | Secret | Value |
+   | --- | --- |
+   | `TS_OAUTH_CLIENT_ID`, `TS_AUDIENCE` | From the trust credential in step 2 |
+   | `DEPLOY_HOST` | The server's Tailscale IP (`tailscale ip -4` on the server) |
+   | `DEPLOY_USER` | `deploy` |
+   | `DEPLOY_SSH_KEY` | The whole of `~/.ssh/expense_deploy` (the private key). Then delete it from the Mac |
+   | `DEPLOY_KNOWN_HOSTS` | The line `ssh-keyscan` printed |
+
+6. Once `ssh root@<server-tailscale-ip>` works over the tailnet, remove the SSH rule from the
+   DigitalOcean firewall. If Tailscale ever breaks, DigitalOcean's Recovery Console still
+   reaches the server.
+
 ## 12. Database migrations and initialization
 
 Migrations run on their own as part of `make up`: the `migrate` container runs

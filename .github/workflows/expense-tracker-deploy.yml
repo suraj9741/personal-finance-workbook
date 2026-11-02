@@ -1,0 +1,131 @@
+name: Expense tracker deploy
+
+# Deploys the app to the server. Runs only when started by hand: Actions > Expense tracker
+# deploy > Run workflow, from main. The runner joins the tailnet for the length of the job
+# (Tailscale workload identity, no long-lived key) and runs scripts/deploy.sh on the server
+# over SSH, so the server needs no SSH port open to the internet.
+#
+# Needs, under Settings > Secrets and variables > Actions:
+#   variable DOCKERHUB_USERNAME (already used by the images workflow)
+#   secrets  TS_OAUTH_CLIENT_ID, TS_AUDIENCE    Tailscale trust credential (OpenID Connect)
+#            DEPLOY_HOST                        the server's Tailscale name or 100.x address
+#            DEPLOY_USER                        the SSH user on the server (deploy)
+#            DEPLOY_SSH_KEY                     that user's private key, used only by this workflow
+#            DEPLOY_KNOWN_HOSTS                 ssh-keyscan of DEPLOY_HOST, so the host is pinned
+# The server must already be set up once (docs/deployment-guide.md, "Deploy with GitHub Actions").
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Image tag to deploy, e.g. sha-9a7d13b. Empty = this commit of main"
+        required: false
+        default: ""
+      build:
+        description: "Build and push the images for this commit first"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  id-token: write # Tailscale workload identity: GitHub vouches for this run, no secret key
+
+# One deploy at a time; a second one waits.
+concurrency:
+  group: expense-tracker-deploy
+  cancel-in-progress: false
+
+jobs:
+  images:
+    if: inputs.build
+    uses: ./.github/workflows/expense-tracker-images-build.yml
+    secrets: inherit
+
+  deploy:
+    needs: images
+    if: ${{ !cancelled() && (needs.images.result == 'success' || needs.images.result == 'skipped') }}
+    runs-on: ubuntu-24.04
+    env:
+      NAMESPACE: ${{ vars.DOCKERHUB_USERNAME }}
+      DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+      DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+    steps:
+      - name: Check the branch, the tag and the settings
+        env:
+          INPUT_TAG: ${{ inputs.tag }}
+          HAS_SECRETS: ${{ secrets.TS_OAUTH_CLIENT_ID != '' && secrets.TS_AUDIENCE != '' && secrets.DEPLOY_HOST != '' && secrets.DEPLOY_USER != '' && secrets.DEPLOY_SSH_KEY != '' && secrets.DEPLOY_KNOWN_HOSTS != '' }}
+        run: |
+          if [ "$GITHUB_REF" != "refs/heads/main" ]; then
+            echo "::error::Run this from main. It was started on ${GITHUB_REF#refs/heads/}."
+            exit 1
+          fi
+          if [ -z "$NAMESPACE" ] || [ "$HAS_SECRETS" != "true" ]; then
+            echo "::error::Missing settings. Needs the variable DOCKERHUB_USERNAME and the secrets TS_OAUTH_CLIENT_ID, TS_AUDIENCE, DEPLOY_HOST, DEPLOY_USER, DEPLOY_SSH_KEY and DEPLOY_KNOWN_HOSTS."
+            exit 1
+          fi
+          tag="${INPUT_TAG:-sha-${GITHUB_SHA::7}}"
+          if ! [[ "$tag" =~ ^sha-[0-9a-f]{7}$ ]]; then
+            echo "::error::The tag must look like sha-9a7d13b (got: $tag)."
+            exit 1
+          fi
+          echo "TAG=$tag" >> "$GITHUB_ENV"
+
+      - name: Check the images exist on Docker Hub
+        run: |
+          for image in backend frontend; do
+            if ! docker manifest inspect "$NAMESPACE/expense-tracker-$image:$TAG" >/dev/null; then
+              echo "::error::$NAMESPACE/expense-tracker-$image:$TAG is not on Docker Hub. Run the images workflow for that commit, or tick \"build\"."
+              exit 1
+            fi
+          done
+
+      - uses: actions/checkout@v6
+
+      - name: Join the tailnet
+        uses: tailscale/github-action@v4
+        with:
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          audience: ${{ secrets.TS_AUDIENCE }}
+          tags: tag:ci
+          ping: ${{ secrets.DEPLOY_HOST }}
+
+      - name: SSH key and pinned host key
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          {
+            echo "Host server"
+            echo "  HostName $DEPLOY_HOST"
+            echo "  User $DEPLOY_USER"
+            echo "  IdentityFile ~/.ssh/deploy_key"
+            echo "  IdentitiesOnly yes"
+            echo "  StrictHostKeyChecking yes"
+            echo "  BatchMode yes"
+            echo "  ConnectTimeout 20"
+          } > ~/.ssh/config
+
+      # The server keeps its .env and data; it gets the compose file and scripts from this
+      # commit, so they never drift from the repo.
+      - name: Copy the compose file and scripts
+        working-directory: expense-tracker
+        run: |
+          ssh server 'mkdir -p expense-tracker/scripts'
+          scp docker-compose.deploy.yml server:expense-tracker/docker-compose.deploy.yml
+          scp scripts/backup.sh scripts/deploy.sh server:expense-tracker/scripts/
+
+      - name: Deploy
+        run: |
+          # shellcheck disable=SC2029  # $TAG is meant to expand here, on the runner
+          ssh server "chmod +x expense-tracker/scripts/*.sh && expense-tracker/scripts/deploy.sh $TAG"
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "### Deploy of \`$TAG\`: ${{ job.status }}"
+            echo "To roll back, run this workflow again with the previous tag (printed at the top of the Deploy step)."
+          } >> "$GITHUB_STEP_SUMMARY"
