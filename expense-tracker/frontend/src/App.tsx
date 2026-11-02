@@ -1,6 +1,6 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect } from "react";
-import { NavLink, Navigate, Outlet, Route, Routes, useLocation, useNavigate, useNavigationType } from "react-router-dom";
+import { Link, NavLink, Navigate, Outlet, Route, Routes, useLocation, useNavigate, useNavigationType } from "react-router-dom";
 import { post } from "./api";
 import { QuickAdd } from "./components/QuickAdd";
 import { ThemeSwitch } from "./components/ThemeSwitch";
@@ -49,10 +49,10 @@ function Shell() {
   return (
     <div className="app">
       <header className="topbar">
-        <span className="brand">
+        <Link to="/" className="brand">
           <Logo />
           Expense Tracker
-        </span>
+        </Link>
         <nav>
           <NavLink to="/" end>
             Dashboard

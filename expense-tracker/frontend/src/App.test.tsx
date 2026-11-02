@@ -57,6 +57,8 @@ it("shows the dashboard and quick-add bar when logged in", async () => {
   expect(screen.getByRole("form", { name: "Quick add" })).toBeTruthy();
   expect(await screen.findByText("2 entries have no category")).toBeTruthy();
   expect(screen.getByRole("link", { name: "Admin" })).toBeTruthy();
+  // The logo and app name in the top bar go back to the dashboard.
+  expect(screen.getByRole("link", { name: "Expense Tracker" }).getAttribute("href")).toBe("/");
 });
 
 it("asks a new household to add its first account", async () => {

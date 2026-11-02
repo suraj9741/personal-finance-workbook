@@ -245,7 +245,11 @@ details.card[open] > summary { margin-bottom: var(--space-3); }
   font-size: var(--text-headline-size);
   font-weight: var(--text-headline-weight);
   letter-spacing: var(--text-headline-tracking);
+  color: var(--color-text);
+  text-decoration: none;
+  border-radius: var(--radius-md);
 }
+.brand:focus-visible { outline: 2px solid var(--color-focus); outline-offset: 2px; }
 .logo { display: block; width: var(--logo-app-size); height: var(--logo-app-size); }
 .auth-logo { width: var(--logo-app-size-lg); height: var(--logo-app-size-lg); }
 .topbar nav { display: flex; gap: var(--space-1); flex: 1; flex-wrap: wrap; }
