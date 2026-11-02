@@ -277,20 +277,20 @@ replace the running containers there.
 ### Deploy with GitHub Actions
 
 After the server is set up once (above, as the `deploy` user in `/home/deploy/expense-tracker`,
-with its first start done by hand), redeploys go through **Actions › Expense tracker deploy ›
-Run workflow** on `main`
-(`.github/workflows/expense-tracker-deploy.yml`). It runs only when started by hand:
+with its first start done by hand), every deploy is **Actions › Expense tracker deploy ›
+Run workflow** on `main` (`.github/workflows/expense-tracker-deploy.yml`). It runs only when
+started by hand:
 
 | Input | Meaning |
 | --- | --- |
 | `tag` | The image tag to deploy, e.g. `sha-9a7d13b`. Empty means the main commit the run started on |
 | `build` | Tick it to build and push that commit's images first (runs the images workflow) |
 
-The runner joins the tailnet for the length of the job, using Tailscale workload identity,
-so there is no long-lived Tailscale key. It then connects to the server over SSH through the
-tailnet, so port 22 can be closed to the internet. On the server it copies
-`docker-compose.deploy.yml`, `scripts/backup.sh` and `scripts/deploy.sh` from the commit, then
-runs `scripts/deploy.sh <tag>`, which:
+The runner checks that the images exist on Docker Hub. It then connects over SSH to the
+server's public IP, using a deploy-only key and a pinned host key, and sends `deploy <tag>`. On
+the server, `authorized_keys` runs `scripts/deploy-gate.sh` for that key instead of a shell.
+The gate accepts only `deploy sha-<7 hex>`. It refreshes `docker-compose.deploy.yml`,
+`backup.sh` and `deploy.sh` from main, then runs `scripts/deploy.sh <tag>`, which:
 
 1. takes a backup (`scripts/backup.sh manual`; a failed Drive upload only warns),
 2. pulls the app images for the tag, and stops without changing anything if they don't exist,
@@ -301,51 +301,62 @@ On failure it prints the logs and the command to roll back. There is no automati
 because a migration may already have run ([section 18](#18-rollback-if-a-deploy-fails)). You
 can also run `scripts/deploy.sh <tag>` by hand on the server.
 
+**The trade-off.** GitHub's runners connect from addresses that change all the time, so port
+22 must accept connections from the whole internet. Four things protect it:
+
+- Password logins are off, so only keys work.
+- `fail2ban` bans addresses that keep failing.
+- The host key is pinned, so the runner can't be tricked into talking to another server.
+- The deploy key is locked to one command, with no shell, pty or forwarding.
+
+If the deploy key leaks, the worst it can do is redeploy an image that is already on Docker
+Hub. Your own login key still needs guarding.
+
 **One-time setup (Your values):**
 
-1. Tailscale admin console › Access controls. Make two tags, let CI reach only the server's SSH
-   port, and keep your own devices' access:
-
-   ```json
-   "tagOwners": {"tag:ci": ["autogroup:admin"], "tag:prod": ["autogroup:admin"]},
-   "grants": [
-     {"src": ["autogroup:member"], "dst": ["*"], "ip": ["*"]},
-     {"src": ["tag:ci"], "dst": ["tag:prod"], "ip": ["tcp:22"]}
-   ]
-   ```
-
-2. Tailscale admin console › Settings › Trust credentials: add an OpenID Connect credential
-   for GitHub (issuer `https://token.actions.githubusercontent.com`), subject
-   `repo:suraj9741/personal-finance-workbook:ref:refs/heads/main`, scope Auth Keys (write) with
-   tag `tag:ci`. See [workload identity federation](https://tailscale.com/kb/1581/workload-identity-federation).
-3. On the server, as root: join the tailnet as `tag:prod` and create the `deploy` user:
+1. On the server, as root, turn off password logins and install fail2ban:
 
    ```sh
-   tailscale up --advertise-tags=tag:prod
-   adduser --disabled-password --gecos "" deploy && usermod -aG docker deploy
+   printf 'PasswordAuthentication no\nKbdInteractiveAuthentication no\nPermitRootLogin prohibit-password\n' > /etc/ssh/sshd_config.d/10-keys-only.conf
+   sshd -t && systemctl reload ssh
+   apt-get install -y fail2ban
    ```
 
-4. On the Mac, make a key that only GitHub uses, and pin the server's host key:
+2. As root, put the gate script in place. The deploy key's forced command points at it:
+
+   ```sh
+   curl -fsSL -o /home/deploy/expense-tracker/scripts/deploy-gate.sh \
+     https://raw.githubusercontent.com/suraj9741/personal-finance-workbook/main/expense-tracker/scripts/deploy-gate.sh
+   chown deploy: /home/deploy/expense-tracker/scripts/deploy-gate.sh
+   chmod 755 /home/deploy/expense-tracker/scripts/deploy-gate.sh
+   ```
+
+3. On the Mac, make a key that only GitHub uses, and install it locked to the gate:
 
    ```sh
    ssh-keygen -t ed25519 -N "" -C github-deploy -f ~/.ssh/expense_deploy
-   ssh root@<server-tailscale-ip> "install -d -m 700 -o deploy -g deploy /home/deploy/.ssh && tee -a /home/deploy/.ssh/authorized_keys && chown deploy:deploy /home/deploy/.ssh/authorized_keys && chmod 600 /home/deploy/.ssh/authorized_keys" < ~/.ssh/expense_deploy.pub
-   ssh-keyscan -t ed25519 <server-tailscale-ip>      # the DEPLOY_KNOWN_HOSTS value
+   echo "command=\"/home/deploy/expense-tracker/scripts/deploy-gate.sh\",restrict $(cat ~/.ssh/expense_deploy.pub)" |
+     ssh root@<server-ip> "install -d -m 700 -o deploy -g deploy /home/deploy/.ssh && tee -a /home/deploy/.ssh/authorized_keys >/dev/null && chown deploy: /home/deploy/.ssh/authorized_keys && chmod 600 /home/deploy/.ssh/authorized_keys"
+   ssh -i ~/.ssh/expense_deploy deploy@<server-ip> whoami    # Safe: prints "This key can only run: deploy sha-..."
    ```
 
+4. Pin the host key. On the Mac, `ssh-keyscan -t ed25519 <server-ip>` prints the line to store.
+   Before you trust it, compare the two fingerprints:
+   `ssh-keyscan -t ed25519 <server-ip> | ssh-keygen -lf -` on the Mac, and
+   `ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub` as root on the server.
 5. GitHub › Settings › Secrets and variables › Actions, as secrets:
 
    | Secret | Value |
    | --- | --- |
-   | `TS_OAUTH_CLIENT_ID`, `TS_AUDIENCE` | From the trust credential in step 2 |
-   | `DEPLOY_HOST` | The server's Tailscale IP (`tailscale ip -4` on the server) |
+   | `DEPLOY_HOST` | The server's public IP |
    | `DEPLOY_USER` | `deploy` |
    | `DEPLOY_SSH_KEY` | The whole of `~/.ssh/expense_deploy` (the private key). Then delete it from the Mac |
-   | `DEPLOY_KNOWN_HOSTS` | The line `ssh-keyscan` printed |
+   | `DEPLOY_KNOWN_HOSTS` | The line `ssh-keyscan` printed in step 4 |
 
-6. Once `ssh root@<server-tailscale-ip>` works over the tailnet, remove the SSH rule from the
-   DigitalOcean firewall. If Tailscale ever breaks, DigitalOcean's Recovery Console still
-   reaches the server.
+6. The DigitalOcean firewall must allow TCP 22 from all addresses.
+
+Deploys don't refresh the gate script, because it would be replacing itself while running. If it
+changes in the repo, repeat step 2.
 
 ## 12. Database migrations and initialization
 
