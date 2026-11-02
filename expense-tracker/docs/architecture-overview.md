@@ -30,11 +30,8 @@ every day, encrypted, for Google Drive.
 
 ![Production architecture: the browser reaches Caddy on the DigitalOcean droplet over HTTPS (DuckDNS name, Let's Encrypt certificate), Caddy proxies to nginx, which serves the React app and proxies /api to FastAPI, which uses Postgres 16. GitHub Actions builds the images, pushes them to Docker Hub and deploys over SSH with a deploy-only key; the server pulls the images. An hourly cron job dumps the database and copies it, encrypted with rclone, to Google Drive.](diagrams/production-architecture.drawio.svg)
 
-Source: [diagrams/production-architecture.drawio](diagrams/production-architecture.drawio) (open
-it in draw.io to edit). The same picture is in
-[production-architecture.drawio.svg](diagrams/production-architecture.drawio.svg), which GitHub
-shows and draw.io also opens, and as a
-[PNG](diagrams/production-architecture.png) for sharing. After editing, export both again.
+Source: [diagrams/production-architecture.drawio.svg](diagrams/production-architecture.drawio.svg).
+It is the image and the editable diagram in one file: open it in draw.io, edit, and save.
 
 ```text
 browser ──HTTPS──► caddy (:80, :443) ──► frontend (nginx, 127.0.0.1:8080) ──/api──► backend (FastAPI) ──► db (Postgres 16)
@@ -315,7 +312,7 @@ image.
 
 | File | Shows |
 | --- | --- |
-| [production-architecture.drawio](diagrams/production-architecture.drawio) (also [.drawio.svg](diagrams/production-architecture.drawio.svg) and [.png](diagrams/production-architecture.png)) | The live setup: browser, DuckDNS, Let's Encrypt, the droplet and its firewall, Caddy, the Compose services, GitHub Actions, Docker Hub, the deploy path, and backups to Google Drive |
+| [production-architecture.drawio.svg](diagrams/production-architecture.drawio.svg) | The live setup: browser, DuckDNS, Let's Encrypt, the droplet and its firewall, Caddy, the Compose services, GitHub Actions, Docker Hub, the deploy path, and backups to Google Drive |
 | [system-architecture.drawio.svg](diagrams/system-architecture.drawio.svg) | The Mac setup (development): Docker Compose services, storage and build-time services |
 | [deployment-flow.drawio.svg](diagrams/deployment-flow.drawio.svg) | Change, CI, merge, and the manual deploy on the Mac |
 | [backup-restore-architecture.drawio.svg](diagrams/backup-restore-architecture.drawio.svg) | The backup script, its schedule, the encrypted Drive copy, and both restore paths (drawn for the Mac's launchd) |
