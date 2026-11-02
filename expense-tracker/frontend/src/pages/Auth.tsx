@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, type FormEvent } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { api, post } from "../api";
+import { Logo } from "../components/Logo";
 
 function useAfterLogin() {
   const client = useQueryClient();
@@ -31,6 +32,7 @@ export function Login() {
   return (
     <main className="auth">
       <form className="card" onSubmit={submit}>
+        <Logo className="auth-logo" full />
         <h1>Expense Tracker</h1>
         <label>
           Email
@@ -75,6 +77,7 @@ export function AcceptInvite() {
           accept.mutate();
         }}
       >
+        <Logo className="auth-logo" full />
         <h1>Join Expense Tracker</h1>
         {info.isError && <p className="error">{(info.error as Error).message}</p>}
         {info.data && (
