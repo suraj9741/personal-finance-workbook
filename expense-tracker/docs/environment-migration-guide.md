@@ -5,6 +5,8 @@ runs on now (the **old machine**, today a Mac) to a new one (the **new machine**
 or a Linux server). It reuses the [deployment guide](deployment-guide.md) for the install,
 and the [backup guide](backup-guide.md) and [restore guide](restore-guide.md) for the data.
 The commands alone are in the [quick reference](quick-reference-commands.md#5-migrate-to-a-new-server).
+To move between two servers that run the CI images (`docker-compose.deploy.yml`), follow
+[Move to another server](server-setup-guide.md#move-to-another-server) in the server setup guide instead.
 
 Commands run from `expense-tracker/` on the machine named in the step. Marks: **Safe**
 (read-only or repeatable), **Your values** (replace `<placeholders>`), **Destructive**

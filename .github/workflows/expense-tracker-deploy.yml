@@ -12,7 +12,7 @@ name: Expense tracker deploy
 #            DEPLOY_USER          the SSH user on the server (deploy)
 #            DEPLOY_SSH_KEY       the private half of the deploy-only key
 #            DEPLOY_KNOWN_HOSTS   the server's host key line (ssh-keyscan), so the host is pinned
-# The server must be set up once first (docs/deployment-guide.md, "Deploy with GitHub Actions").
+# The server must be set up once first: expense-tracker/docs/server-setup-guide.md, Parts A and B.
 on:
   workflow_dispatch:
     inputs:
