@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type CSSProperties, type InputHTMLAttributes } from "react";
 import { formatDay, readTypedDay, shiftDay, shiftMonth, today } from "../format";
 import { Icon } from "./Icon";
+import { visibleArea } from "../viewport";
 
 const WEEKDAYS = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"];
 const GAP_PX = 6;
@@ -26,6 +27,17 @@ interface Placement {
   x: number;
   y: number;
   up: boolean;
+}
+
+/** Under the field, or over it when there's more room there (counting the phone keyboard). */
+function place(input: HTMLElement): Placement {
+  const r = input.getBoundingClientRect();
+  const screen = visibleArea();
+  const up = screen.bottom - r.bottom < ROOM_PX && r.top - screen.top > screen.bottom - r.bottom;
+  // Kept on screen when the field sits near the right edge (a phone has its own rule in CSS).
+  const rem = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
+  const x = Math.max(rem, Math.min(r.left, window.innerWidth - WIDTH_REM * rem - rem));
+  return { x, y: up ? r.top - GAP_PX : r.bottom + GAP_PX, up };
 }
 
 type Props = Omit<InputHTMLAttributes<HTMLInputElement>, "type" | "value" | "onChange" | "min"> & {
@@ -59,30 +71,37 @@ export function DateInput({ value, onChange, min, required, className, onBlur, o
   function openCalendar() {
     const input = inputRef.current;
     if (!input || placement) return;
-    const r = input.getBoundingClientRect();
-    const up = window.innerHeight - r.bottom < ROOM_PX && r.top > window.innerHeight - r.bottom;
-    // Kept on screen when the field sits near the right edge (a phone has its own rule in CSS).
-    const rem = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
-    const x = Math.max(rem, Math.min(r.left, window.innerWidth - WIDTH_REM * rem - rem));
     setShown((readTypedDay(text) || value || now).slice(0, 7));
-    setPlacement({ x, y: up ? r.top - GAP_PX : r.bottom + GAP_PX, up });
+    setPlacement(place(input));
   }
 
   const close = () => setPlacement(null);
 
-  // Scrolling the page or resizing moves the field away from the calendar, so it closes.
+  // Scrolling, a resize or the phone keyboard opening moves the calendar along with the field;
+  // once the field is off screen it closes.
+  const open = !!placement;
   useEffect(() => {
-    if (!placement) return;
-    const moved = (e: Event) => {
-      if (!popRef.current?.contains(e.target as Node)) close();
+    if (!open) return;
+    const follow = (e: Event) => {
+      const input = inputRef.current;
+      if (!input || popRef.current?.contains(e.target as Node)) return;
+      const r = input.getBoundingClientRect();
+      const screen = visibleArea();
+      if (r.bottom < screen.top || r.top > screen.bottom) close();
+      else setPlacement(place(input));
     };
-    window.addEventListener("scroll", moved, true);
-    window.addEventListener("resize", close);
+    const vv = window.visualViewport;
+    window.addEventListener("scroll", follow, true);
+    window.addEventListener("resize", follow);
+    vv?.addEventListener("resize", follow);
+    vv?.addEventListener("scroll", follow);
     return () => {
-      window.removeEventListener("scroll", moved, true);
-      window.removeEventListener("resize", close);
+      window.removeEventListener("scroll", follow, true);
+      window.removeEventListener("resize", follow);
+      vv?.removeEventListener("resize", follow);
+      vv?.removeEventListener("scroll", follow);
     };
-  }, [placement]);
+  }, [open]);
 
   function typed(next: string) {
     setText(next);

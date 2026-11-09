@@ -85,6 +85,8 @@
 
   --text-callout-size: 0.9375rem;
   --text-callout-leading: 1.45;
+  /* Text typed into fields. Touch screens raise it to 16px (see below). */
+  --field-text-size: var(--text-callout-size);
 
   --text-footnote-size: 0.8125rem;
   --text-footnote-leading: 1.4;
@@ -187,6 +189,14 @@
   --pop-w: 0px;
   --pop-max-h: 0px;
 
+  /* ---- the part of the screen the on-screen keyboard leaves (viewport.ts) ---- */
+  /* While a popup is open these follow the keyboard; without one they cover the whole screen. */
+  --vv-top: 0px;
+  --vv-bottom: 0px;
+  --vv-height: 100dvh;
+  /* A popup's side padding; its pinned buttons reach out through it to the edges. */
+  --modal-pad-x: var(--space-6);
+
   /* ---- bank logos (AccountMark.tsx, assets/banks) ---- */
   /* White in both themes: the logos are drawn for a light background. */
   --color-logo-tile: #ffffff;
@@ -251,11 +261,12 @@
 :root[data-theme="light"] { color-scheme: light; }
 :root[data-theme="dark"] { color-scheme: dark; }
 
-/* Touch screens get 44px controls. */
+/* Touch screens get 44px controls, and 16px field text: Safari zooms in on any field below 16px. */
 @media (pointer: coarse) {
   :root {
     --control-h: 2.75rem;
     --control-h-sm: 2.25rem;
+    --field-text-size: max(var(--text-body-size), 16px);
   }
 }
 
@@ -271,6 +282,7 @@
   :root {
     --gutter: var(--space-4);
     --card-padding: var(--space-4);
+    --modal-pad-x: var(--space-4);
     --stack-gap: var(--space-4);
   }
 }

@@ -771,7 +771,7 @@ function Household({ isOwner, meId }: { isOwner: boolean; meId?: string }) {
               {remove.error.message}
             </p>
           )}
-          <div className="row">
+          <div className="row modal-actions">
             <button type="button" data-autofocus disabled={remove.isPending} onClick={() => setRemoving(null)}>
               Cancel
             </button>

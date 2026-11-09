@@ -100,6 +100,7 @@ input, select, textarea, button {
   border-radius: var(--radius-md);
   min-height: var(--control-h);
 }
+input, select, textarea { font-size: var(--field-text-size); }
 
 /* Filled fields: a soft grey box with no border; the blue edge and ring appear only while focused. */
 input, select, textarea {
@@ -897,8 +898,11 @@ td.transfer { color: var(--color-transfer); }
 .tx-form { display: grid; gap: var(--space-3); }
 .tx-form label { display: grid; gap: var(--space-1); font-size: var(--text-callout-size); color: var(--color-text-secondary); }
 .tx-form label > input, .tx-form label > select, .tx-form label > textarea { color: var(--color-text); }
-/* A native <dialog>: showModal() makes the page behind inert. Enter springs in from --modal-enter-scale. */
+/* A native <dialog>: showModal() makes the page behind inert. Enter springs in from --modal-enter-scale.
+   It sits in the part of the screen the keyboard leaves (--vv-*), so every field can scroll into view. */
 .modal {
+  top: var(--vv-top);
+  bottom: var(--vv-bottom);
   padding: 0;
   border: 0;
   color: var(--color-text);
@@ -909,9 +913,11 @@ td.transfer { color: var(--color-transfer); }
   box-shadow: var(--shadow-modal);
   width: min(var(--modal-width), calc(100% - 2 * var(--space-4)));
   max-width: none;
-  max-height: calc(100dvh - 2 * var(--space-4));
+  max-height: calc(var(--vv-height) - 2 * var(--space-4));
   overflow: auto;
   overscroll-behavior: contain;
+  /* A field scrolled into view stops above the pinned buttons. */
+  scroll-padding-block-end: calc(var(--control-h) + 2 * var(--space-2));
   transition:
     opacity var(--motion-fast) var(--motion-ease),
     transform var(--motion-spring-duration) var(--motion-spring);
@@ -926,7 +932,16 @@ td.transfer { color: var(--color-transfer); }
 }
 .modal[data-closing]::backdrop { opacity: 0; }
 html:has(.modal[open]) { overflow: hidden; }
-.modal-body { padding: var(--space-5) var(--space-6) var(--space-6); }
+.modal-body { padding: var(--space-5) var(--modal-pad-x) var(--space-6); }
+/* The buttons stay pinned to the bottom of a popup that scrolls, so Save is always in reach. */
+.modal .modal-actions {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+  margin-inline: calc(-1 * var(--modal-pad-x));
+  padding: var(--space-2) var(--modal-pad-x);
+  background: var(--color-surface-raised);
+}
 .modal header { display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--space-3); }
 .modal header h2 { margin: 0; font-size: var(--text-title-size); letter-spacing: var(--text-title-tracking); }
 .modal header button { min-width: var(--control-h-sm); min-height: var(--control-h-sm); padding: 0; border-radius: var(--radius-pill); }
@@ -951,7 +966,7 @@ html:has(.modal[open]) { overflow: hidden; }
 [aria-invalid="true"]:is(input, select, textarea) { border-color: var(--color-negative); }
 .fields { align-items: flex-end; }
 .field { display: grid; gap: var(--space-1); font-size: var(--text-footnote-size); color: var(--color-text-secondary); }
-.field > :is(input, select) { color: var(--color-text); font-size: var(--text-callout-size); }
+.field > :is(input, select) { color: var(--color-text); font-size: var(--field-text-size); }
 .inline-rename { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1) var(--space-2); min-width: 0; }
 .inline-rename input { flex: 1 1 var(--field-md); min-width: 0; max-width: var(--field-lg); }
 .unsaved-bar {
@@ -1635,14 +1650,14 @@ tfoot th { color: var(--color-text); font-weight: 600; border-top: 1px solid var
   .modal {
     width: 100%;
     margin: auto 0 0;
-    max-height: calc(100dvh - var(--space-8));
+    max-height: calc(var(--vv-height) - var(--space-8));
     border-radius: var(--radius-xl) var(--radius-xl) 0 0;
   }
   @starting-style {
     .modal[open] { opacity: 1; transform: translateY(var(--sheet-enter-y)); }
   }
   .modal[data-closing] { opacity: 1; transform: translateY(var(--sheet-enter-y)); }
-  .modal-body { padding: var(--space-2) var(--space-4) calc(var(--space-4) + env(safe-area-inset-bottom)); }
+  .modal-body { padding: var(--space-2) var(--modal-pad-x) calc(var(--space-4) + env(safe-area-inset-bottom)); }
   .sheet-grabber {
     display: block;
     width: var(--space-10);
