@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState, type CSSProperties, type KeyboardEvent } from "react";
 import { Icon, type IconName } from "./Icon";
+import { visibleArea } from "../viewport";
 
 export interface PickerItem {
   id: string;
@@ -49,8 +50,10 @@ function place(button: HTMLElement): Placement {
   const r = button.getBoundingClientRect();
   const rem = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
   const width = Math.min(Math.max(r.width, MIN_WIDTH_REM * rem), window.innerWidth - 2 * rem);
-  const below = window.innerHeight - r.bottom - GAP_PX;
-  const above = r.top - GAP_PX;
+  // The part of the screen the on-screen keyboard leaves, so the list never opens behind it.
+  const screen = visibleArea();
+  const below = screen.bottom - r.bottom - GAP_PX;
+  const above = r.top - screen.top - GAP_PX;
   const up = below < ROOM_PX && above > below;
   return {
     x: Math.max(rem, Math.min(r.left, window.innerWidth - width - rem)),
@@ -131,23 +134,33 @@ export function SearchPicker({ items, value, onChange, label, none, showGroup = 
     close(true);
   }
 
-  // While open: a press outside, a resize, or scrolling the page closes the list (as a native menu does).
+  // While open: a press outside closes the list. Scrolling, a resize or the phone keyboard
+  // opening or closing moves the list along with its button; once the button is off screen it closes.
   useEffect(() => {
     if (!open) return;
     const outside = (e: PointerEvent) => {
       if (!rootRef.current?.contains(e.target as Node)) setLeaving(true);
     };
-    const scrolled = (e: Event) => {
-      if (!listRef.current?.contains(e.target as Node)) setLeaving(true);
+    const follow = (e: Event) => {
+      const button = buttonRef.current;
+      if (!button || listRef.current?.contains(e.target as Node)) return;
+      const r = button.getBoundingClientRect();
+      const screen = visibleArea();
+      if (r.bottom < screen.top || r.top > screen.bottom) setLeaving(true);
+      else setPlacement(place(button));
     };
-    const resized = () => setLeaving(true);
+    const vv = window.visualViewport;
     document.addEventListener("pointerdown", outside);
-    window.addEventListener("scroll", scrolled, true);
-    window.addEventListener("resize", resized);
+    window.addEventListener("scroll", follow, true);
+    window.addEventListener("resize", follow);
+    vv?.addEventListener("resize", follow);
+    vv?.addEventListener("scroll", follow);
     return () => {
       document.removeEventListener("pointerdown", outside);
-      window.removeEventListener("scroll", scrolled, true);
-      window.removeEventListener("resize", resized);
+      window.removeEventListener("scroll", follow, true);
+      window.removeEventListener("resize", follow);
+      vv?.removeEventListener("resize", follow);
+      vv?.removeEventListener("scroll", follow);
     };
   }, [open]);
 

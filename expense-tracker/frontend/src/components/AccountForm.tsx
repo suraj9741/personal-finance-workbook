@@ -324,7 +324,7 @@ export function AccountForm({ existing, group: initialGroup = "bank", onDone, on
           {error}
         </p>
       )}
-      <div className="row wrap">
+      <div className="row wrap modal-actions">
         <button type="submit" className="primary" disabled={busy}>
           <BusyLabel busy={save.isPending} idle={existing ? "Save changes" : "Add account"} working={existing ? "Saving…" : "Adding…"} />
         </button>

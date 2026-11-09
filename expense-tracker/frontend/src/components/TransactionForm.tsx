@@ -274,7 +274,7 @@ export function TransactionForm({ existing, accountId, onDone }: Props) {
           {error}
         </p>
       )}
-      <div className="row">
+      <div className="row modal-actions">
         <button type="submit" className="primary" disabled={busy}>
           <BusyLabel busy={busy} idle={existing ? "Save changes" : "Add transaction"} working={existing ? "Saving…" : "Adding…"} />
         </button>

@@ -455,7 +455,7 @@ function TemplateSection() {
               {copy.error.message}
             </p>
           )}
-          <div className="row">
+          <div className="row modal-actions">
             <button type="button" data-autofocus disabled={copy.isPending} onClick={() => setConfirming(false)}>
               Cancel
             </button>

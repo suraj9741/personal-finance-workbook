@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useId, useMemo, useRef, type ReactNode } from "react";
 import { ModalContext, type ModalControls } from "./modal-context";
 import { Icon } from "./Icon";
+import { isTextField, trackVisibleViewport } from "../viewport";
 
 // Where focus goes when the opener is gone (for example, the row that was just deleted).
 const FALLBACK_FOCUS = "[data-return-focus]";
@@ -49,6 +50,22 @@ export function Modal({ title, onClose, children }: { title: string; onClose: ()
     return () => {
       const target = opener instanceof HTMLElement && opener.isConnected ? opener : document.querySelector<HTMLElement>(FALLBACK_FOCUS);
       target?.focus();
+    };
+  }, []);
+
+  // On a phone the popup shrinks to the space above the keyboard, and the field being typed in
+  // scrolls into view inside it (above the pinned buttons, see scroll-padding in styles.css).
+  useEffect(() => {
+    const dialog = ref.current!;
+    const reveal = () => {
+      const field = document.activeElement;
+      if (isTextField(field) && dialog.contains(field)) field.scrollIntoView?.({ block: "nearest" });
+    };
+    const stop = trackVisibleViewport(reveal);
+    dialog.addEventListener("focusin", reveal);
+    return () => {
+      stop();
+      dialog.removeEventListener("focusin", reveal);
     };
   }, []);
 
