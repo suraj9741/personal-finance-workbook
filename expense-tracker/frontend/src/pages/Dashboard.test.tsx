@@ -34,11 +34,13 @@ const OVERVIEW = {
 };
 
 // The Dashboard opens in Just me; most tests look at Household, so they switch to it first.
-function renderWith({ household = month("household"), me = month("me"), overview = OVERVIEW, overviewMe = overview, uncategorized = 0, scope = "household" }: { household?: object; me?: object; overview?: object; overviewMe?: object; uncategorized?: number; scope?: "household" | "me" } = {}) {
+function renderWith({ household = month("household"), me = month("me"), overview = OVERVIEW, overviewMe = overview, uncategorized = 0, scope = "household", user = [], members = [] }: { household?: object; me?: object; overview?: object; overviewMe?: object; uncategorized?: number; scope?: "household" | "me"; user?: object; members?: object[] } = {}) {
   vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
     const url = String(input);
     const body = url.includes("/stats/month") ? (url.includes("scope=me") ? me : household)
       : url.includes("/stats/overview") ? (url.includes("scope=me") ? overviewMe : overview)
+      : url.includes("/auth/me") ? user
+      : url.includes("/household/members") ? members
       : url.includes("/stats/attention") ? { month: "2026-10", uncategorized, over_budget: [], old_loans: [], no_income: false, credit_card_category_used: 0 }
       : [];
     return new Response(JSON.stringify(body), { status: 200 });
@@ -191,4 +193,82 @@ it("shows each card's statement by its own statement day, and what's unbilled", 
   const totals = row.closest("table")!.querySelector("tfoot")!;
   expect(cell(totals, "October statement")).toBe("₹1,449.00");
   expect(cell(totals, "Unbilled")).toBe("₹470.00");
+});
+
+it("splits the cards by whose they are, with a total for each person and the household", async () => {
+  vi.useFakeTimers({ toFake: ["Date"] });
+  vi.setSystemTime(new Date(2026, 9, 24, 12));
+  const base = OVERVIEW.accounts[0];
+  const card = (id: string, name: string, owner: string, limit: string, outstanding: string, available: string) => ({
+    ...base, balance: null, outstanding, available_credit: available, month_expenses: outstanding, month_transfers_in: "100",
+    statement_start: null, statement_end: null, statement_purchases: null, statement_payments: null, unbilled_since: null, unbilled: null,
+    account: { ...base.account, id, name, owner_user_id: owner, pay_type: "credit_card", credit_limit: limit, statement_day: null, due_day: null },
+  });
+  const accounts = [
+    { ...base, account: { ...base.account, owner_user_id: "u1" } },
+    card("c1", "ICICI", "u1", "100000", "4000", "96000"),
+    card("c2", "SBI", "u1", "50000", "1000", "49000"),
+    card("c3", "HDFC Indian oil", "u2", "25000", "25000", "0"),
+  ];
+  renderWith({
+    overview: { ...OVERVIEW, accounts, totals: { ...OVERVIEW.totals, card_outstanding: "30000", available_credit: "145000" } },
+    user: { id: "u1", email: "a@b", display_name: "Asha", is_site_admin: false, household_id: "h", household_name: "H", role: "owner" },
+    members: [{ user_id: "u1", display_name: "Asha" }, { user_id: "u2", display_name: "Sumit Jadhav" }],
+  });
+  const table = (await screen.findByRole("link", { name: "HDFC Indian oil" })).closest("table")!;
+  const groups = [...table.querySelectorAll("tbody")];
+  expect(groups.map((g) => g.querySelector(".overview-owner")!.textContent)).toEqual(["Your cards", "SSumitshared with you · view only"]);
+  const cell = (r: Element, label: string) => r.querySelector(`[data-label="${label}"]`)!.textContent;
+  const subtotal = (g: Element) => g.querySelector(".overview-subtotal")!;
+  expect(subtotal(groups[0]).firstElementChild!.textContent).toBe("Your total");
+  expect(cell(subtotal(groups[0]), "Credit limit")).toBe("₹1,50,000.00");
+  expect(cell(subtotal(groups[0]), "Outstanding")).toBe("₹5,000.00");
+  expect(cell(subtotal(groups[0]), "Available credit")).toBe("₹1,45,000.00");
+  expect(subtotal(groups[1]).firstElementChild!.textContent).toBe("Sumit's total");
+  expect(cell(subtotal(groups[1]), "Outstanding")).toBe("₹25,000.00");
+  // Under Sumit's heading his card needs no owner tag of its own.
+  expect(within(groups[1]).getByRole("link", { name: "HDFC Indian oil" }).parentElement!.querySelector(".owner-tag")).toBeNull();
+  const totals = table.querySelector("tfoot")!;
+  expect(totals.querySelector("th")!.textContent).toBe("Household total");
+  expect(cell(totals, "Credit limit")).toBe("₹1,75,000.00");
+  expect(cell(totals, "Outstanding")).toBe("₹30,000.00");
+});
+
+it("splits the brokers by whose they are; a person's value waits until all their brokers have one", async () => {
+  const base = OVERVIEW.accounts[0];
+  const broker = (id: string, name: string, owner: string, extra: object) => ({
+    ...base, balance: "1000", deposited: "60000", withdrawn: "0", invested: "50000", current_value: null, unrealized_pl: null,
+    realized_pl: null, realized_complete: true,
+    account: { ...base.account, id, name, owner_user_id: owner, pay_type: "share_broker", valued_on: null },
+    ...extra,
+  });
+  const accounts = [
+    { ...base, account: { ...base.account, owner_user_id: "u1" } },
+    broker("b1", "Zerodha", "u1", { current_value: "55000", unrealized_pl: "5000" }),
+    broker("b2", "Coin", "u1", { current_value: "52000", unrealized_pl: "2000", realized_pl: "300" }),
+    broker("b3", "Groww", "u2", {}),
+  ];
+  renderWith({
+    overview: { ...OVERVIEW, accounts, totals: { ...OVERVIEW.totals, broker_cash: "3000", invested: "150000", portfolio_value: null, brokers: 3, brokers_valued: 2 } },
+    user: { id: "u1", email: "a@b", display_name: "Asha", is_site_admin: false, household_id: "h", household_name: "H", role: "owner" },
+    members: [{ user_id: "u1", display_name: "Asha" }, { user_id: "u2", display_name: "Sumit" }],
+  });
+  const table = (await screen.findByRole("link", { name: "Groww" })).closest("table")!;
+  const groups = [...table.querySelectorAll("tbody")];
+  expect(groups.map((g) => g.querySelector(".overview-owner")!.textContent)).toEqual(["Your brokers", "SSumitshared with you · view only"]);
+  const cell = (r: Element, label: string) => r.querySelector(`[data-label="${label}"]`)!.textContent;
+  const mine = groups[0].querySelector(".overview-subtotal")!;
+  expect(cell(mine, "Deposited")).toBe("₹1,20,000.00");
+  expect(cell(mine, "Invested (cost)")).toBe("₹1,00,000.00");
+  expect(cell(mine, "Current value")).toBe("₹1,07,000.00");
+  expect(cell(mine, "Unrealized P/L")).toBe("+₹7,000.00");
+  expect(cell(mine, "Realized P/L")).toBe("+₹300.00");
+  const his = groups[1].querySelector(".overview-subtotal")!;
+  expect(his.firstElementChild!.textContent).toBe("Sumit's total");
+  expect(cell(his, "Current value")).toBe("—");
+  expect(cell(his, "Realized P/L")).toBe("—");
+  const totals = table.querySelector("tfoot")!;
+  expect(totals.querySelector("th")!.textContent).toBe("Household total");
+  expect(cell(totals, "Cash in account")).toBe("₹3,000.00");
+  expect(cell(totals, "Current value")).toBe("—");
 });
