@@ -84,6 +84,51 @@ function byOwner(rows: AccountFigures[], ownerOf: (r: AccountFigures) => string 
   return [...groups.entries()].sort(([a], [b]) => (a === "" ? -1 : b === "" ? 1 : a.localeCompare(b)));
 }
 
+/** The heading over one person's rows: "Your accounts", or the member's tag and that it's view only. */
+function OwnerHeading({ who, mine, colSpan }: { who: string; mine: string; colSpan: number }) {
+  return (
+    <tr className="overview-owner">
+      <th colSpan={colSpan} scope="rowgroup">
+        {who ? <OwnerTag name={who} /> : mine}
+        {who && <span className="muted">shared with you · view only</span>}
+      </th>
+    </tr>
+  );
+}
+
+/**
+ * A totals row for brokers: one person's (in a body row) or everyone's (in the footer, where the
+ * cash, invested and value figures come from the server's totals). Value is "—" until every active
+ * broker in the group has one, as for the portfolio.
+ */
+function BrokerTotals({ rows, label, footer = false, totals }: { rows: AccountFigures[]; label: string; footer?: boolean; totals?: Overview["totals"] }) {
+  const active = rows.filter((r) => r.account.is_active);
+  const cash = totals ? totals.broker_cash : sum(active, (r) => r.balance);
+  const invested = totals ? totals.invested : sum(active, (r) => r.invested);
+  const value = totals
+    ? totals.portfolio_value
+    : active.length > 0 && active.every((r) => r.current_value !== null) ? sum(active, (r) => r.current_value) : null;
+  const Cell = footer ? "th" : "td";
+  return (
+    <tr className={footer ? undefined : "overview-subtotal"}>
+      <Cell>{label}</Cell>
+      <Cell data-label="Deposited" className="num"><Amounts>{money(sum(rows, (r) => r.deposited))}</Amounts></Cell>
+      <Cell data-label="Withdrawn" className="num"><Amounts>{money(sum(rows, (r) => r.withdrawn))}</Amounts></Cell>
+      <Cell data-label="Cash in account" className="num"><Amounts>{money(cash)}</Amounts></Cell>
+      <Cell data-label="Invested (cost)" className="num"><Amounts>{money(invested)}</Amounts></Cell>
+      <Cell data-label="Current value" className="num"><Amounts>{value === null ? "—" : money(value)}</Amounts></Cell>
+      <Cell data-label="Unrealized P/L" className="num">
+        {value === null ? "—" : <Signed value={Number(value) - Number(invested)} />}
+      </Cell>
+      <Cell data-label="Realized P/L" className="num">
+        <Signed value={rows.every((r) => r.realized_pl === null) ? null : sum(rows, (r) => r.realized_pl)} />
+        {rows.some((r) => !r.realized_complete) && <small className="muted" title="Some sells have no cost entered"> (partial)</small>}
+      </Cell>
+      <Cell className="row-chevron" />
+    </tr>
+  );
+}
+
 /** Where all the money is: cards for totals, then a table per account type. */
 export function FinancialOverview({ month, scope = "household" }: { month: string; scope?: "household" | "me" }) {
   const overview = useOverview(month, scope);
@@ -111,8 +156,14 @@ export function FinancialOverview({ month, scope = "household" }: { month: strin
     ? bankOwners.map(([who, rows]) => `${who || "Yours"} ${money(activeSum(rows, (r) => r.balance))}`).join(" · ")
     : "Active bank and cash accounts";
   const cards = shown(data, "credit_card");
+  const cardOwners = byOwner(cards, ownerOf);
+  // Same as banks: a family member's shared cards get their own section and subtotal.
+  const splitCards = cardOwners.length > 1;
   const brokers = shown(data, "share_broker");
+  const brokerOwners = byOwner(brokers, ownerOf);
+  const splitBrokers = brokerOwners.length > 1;
   const current = month === currentMonth();
+  const cardColumns = current ? 9 : 8;
   const short = monthName(month).slice(0, 3);
   const [year, monthNumber] = month.split("-").map(Number);
   const lastDay = `${month}-${new Date(year, monthNumber, 0).getDate()}`;
@@ -177,14 +228,7 @@ export function FinancialOverview({ month, scope = "household" }: { month: strin
               </thead>
               {bankOwners.map(([who, rows]) => (
               <tbody key={who || "mine"}>
-                {split && (
-                  <tr className="overview-owner">
-                    <th colSpan={8} scope="rowgroup">
-                      {who ? <OwnerTag name={who} /> : "Your accounts"}
-                      {who && <span className="muted">shared with you · view only</span>}
-                    </th>
-                  </tr>
-                )}
+                {split && <OwnerHeading who={who} mine="Your accounts" colSpan={8} />}
                 {rows.map((r) => (
                   <tr key={r.account.id} className="link-row">
                     {/* Under a person's heading the name already says whose it is. */}
@@ -266,10 +310,13 @@ export function FinancialOverview({ month, scope = "household" }: { month: strin
                     <th className="row-chevron" />
                   </tr>
                 </thead>
-                <tbody>
-                  {cards.map((r) => (
+                {cardOwners.map(([who, rows]) => (
+                <tbody key={who || "mine"}>
+                  {splitCards && <OwnerHeading who={who} mine="Your cards" colSpan={cardColumns} />}
+                  {rows.map((r) => (
                     <tr key={r.account.id} className="link-row">
-                      <td><AccountLink row={r} owner={ownerOf(r)} /></td>
+                      {/* Under a person's heading the name already says whose it is. */}
+                      <td><AccountLink row={r} owner={splitCards ? undefined : ownerOf(r)} /></td>
                       <td data-label="Credit limit" className="num"><Amounts>{money(r.account.credit_limit)}</Amounts></td>
                       <td data-label="Outstanding" className="num"><Amounts>{money(r.outstanding)}</Amounts></td>
                       <td data-label="Available credit" className="num"><Amounts>{money(r.available_credit)}</Amounts></td>
@@ -290,11 +337,25 @@ export function FinancialOverview({ month, scope = "household" }: { month: strin
                       <Chevron />
                     </tr>
                   ))}
+                  {splitCards && (
+                    <tr className="overview-subtotal">
+                      <td>{who ? `${who}'s total` : "Your total"}</td>
+                      <td data-label="Credit limit" className="num"><Amounts>{money(activeSum(rows, (r) => r.account.credit_limit))}</Amounts></td>
+                      <td data-label="Outstanding" className="num"><Amounts>{money(activeSum(rows, (r) => r.outstanding))}</Amounts></td>
+                      <td data-label="Available credit" className="num"><Amounts>{money(activeSum(rows, (r) => r.available_credit))}</Amounts></td>
+                      <td data-label={`${monthName(month)} statement`} className="num"><Amounts>{money(sum(rows, statementOf))}</Amounts></td>
+                      <td data-label="Payments" className="num"><Amounts>{money(sum(rows, paymentsOf))}</Amounts></td>
+                      {current && <td data-label="Unbilled" className="num"><Amounts>{money(sum(rows, (r) => r.unbilled))}</Amounts></td>}
+                      <td />
+                      <td className="row-chevron" />
+                    </tr>
+                  )}
                 </tbody>
+                ))}
                 <tfoot>
                   <tr>
-                    <th>Total</th>
-                    <th />
+                    <th>{splitCards ? "Household total" : "Total"}</th>
+                    <th data-label="Credit limit" className="num"><Amounts>{money(activeSum(cards, (r) => r.account.credit_limit))}</Amounts></th>
                     <th data-label="Outstanding" className="num"><Amounts>{money(t.card_outstanding)}</Amounts></th>
                     <th data-label="Available credit" className="num"><Amounts>{money(t.available_credit)}</Amounts></th>
                     <th data-label={`${monthName(month)} statement`} className="num"><Amounts>{money(sum(cards, statementOf))}</Amounts></th>
@@ -339,10 +400,13 @@ export function FinancialOverview({ month, scope = "household" }: { month: strin
                     <th className="row-chevron" />
                   </tr>
                 </thead>
-                <tbody>
-                  {brokers.map((r) => (
+                {brokerOwners.map(([who, rows]) => (
+                <tbody key={who || "mine"}>
+                  {splitBrokers && <OwnerHeading who={who} mine="Your brokers" colSpan={9} />}
+                  {rows.map((r) => (
                     <tr key={r.account.id} className="link-row">
-                      <td><AccountLink row={r} owner={ownerOf(r)} /></td>
+                      {/* Under a person's heading the name already says whose it is. */}
+                      <td><AccountLink row={r} owner={splitBrokers ? undefined : ownerOf(r)} /></td>
                       <td data-label="Deposited" className="num"><Amounts>{money(r.deposited)}</Amounts></td>
                       <td data-label="Withdrawn" className="num"><Amounts>{money(r.withdrawn)}</Amounts></td>
                       <td data-label="Cash in account" className="num"><Amounts>{money(r.balance)}</Amounts></td>
@@ -359,21 +423,11 @@ export function FinancialOverview({ month, scope = "household" }: { month: strin
                       <Chevron />
                     </tr>
                   ))}
+                  {splitBrokers && <BrokerTotals rows={rows} label={who ? `${who}'s total` : "Your total"} />}
                 </tbody>
+                ))}
                 <tfoot>
-                  <tr>
-                    <th>Total</th>
-                    <th />
-                    <th />
-                    <th data-label="Cash in account" className="num"><Amounts>{money(t.broker_cash)}</Amounts></th>
-                    <th data-label="Invested (cost)" className="num"><Amounts>{money(t.invested)}</Amounts></th>
-                    <th data-label="Current value" className="num"><Amounts>{t.portfolio_value === null ? "—" : money(t.portfolio_value)}</Amounts></th>
-                    <th data-label="Unrealized P/L" className="num">
-                      {t.portfolio_value === null ? "—" : <Signed value={Number(t.portfolio_value) - Number(t.invested)} />}
-                    </th>
-                    <th />
-                    <th className="row-chevron" />
-                  </tr>
+                  <BrokerTotals rows={brokers} label={splitBrokers ? "Household total" : "Total"} footer totals={t} />
                 </tfoot>
               </table>
             </div>
