@@ -47,11 +47,15 @@ interface Props {
   existing?: Transaction;
   /** For a new entry: start on this account (from an account's page). */
   accountId?: string;
+  /** For a new entry: fields to start with, such as a statement adjustment. */
+  prefill?: Partial<TransactionInput>;
+  /** Keeps a prefilled entry's draft apart from the account's usual new-entry draft. */
+  draftName?: string;
   onDone: () => void;
 }
 
 /** Every field: type, account (type first), transfers, lending (person), notes. Add or edit. */
-export function TransactionForm({ existing, accountId, onDone }: Props) {
+export function TransactionForm({ existing, accountId, prefill, draftName, onDone }: Props) {
   const allAccounts = useAccounts(true).data ?? [];
   const own = new Set(useOwnAccounts(allAccounts).map((a) => a.id));
   // Your own active accounts, plus the ones this entry already uses so editing doesn't lose
@@ -61,7 +65,7 @@ export function TransactionForm({ existing, accountId, onDone }: Props) {
   const categories = useCategories().data ?? [];
   const refresh = useRefreshMoney();
   // What you typed last time comes back: per entry when editing, per account page when adding.
-  const draftKey = existing ? `tx:${existing.id}` : `tx:new${accountId ? `:${accountId}` : ""}`;
+  const draftKey = existing ? `tx:${existing.id}` : `tx:${draftName ?? "new"}${accountId ? `:${accountId}` : ""}`;
   const { base, restored } = useDraft<TransactionInput>(draftKey, {
     date: existing?.date ?? today(),
     amount: existing?.amount ?? "",
@@ -74,6 +78,7 @@ export function TransactionForm({ existing, accountId, onDone }: Props) {
     posted_on: existing?.posted_on ?? "",
     counterparty: existing?.counterparty ?? "",
     notes: existing?.notes ?? "",
+    ...(existing ? {} : prefill),
   }, !!existing);
   const [form, setForm] = useState<TransactionInput>(() => restored ?? (JSON.parse(base) as TransactionInput));
   const [showRestored, setShowRestored] = useState(restored !== null);

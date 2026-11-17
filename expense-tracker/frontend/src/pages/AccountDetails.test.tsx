@@ -35,9 +35,14 @@ const ITEMS = [tx("Card bill", "2026-10-05", "transfer", "21000.00", { account_i
 function setup(path: string, { summary = figures as object, items = ITEMS as object[], accounts = [BANK, CARD] as object[] } = {}) {
   const lists: URLSearchParams[] = [];
   const patches: { url: string; body: unknown }[] = [];
+  const writes: { method: string; url: string; body: unknown }[] = [];
   vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
     const url = String(input);
     const search = new URL(url, "http://x").searchParams;
+    if (init?.method === "PUT" || init?.method === "DELETE") {
+      writes.push({ method: init.method, url, body: init.body ? JSON.parse(String(init.body)) : null });
+      return init.method === "PUT" ? new Response(JSON.stringify({}), { status: 200 }) : new Response(null, { status: 204 });
+    }
     if (init?.method === "PATCH") {
       patches.push({ url, body: JSON.parse(String(init.body)) });
       return new Response(JSON.stringify(items[0]), { status: 200 });
@@ -61,7 +66,7 @@ function setup(path: string, { summary = figures as object, items = ITEMS as obj
     </QueryClientProvider>,
   );
   const lastList = () => lists[lists.length - 1];
-  return Object.assign(lastList, { patches });
+  return Object.assign(lastList, { patches, writes });
 }
 
 it("shows where you are, the card's one large number and its month, signed", async () => {
@@ -155,4 +160,66 @@ it("shows a card's statement, where each bill closes, and moves a late entry to 
   fireEvent.click(within(petrol).getByRole("button", { name: "Undo" }));
   await waitFor(() => expect(patches).toHaveLength(2));
   expect(patches[1].body).toEqual({ posted_on: null });
+});
+
+it("checks a card statement against the bank's total and offers the adjustment", async () => {
+  vi.useFakeTimers({ toFake: ["Date"] });
+  vi.setSystemTime(new Date(2026, 10, 17, 12));
+  const card = account("a6", "Yes Bank", "credit_card", { statement_day: 14 });
+  const bill = {
+    ...figures, account: card, statement_start: "2026-10-15", statement_end: "2026-11-14", statement_purchases: "18409.27",
+    statement_refunds: "0", statement_payments: "16963.04", statement_credits: "0", unbilled_since: "2026-11-15", unbilled: "0",
+    statement_opening: "16963.04", statement_closing: "18409.27", statement_amount_due: null, statement_difference: null,
+  };
+  const { writes } = setup("/accounts/a6?month=2026-11", { summary: bill, items: [], accounts: [BANK, card] });
+  expect(await screen.findByRole("heading", { name: "Check against the bank" })).toBeTruthy();
+  expect(screen.getByText("Previous balance").nextSibling?.textContent).toBe("₹16,963.04");
+  expect(screen.getByText("Owed on 14 Oct")).toBeTruthy();
+  expect(screen.getByText("App's balance").nextSibling?.textContent).toBe("₹18,409.27");
+  expect(screen.getByText(/Type the “Total amount due” from the bank's November statement/)).toBeTruthy();
+  const field = screen.getByLabelText("Bank's total due");
+  fireEvent.change(field, { target: { value: "₹18,419.83" } });
+  fireEvent.click(screen.getByRole("button", { name: "Save" }));
+  await waitFor(() => expect(writes).toHaveLength(1));
+  expect(writes[0]).toMatchObject({ method: "PUT", body: { amount_due: "18419.83" } });
+  expect(writes[0].url).toContain("/accounts/a6/statements/2026-11-14");
+});
+
+it("says what a difference means and starts the adjustment entry", async () => {
+  vi.useFakeTimers({ toFake: ["Date"] });
+  vi.setSystemTime(new Date(2026, 10, 17, 12));
+  const card = account("a6", "Yes Bank", "credit_card", { statement_day: 14 });
+  const bill = {
+    ...figures, account: card, statement_start: "2026-10-15", statement_end: "2026-11-14", statement_purchases: "18409.27",
+    statement_refunds: "0", statement_payments: "16963.04", statement_credits: "0", unbilled_since: "2026-11-15", unbilled: "0",
+    statement_opening: "16963.04", statement_closing: "18409.27", statement_amount_due: "18419.83", statement_difference: "10.56",
+  };
+  const { writes } = setup("/accounts/a6?month=2026-11", { summary: bill, items: [], accounts: [BANK, card] });
+  expect(await screen.findByText(amountText("The bank asks ₹10.56 more."))).toBeTruthy();
+  expect(screen.getByText("Difference").nextSibling?.textContent).toBe("+₹10.56");
+  const field = screen.getByLabelText("Bank's total due") as HTMLInputElement;
+  expect(field.value).toBe("18419.83");
+  // Emptying the field and saving forgets the total.
+  fireEvent.change(field, { target: { value: "" } });
+  fireEvent.click(screen.getByRole("button", { name: "Clear" }));
+  await waitFor(() => expect(writes).toHaveLength(1));
+  expect(writes[0].method).toBe("DELETE");
+  fireEvent.click(screen.getByRole("button", { name: amountText("Add ₹10.56 charge") }));
+  const dialog = await screen.findByRole("dialog", { name: "Add statement adjustment" });
+  expect((within(dialog).getByLabelText(/^Amount/) as HTMLInputElement).value).toBe("10.56");
+  expect((within(dialog).getByLabelText("Description") as HTMLInputElement).value).toBe("November statement adjustment");
+});
+
+it("waits for a statement that hasn't closed", async () => {
+  vi.useFakeTimers({ toFake: ["Date"] });
+  vi.setSystemTime(new Date(2026, 10, 17, 12));
+  const card = account("a6", "Yes Bank", "credit_card", { statement_day: 14 });
+  const bill = {
+    ...figures, account: card, statement_start: "2026-11-15", statement_end: "2026-12-14", statement_purchases: "799.00",
+    statement_refunds: "0", statement_payments: "0", statement_credits: "0", unbilled_since: "2026-11-15", unbilled: "799.00",
+    statement_opening: "18419.83", statement_closing: "19218.83", statement_amount_due: null, statement_difference: null,
+  };
+  setup("/accounts/a6?month=2026-12", { summary: bill, items: [], accounts: [BANK, card] });
+  expect(await screen.findByText("The December statement closes on 14 Dec. Type the bank's total once it's out.")).toBeTruthy();
+  expect(screen.queryByLabelText("Bank's total due")).toBeNull();
 });

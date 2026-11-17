@@ -240,6 +240,18 @@ class AccountOut(Orm):
     is_active: bool
 
 
+class StatementTotalIn(BaseModel):
+    """The bank's "Total amount due". Below 0 when the card is in credit."""
+
+    amount_due: Money
+
+
+class StatementTotalOut(Orm):
+    account_id: uuid.UUID
+    statement_end: date
+    amount_due: Decimal
+
+
 class ValuationOut(Orm):
     valued_on: date
     value: Decimal
@@ -621,6 +633,15 @@ class AccountFigures(BaseModel):
     # Purchases less refunds since the last statement that closed before today.
     unbilled_since: date | None = None
     unbilled: Decimal | None = None
+    # The same statement as a balance: what was owed the day before it opened and on its
+    # statement day, entries counted by posted date. Null when the card opened after the
+    # statement day. statement_amount_due is the bank's "Total amount due" the user typed,
+    # null until they do; statement_difference is that less statement_closing, so a positive
+    # difference means the bank asks for more than the app knows about.
+    statement_opening: Decimal | None = None
+    statement_closing: Decimal | None = None
+    statement_amount_due: Decimal | None = None
+    statement_difference: Decimal | None = None
 
 
 class OverviewTotals(BaseModel):

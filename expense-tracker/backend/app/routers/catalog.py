@@ -1,7 +1,7 @@
 """Categories, accounts and auto-categorization rules for the current household."""
 
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import exists, func, or_, select
@@ -9,9 +9,17 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.balances import statement_close
 from app.db import get_db
 from app.deps import Ctx, get_ctx, not_found, require_owner
-from app.models import Account, AccountValuation, Category, CategoryRule, Transaction
+from app.models import (
+    Account,
+    AccountValuation,
+    CardStatement,
+    Category,
+    CategoryRule,
+    Transaction,
+)
 from app.schemas import (
     AccountIn,
     AccountOut,
@@ -24,6 +32,8 @@ from app.schemas import (
     RuleIn,
     RuleOut,
     RulePatchIn,
+    StatementTotalIn,
+    StatementTotalOut,
     ValuationOut,
 )
 from app.services import CATEGORY_ORDER, family_group_names
@@ -313,6 +323,68 @@ def delete_account(
         raise conflict("Account has transactions. Deactivate it instead.")
     db.delete(account)
     db.commit()
+
+
+def get_statement_card(
+    db: Session, ctx: Ctx, account_id: uuid.UUID, statement_end: date
+) -> Account:
+    """A card of yours with a statement day, and statement_end one of its statement dates that
+    has already come."""
+    account = get_account(db, ctx, account_id)
+    if not can_manage(ctx, account):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "You can't change this account")
+    if account.pay_type != "credit_card" or account.statement_day is None:
+        raise HTTPException(422, "Only a credit card with a statement day has statements")
+    if statement_end != statement_close(
+        account.statement_day, statement_end.year, statement_end.month
+    ):
+        raise HTTPException(422, "That isn't one of this card's statement dates")
+    if statement_end > datetime.now(UTC).date():
+        raise HTTPException(422, "That statement isn't out yet")
+    return account
+
+
+@router.put("/accounts/{account_id}/statements/{statement_end}", response_model=StatementTotalOut)
+def set_statement_total(
+    account_id: uuid.UUID,
+    statement_end: date,
+    body: StatementTotalIn,
+    ctx: Ctx = Depends(get_ctx),
+    db: Session = Depends(get_db),
+) -> CardStatement:
+    """Keep the bank's "Total amount due" for one statement. Typing it again replaces it."""
+    account = get_statement_card(db, ctx, account_id, statement_end)
+    row = db.scalar(
+        select(CardStatement).where(
+            CardStatement.account_id == account.id, CardStatement.statement_end == statement_end
+        )
+    )
+    if row is None:
+        row = CardStatement(account_id=account.id, statement_end=statement_end)
+        db.add(row)
+    row.amount_due = body.amount_due
+    db.commit()
+    return row
+
+
+@router.delete(
+    "/accounts/{account_id}/statements/{statement_end}", status_code=status.HTTP_204_NO_CONTENT
+)
+def clear_statement_total(
+    account_id: uuid.UUID,
+    statement_end: date,
+    ctx: Ctx = Depends(get_ctx),
+    db: Session = Depends(get_db),
+) -> None:
+    account = get_statement_card(db, ctx, account_id, statement_end)
+    row = db.scalar(
+        select(CardStatement).where(
+            CardStatement.account_id == account.id, CardStatement.statement_end == statement_end
+        )
+    )
+    if row is not None:
+        db.delete(row)
+        db.commit()
 
 
 # ---- rules ----------------------------------------------------------------------------

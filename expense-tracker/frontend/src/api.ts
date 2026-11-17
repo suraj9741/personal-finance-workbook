@@ -232,6 +232,12 @@ export interface AccountFigures {
   /** Purchases less refunds since the last statement that closed before today. */
   unbilled_since: string | null;
   unbilled: string | null;
+  /** The same statement as a balance: owed the day before it opened, and on its statement day. */
+  statement_opening: string | null;
+  statement_closing: string | null;
+  /** The bank's "Total amount due" you typed, and that less statement_closing (+ = bank asks more). */
+  statement_amount_due: string | null;
+  statement_difference: string | null;
 }
 export interface Overview {
   month: string;
