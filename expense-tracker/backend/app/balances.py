@@ -21,7 +21,10 @@ before the month and up to its last day, so start + the month's flows = end.
 
 A card with a statement day also gets statement figures: the statement that closes in the
 month runs from the day after the previous statement day to the statement day itself, and an
-entry lands on it by its posted date when it has one, else its purchase date.
+entry lands on it by its posted date when it has one, else its purchase date. Its opening and
+closing balances are the card's outstanding the day before it opens and on its statement day,
+counted the same way, so they line up with the bank's "Previous balance" and "Total amount
+due". The user can type that total; the difference points at a missing or wrong entry.
 """
 
 import calendar
@@ -34,12 +37,14 @@ from decimal import Decimal
 from sqlalchemy import ColumnElement, func, or_, select, true
 from sqlalchemy.orm import Session, aliased
 
-from app.models import Account, Transaction
+from app.models import Account, CardStatement, Transaction
 from app.schemas import AccountFigures, AccountOut, OverviewTotals
 
 ZERO = Decimal("0")
 OUT_TYPES = ("expense", "buy", "transfer")
 IN_TYPES = ("income", "refund", "sell")
+# The day an entry lands on a card statement: its posted date when it has one.
+lands_on: ColumnElement[date] = func.coalesce(Transaction.posted_on, Transaction.date)
 
 
 @dataclass
@@ -166,15 +171,14 @@ def _statements(
     if not result:
         return result
     first = min(min(s.start, s.since) for s in result.values())
-    lands: ColumnElement[date] = func.coalesce(Transaction.posted_on, Transaction.date)
     rows = db.execute(
-        select(Transaction.account_id, Transaction.type, lands, func.sum(Transaction.amount))
+        select(Transaction.account_id, Transaction.type, lands_on, func.sum(Transaction.amount))
         .where(
             Transaction.account_id.in_(result),
             Transaction.type.in_(("expense", "refund", "income")),
-            lands >= first,
+            lands_on >= first,
         )
-        .group_by(Transaction.account_id, Transaction.type, lands)
+        .group_by(Transaction.account_id, Transaction.type, lands_on)
     )
     for account_id, kind, day, amount in rows:
         s = result[account_id]
@@ -200,6 +204,46 @@ def _statements(
     return result
 
 
+Owed = dict[uuid.UUID, Decimal]
+
+
+def _owed_through(db: Session, cards: list[Account], day_of: dict[uuid.UUID, date]) -> Owed:
+    """Each card's outstanding at the end of its own day in day_of, entries counted on the
+    day they land on a statement. The opening balance is what was owed as the opening date
+    began, so it is the answer for the day before; cards opened later than that are left out."""
+    owed: Owed = {}
+    by_day: dict[date, list[Account]] = defaultdict(list)
+    for card in cards:
+        day = day_of[card.id]
+        if card.opening_date is None or card.opening_date <= day + timedelta(days=1):
+            by_day[day].append(card)
+    for day, group in by_day.items():
+        flows = _flows(db, [c.id for c in group], lands_on <= day, since_opening=True)
+        for card in group:
+            owed[card.id] = card.opening_balance - flows[card.id].net()
+    return owed
+
+
+def _statement_balances(
+    db: Session, cards: list[Account], statements: dict[uuid.UUID, Statement]
+) -> tuple[Owed, Owed, Owed]:
+    """Opening and closing balance of each card's statement, and the total the user typed."""
+    with_bill = [c for c in cards if c.id in statements]
+    if not with_bill:
+        return {}, {}, {}
+    opening = _owed_through(
+        db, with_bill, {c.id: statements[c.id].start - timedelta(days=1) for c in with_bill}
+    )
+    closing = _owed_through(db, with_bill, {c.id: statements[c.id].end for c in with_bill})
+    typed = db.execute(
+        select(
+            CardStatement.account_id, CardStatement.statement_end, CardStatement.amount_due
+        ).where(CardStatement.account_id.in_([c.id for c in with_bill]))
+    )
+    due = {aid: amount for aid, end, amount in typed if statements[aid].end == end}
+    return opening, closing, due
+
+
 def figures(
     db: Session, accounts: list[Account], month_start: date, month_end: date, today: date
 ) -> list[AccountFigures]:
@@ -216,6 +260,7 @@ def figures(
     )
     cards = [a for a in accounts if a.pay_type == "credit_card"]
     statements = _statements(db, cards, month_start, today)
+    bill_open, bill_close, bill_due = _statement_balances(db, cards, statements)
     result = []
     for account in accounts:
         f, m = all_time[account.id], month[account.id]
@@ -245,6 +290,7 @@ def figures(
                 realized = f.sell_with_cost - f.sell_cost
             realized_complete = f.sell_with_cost == sells
         st = statements.get(account.id)
+        closing, due = bill_close.get(account.id), bill_due.get(account.id)
         result.append(
             AccountFigures(
                 account=AccountOut.model_validate(account),
@@ -278,6 +324,12 @@ def figures(
                 statement_credits=st.credits if st else None,
                 unbilled_since=st.since if st else None,
                 unbilled=st.unbilled if st else None,
+                statement_opening=bill_open.get(account.id),
+                statement_closing=closing,
+                statement_amount_due=due,
+                statement_difference=due - closing
+                if due is not None and closing is not None
+                else None,
             )
         )
     return result

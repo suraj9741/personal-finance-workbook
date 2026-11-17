@@ -1818,3 +1818,14 @@ input.switch:focus-visible { outline: 2px solid var(--color-focus); outline-offs
 .overview-subtotal td { color: var(--color-text-secondary); font-weight: 500; }
 .account-group-figure { display: grid; justify-items: end; gap: var(--space-0); text-align: right; }
 .admin-email .rename-name { color: var(--color-text-secondary); font-size: var(--text-footnote-size); }
+
+/* Card statement check: the bank's total next to the app's closing balance. */
+.stmt-check { margin-top: var(--space-4); display: grid; gap: var(--space-4); }
+.stmt-title { margin: 0; font-size: var(--text-headline-size); font-weight: 600; }
+.stmt-figures { padding: 0; box-shadow: none; background: none; }
+.stmt-form { display: flex; gap: var(--space-2); align-items: center; }
+.stmt-input { max-width: 12rem; }
+.stmt-input input { font-weight: 600; }
+.stmt-check > p, .stmt-verdict { margin: 0; }
+.stmt-verdict-row { display: flex; flex-wrap: wrap; gap: var(--space-3); align-items: center; justify-content: space-between; border-top: 1px solid var(--color-separator); padding-top: var(--space-3); }
+.stmt-check > .stmt-verdict, .stmt-check > p { border-top: 1px solid var(--color-separator); padding-top: var(--space-3); }

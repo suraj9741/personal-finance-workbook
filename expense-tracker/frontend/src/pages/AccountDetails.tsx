@@ -1,8 +1,8 @@
 import { Amounts } from "../components/Amounts";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Fragment, useState, type ReactNode } from "react";
+import { Fragment, useState, type FormEvent, type ReactNode } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { api, ApiError, patch, type Account, type AccountFigures, type Transaction } from "../api";
+import { api, ApiError, del, patch, put, type Account, type AccountFigures, type Transaction, type TransactionInput } from "../api";
 import { AccountForm } from "../components/AccountForm";
 import { AccountMark } from "../components/AccountMark";
 import { Meter } from "../components/Meter";
@@ -84,6 +84,8 @@ export function AccountDetails() {
   const [filters, setFilters] = useState(NO_FILTERS);
   const [limit, setLimit] = useState(PAGE);
   const [editing, setEditing] = useState<"account" | "value" | "new" | Transaction | null>(null);
+  // A statement adjustment: a new entry that starts filled in with the difference.
+  const [adjusting, setAdjusting] = useState<Partial<TransactionInput> | null>(null);
   const { hidden } = useToasts();
   const navigate = useNavigate();
 
@@ -232,6 +234,9 @@ export function AccountDetails() {
         <MonthPicker month={month} onChange={setMonth} />
       </div>
       <MonthFigures s={s} group={group} current={month === currentMonth()} />
+      {group === "credit_card" && s.statement_end && s.statement_closing !== null && (
+        <StatementCheck key={`${account.id}:${s.statement_end}`} s={s} canManage={canManage && account.is_active} onAdjust={setAdjusting} />
+      )}
 
       <h2 className="section-title">Entries</h2>
       <div className="filters">
@@ -408,6 +413,11 @@ export function AccountDetails() {
           <TransactionForm existing={editing === "new" ? undefined : editing} accountId={account.id} onDone={() => setEditing(null)} />
         </Modal>
       )}
+      {adjusting && (
+        <Modal title="Add statement adjustment" onClose={() => setAdjusting(null)}>
+          <TransactionForm accountId={account.id} prefill={adjusting} draftName={`adjust:${adjusting.date}`} onDone={() => setAdjusting(null)} />
+        </Modal>
+      )}
     </section>
   );
 }
@@ -575,6 +585,147 @@ function MonthFigures({ s, group, current }: { s: AccountFigures; group: Account
         );
       })}
     </dl>
+  );
+}
+
+/** Differences under half a paisa are rounding, not a mismatch. */
+const settled = (n: number) => Math.abs(n) < 0.005;
+
+/**
+ * The bank's statement total next to the app's closing balance for the same bill. The
+ * difference is what the app is missing: a fee or surcharge when the bank asks more, a
+ * payment, refund or cashback when it asks less.
+ */
+function StatementCheck({ s, canManage, onAdjust }: { s: AccountFigures; canManage: boolean; onAdjust: (prefill: Partial<TransactionInput>) => void }) {
+  const end = s.statement_end as string;
+  const saved = s.statement_amount_due;
+  const [raw, setRaw] = useState(saved === null ? "" : Number(saved).toFixed(2));
+  const [error, setError] = useState("");
+  const refresh = useRefreshMoney();
+  const path = `/accounts/${s.account.id}/statements/${end}`;
+  const value = raw.trim();
+  const dirty = value !== (saved === null ? "" : Number(saved).toFixed(2));
+  const save = useMutation({
+    mutationFn: () => (value === "" ? del(path) : put(path, { amount_due: value })),
+    onSuccess: () => {
+      setError("");
+      if (value !== "") setRaw(Number(value).toFixed(2));
+      void refresh();
+    },
+    onError: (e: Error) => setError(e.message),
+  });
+
+  function submit(event: FormEvent) {
+    event.preventDefault();
+    if (save.isPending || !dirty) return;
+    if (value !== "" && !/^-?\d+(\.\d{1,2})?$/.test(value)) {
+      setError("Enter the amount like 18419.83.");
+      return;
+    }
+    save.mutate();
+  }
+
+  const out = end >= today();
+  const name = billName(end);
+  const closing = Number(s.statement_closing);
+  const diff = s.statement_difference === null ? null : Number(s.statement_difference);
+  const adjust = (amount: number) =>
+    onAdjust({
+      type: amount > 0 ? "expense" : "refund",
+      amount: Math.abs(amount).toFixed(2),
+      date: end,
+      description: `${name} statement adjustment`,
+    });
+
+  let verdict: ReactNode;
+  if (out) {
+    verdict = <p className="muted small">The {name} statement closes on {dayLabel(end)}. Type the bank's total once it's out.</p>;
+  } else if (diff === null) {
+    verdict = <p className="muted small">Type the “Total amount due” from the bank's {name} statement to check it against the app.</p>;
+  } else if (settled(diff)) {
+    verdict = <p className="stmt-verdict pos-text">Matches the bank.</p>;
+  } else {
+    const more = diff > 0;
+    verdict = (
+      <div className="stmt-verdict-row">
+        <p className="stmt-verdict">
+          <span className={more ? "neg-text" : "pos-text"}>
+            The bank asks <Amounts>{money(Math.abs(diff))}</Amounts> {more ? "more" : "less"}.
+          </span>{" "}
+          <span className="muted small">
+            {more ? "Usually a fee, surcharge or interest that isn't in the app." : "Usually a payment, refund or cashback that isn't in the app."}
+          </span>
+        </p>
+        {canManage && (
+          <button type="button" className="tinted" onClick={() => adjust(diff)}>
+            Add <Amounts>{money(Math.abs(diff))}</Amounts> {more ? "charge" : "credit"}
+          </button>
+        )}
+      </div>
+    );
+  }
+
+  const owed = (n: number) => (n < 0 ? `${money(-n)} in credit` : money(n));
+  return (
+    <div className="card stmt-check">
+      <h3 className="stmt-title">Check against the bank</h3>
+      <dl className="acct-month stmt-figures">
+        <div>
+          <dt>Previous balance</dt>
+          <dd className="num"><Amounts>{s.statement_opening === null ? "—" : owed(Number(s.statement_opening))}</Amounts></dd>
+          <dd className="acct-month-note">Owed on {dayLabel(shiftDay(s.statement_start as string, -1))}</dd>
+        </div>
+        <div>
+          <dt>App's balance</dt>
+          <dd className="num"><Amounts>{owed(closing)}</Amounts></dd>
+          <dd className="acct-month-note">On {dayLabel(end)}{out ? " · so far" : ""}</dd>
+        </div>
+        <div>
+          <dt id="stmt-bank-label">Bank's total due</dt>
+          {canManage && !out ? (
+            <dd>
+              <form className="stmt-form" onSubmit={submit}>
+                <span className="budget-input stmt-input">
+                  <span aria-hidden="true">₹</span>
+                  <input
+                    aria-labelledby="stmt-bank-label"
+                    inputMode="decimal"
+                    autoComplete="off"
+                    placeholder="0.00"
+                    value={raw}
+                    aria-invalid={error ? true : undefined}
+                    onChange={(e) => setRaw(e.target.value.replace(/[,\s₹]/g, ""))}
+                    onKeyDown={(e) => {
+                      if (e.key === "Escape" && dirty) {
+                        e.preventDefault();
+                        setRaw(saved === null ? "" : Number(saved).toFixed(2));
+                        setError("");
+                      }
+                    }}
+                  />
+                </span>
+                {dirty && (
+                  <button type="submit" className="primary" disabled={save.isPending}>
+                    {save.isPending ? "Saving…" : value === "" ? "Clear" : "Save"}
+                  </button>
+                )}
+              </form>
+              {error && <p className="field-error small">{error}</p>}
+            </dd>
+          ) : (
+            <dd className="num"><Amounts>{saved === null ? "—" : owed(Number(saved))}</Amounts></dd>
+          )}
+        </div>
+        <div>
+          <dt>Difference</dt>
+          <dd className={`num ${diff === null || settled(diff) ? "" : diff > 0 ? "neg-text" : "pos-text"}`}>
+            <Amounts>{diff === null ? "—" : settled(diff) ? money(0) : signedMoney(diff)}</Amounts>
+          </dd>
+          <dd className="acct-month-note">Bank less app</dd>
+        </div>
+      </dl>
+      {verdict}
+    </div>
   );
 }
 

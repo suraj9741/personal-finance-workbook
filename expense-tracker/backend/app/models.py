@@ -291,6 +291,24 @@ class AccountValuation(Base):
     created_at: Mapped[datetime] = created_at()
 
 
+class CardStatement(Base):
+    """The "Total amount due" the user copied from a card's bank statement, one per statement
+    date. The app's own closing balance for that cycle is worked out in balances.py."""
+
+    __tablename__ = "card_statements"
+    __table_args__ = (
+        UniqueConstraint("account_id", "statement_end", name="uq_card_statements_end"),
+    )
+
+    id: Mapped[uuid.UUID] = uuid_pk()
+    account_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("accounts.id", ondelete="CASCADE"), index=True
+    )
+    statement_end: Mapped[date] = mapped_column(Date)
+    amount_due: Mapped[Decimal] = mapped_column(Numeric(14, 2))
+    created_at: Mapped[datetime] = created_at()
+
+
 class Transaction(Base):
     __tablename__ = "transactions"
     __table_args__ = (
